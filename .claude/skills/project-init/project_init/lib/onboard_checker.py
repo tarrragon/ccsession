@@ -158,7 +158,9 @@ def parse_hook_classification(config_path: Path) -> HookClassificationInfo:
             project_specific_hooks=sorted(project_specific_hooks),
             is_available=True,
         )
-    except Exception:
+    except (OSError, UnicodeDecodeError):
+        # OSError: 檔案讀取失敗（權限、磁碟等）
+        # UnicodeDecodeError: 編碼錯誤
         return HookClassificationInfo(
             flutter_hooks=[],
             project_specific_hooks=[],

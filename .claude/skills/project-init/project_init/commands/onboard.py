@@ -146,12 +146,25 @@ def _print_onboard_result(
 ) -> None:
     """輸出格式化的 onboard 結果到 stdout."""
     print()
+    _print_header()
+    print()
+    _print_language_section(language_info)
+    _print_hook_classification_section(hook_classification)
+    _print_claude_md_section(result)
+    _print_language_template_section(result)
+    _print_settings_local_section(result)
+    _print_todolist_section(result)
+
+
+def _print_header() -> None:
+    """輸出頁頭."""
     print(SEPARATOR)
     print(OnboardMessages.HEADER)
     print(SEPARATOR)
-    print()
 
-    # 語言偵測部分
+
+def _print_language_section(language_info) -> None:
+    """輸出語言偵測部分."""
     print(f"[{OnboardMessages.LANGUAGE_SECTION}]")
     if language_info.is_available:
         language_display = _format_language_name(language_info.language)
@@ -161,7 +174,9 @@ def _print_onboard_result(
         print(f"  {OnboardMessages.LANGUAGE_UNKNOWN}")
     print()
 
-    # Hook 語言分類部分
+
+def _print_hook_classification_section(hook_classification) -> None:
+    """輸出 Hook 語言分類部分."""
     print(f"[{OnboardMessages.HOOK_CLASSIFICATION_SECTION}]")
     if hook_classification.is_available:
         if hook_classification.flutter_hooks:
@@ -178,7 +193,9 @@ def _print_onboard_result(
         print("  無法讀取 Hook 分類配置")
     print()
 
-    # CLAUDE.md 部分
+
+def _print_claude_md_section(result: OnboardResult) -> None:
+    """輸出 CLAUDE.md 部分."""
     print(f"[{OnboardMessages.CLAUDE_MD_SECTION}]")
     if result.language == "unknown":
         print(f"  {STATUS_SKIP} 無法確認需求")
@@ -189,7 +206,9 @@ def _print_onboard_result(
         print(f"  {OnboardMessages.CLAUDE_MD_OK}")
     print()
 
-    # 語言模板部分
+
+def _print_language_template_section(result: OnboardResult) -> None:
+    """輸出語言模板部分."""
     print(f"[{OnboardMessages.LANGUAGE_TEMPLATE_SECTION}]")
     if result.language == "flutter":
         if _has_todo_item(result.todo_items, "FLUTTER"):
@@ -201,7 +220,9 @@ def _print_onboard_result(
         print(f"  {OnboardMessages.TEMPLATE_TODO.format(language=language_upper)}")
     print()
 
-    # settings.local.json 部分
+
+def _print_settings_local_section(result: OnboardResult) -> None:
+    """輸出 settings.local.json 部分."""
     print(f"[{OnboardMessages.SETTINGS_LOCAL_SECTION}]")
     if result.language == "unknown":
         print(f"  {STATUS_SKIP} 無法確認需求")
@@ -213,7 +234,9 @@ def _print_onboard_result(
         print(f"  {OnboardMessages.SETTINGS_LOCAL_OK}")
     print()
 
-    # 待辦清單部分
+
+def _print_todolist_section(result: OnboardResult) -> None:
+    """輸出待辦清單部分."""
     print(SEPARATOR)
     print(f"{OnboardMessages.TODOLIST_HEADER} ({_format_todo_count(result.todo_count)})")
     print(SEPARATOR)
