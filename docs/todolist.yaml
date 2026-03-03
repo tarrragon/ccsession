@@ -1,0 +1,41 @@
+# todolist.yaml - 結構化版本索引
+# 已解決的問題應移除（不是標記完成）
+# 已排程的問題應移至 worklog
+
+status: active
+current_version: 0.1.0
+
+## 技術債務追蹤
+
+tech_debt:
+  - id: TD-003
+    description: "_print_status() in handoff.py 達 90 行，超過 30 行限制"
+    source_version: v0.1.0
+    source_ticket: 0.1.0-W1-005
+    risk: 中
+    priority: P2
+    status: pending
+
+  - id: TD-004
+    description: "兄弟節點重複 I/O - handoff.py 中重複獲取兄弟節點"
+    source_version: v0.1.0
+    source_ticket: 0.1.0-W1-005
+    risk: 低
+    priority: P2
+    status: pending
+
+  - id: TD-005
+    description: "4x 獨立過濾邏輯 - track_relations.py 中多個過濾語句可合併為單次遍歷"
+    source_version: v0.1.0
+    source_ticket: 0.1.0-W1-005
+    risk: 低
+    priority: P3
+    status: pending
+
+  - id: TD-006
+    description: "Ticket 驗證邏輯重複 - 多個命令中重複檢查 Ticket 存在性，可提取共用函式"
+    source_version: v0.1.0
+    source_ticket: 0.1.0-W1-005
+    risk: 中
+    priority: P2
+    status: pending
