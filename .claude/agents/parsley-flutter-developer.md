@@ -134,7 +134,7 @@ List<ProcessedBook> processBooks(List<Book> books) {
 
 > **統一品質標準**：所有品質規則定義在 @.claude/rules/core/implementation-quality.md
 >
-> parsley 必須遵循：第 1 節（通用規則）+ 第 2 節（Dart/Flutter 補充）+ 第 4.1 節 + 第 4.2 節
+> parsley 必須遵循：第 1 節（通用規則）+ 第 2 節（Dart/Flutter 補充）+ 第 6.1 節 + 第 6.2 節
 
 - **Package 導入語意化**：100% 使用 `package:` 格式導入
 - **程式碼自然語言化**：函式和變數命名清晰可讀
@@ -142,6 +142,85 @@ List<ProcessedBook> processBooks(List<Book> books) {
 - **需求註解覆蓋**：業務邏輯函式包含需求編號
 - **錯誤處理規範**：使用預編譯錯誤或專用異常
 - **常數管理**：無硬編碼使用者訊息、無魔法數字
+- **多語系管理**：所有 UI 字串必須透過 ARB/l10n 系統，禁止硬編碼
+- **常數集中管理**：所有魔法數字和字串集中在 `AppConstants` 或 constants 檔案
+
+### 5.1 多語系（i18n）強制規範
+
+> **核心原則**：Flutter UI 中禁止任何硬編碼文字，所有使用者可見字串透過 ARB 多語系系統管理。
+
+**ARB 檔案結構**：
+
+```
+ui/lib/l10n/
+├── app_en.arb      # 英文（預設）
+└── app_zh_TW.arb   # 繁體中文
+```
+
+**使用方式**：
+
+```dart
+// ✅ 正確：透過 l10n 取得字串
+Text(context.l10n.sessionListTitle)
+Text(context.l10n.connectionStatusConnected)
+
+// ❌ 錯誤：硬編碼文字
+Text('Session List')
+Text('Connected')
+```
+
+**適用範圍**：
+- 所有 Widget 中的顯示文字
+- 錯誤提示訊息
+- 按鈕標籤、Tooltip
+- 狀態文字（Active、Idle、Completed）
+
+**例外**：開發者 debug log、測試斷言字串、技術標識符
+
+### 5.2 常數集中管理（強制）
+
+> **核心原則**：程式碼中禁止魔法數字和硬編碼設定值，所有常數集中管理。
+
+**目錄結構**：
+
+```
+ui/lib/core/constants/
+├── app_constants.dart      # 全域常數（數值、尺寸等）
+├── duration_constants.dart # 時間相關常數
+└── style_constants.dart    # 樣式數值常數
+```
+
+**使用方式**：
+
+```dart
+// ✅ 正確：使用具名常數
+const reconnectInitialDelay = DurationConstants.reconnectInitialDelay;
+const maxPanelCount = AppConstants.maxSplitPanels;
+
+// ❌ 錯誤：硬編碼
+Future.delayed(Duration(seconds: 1))
+if (panels.length > 4)
+```
+
+**AppConstants 範例**：
+
+```dart
+// app_constants.dart
+class AppConstants {
+  AppConstants._();  // 禁止實例化
+
+  static const int maxSplitPanels = 4;
+  static const int maxHistoryPreload = 1000;
+}
+
+class DurationConstants {
+  DurationConstants._();
+
+  static const Duration reconnectInitialDelay = Duration(seconds: 1);
+  static const Duration heartbeatInterval = Duration(seconds: 30);
+  static const Duration activeSessionThreshold = Duration(minutes: 2);
+  static const Duration completedSessionThreshold = Duration(minutes: 30);
+}
 
 ## 🔧 工具權限與使用
 
