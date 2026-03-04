@@ -24,6 +24,7 @@ migrate_working_dir/
 **/doc/api/
 **/ios/Flutter/.last_build_id
 .dart_tool/
+.packages
 .flutter-plugins
 .flutter-plugins-dependencies
 .pub-cache/
@@ -31,6 +32,13 @@ migrate_working_dir/
 ui/build/
 ui/**/.gradle/
 /coverage/
+
+# Dart web build artifacts
+*.dart.js
+*.info.json
+*.js_
+*.js.deps
+*.js.map
 
 # Symbolication related
 app.*.symbols
@@ -46,6 +54,17 @@ ui/android/app/release
 # Go build artifacts (under server/)
 server/bin/
 server/tmp/
+server/*.exe
+server/*.exe~
+server/*.dll
+server/*.so
+server/*.dylib
+server/*.test
+server/*.out
+server/coverage.*
+server/*.coverprofile
+server/go.work
+server/go.work.sum
 
 # Claude Code logs and temp files
 .claude/hook-logs/
