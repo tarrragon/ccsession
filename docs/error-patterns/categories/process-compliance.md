@@ -54,3 +54,21 @@ if current_version:
 2. `get_project_root()` 的 `pubspec.yaml` 搜尋邏輯對 Go/混合型專案無效，應以 `CLAUDE_PROJECT_DIR` 為主要偵測機制
 3. 新專案加入框架後，確認 `todolist.yaml` 使用框架標準的 `versions` 列表格式，或確保框架工具支援其格式
 4. Fallback 掃描目錄的邏輯應加入警告 log，提示版本來自 fallback 而非明確配置
+
+### 架構設計原則（根本問題）
+
+> 通用框架 sync（sync-push/sync-pull）**不應**攜帶任何專案特定資料。
+> 版本號屬於專案特定資料，不屬於框架本身。
+
+**正確的框架/專案邊界**：
+
+| 資料類型 | 屬於 | 應 sync |
+|---------|------|--------|
+| `.claude/hooks/`, `.claude/skills/`, `.claude/rules/` | 框架 | 是 |
+| `docs/work-logs/`, `docs/todolist.yaml` | 專案 | 否 |
+| `.claude/` 下任何含版本號的 hardcode | 框架（但不當） | 需移除 |
+
+**設計要求**：
+- `sync-push.sh` 應明確排除 `docs/` 目錄（或任何含版本號的專案資料）
+- 框架工具（如 ticket CLI）讀取版本時，應依賴執行環境（`CLAUDE_PROJECT_DIR`/cwd）而非框架內的 hardcode
+- 若框架必須有預設值，應用佔位符（如 `{current_version}`）而非具體版本號
