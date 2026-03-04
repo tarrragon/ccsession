@@ -82,10 +82,19 @@ def _parse_todolist_active_version() -> Optional[str]:
         with open(todolist_path, encoding="utf-8") as f:
             data = yaml.safe_load(f)
 
+        # 格式一：versions 列表（.claude 框架標準格式）
         versions = data.get("versions", [])
         for v in versions:
             if v.get("status") == "active":
                 return f"v{v['version']}"
+
+        # 格式二：current_version 頂層欄位（專案自訂格式）
+        current_version = data.get("current_version")
+        if current_version:
+            version_str = str(current_version)
+            if not version_str.startswith("v"):
+                version_str = f"v{version_str}"
+            return version_str
     except Exception:
         # YAML 解析失敗時靜默 fallback
         pass
