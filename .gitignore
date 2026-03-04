@@ -20,6 +20,11 @@ migrate_working_dir/
 
 #.vscode/
 
+# Root-level Flutter platform dirs (should be under ui/, these are stray artifacts)
+/android/
+/ios/
+/macos/
+
 # Flutter/Dart/Pub related (under ui/)
 **/doc/api/
 **/ios/Flutter/.last_build_id
