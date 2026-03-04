@@ -1,3 +1,43 @@
+## [1.1.21] - 2026-03-05
+
+### Summary
+feat: W5-006 handoff 驗收前置檢查 + W5-007 resume --list stale 過濾修復
+
+---
+
+
+## [1.1.20] - 2026-03-04
+
+### Summary
+fix: 修復 handoff GC 誤刪 bug + 新增 IMP-010 錯誤模式
+
+---
+
+
+## [1.1.19] - 2026-03-04
+
+### Summary
+feat: sync-pull 後自動重新安裝全域 CLI 套件
+
+---
+
+
+## [1.1.18] - 2026-03-04
+
+### Summary
+feat: v0.2.0 onboarding framework - onboard 子指令 + Hook 分類 + settings 模板 + 文件泛化
+
+---
+
+
+## [1.1.17] - 2026-03-03
+
+### Summary
+refactor: 簡化 sync 機制，移除 FLUTTER.md 獨立處理邏輯
+
+---
+
+
 ## [1.1.16] - 2026-03-03
 
 ### Summary
