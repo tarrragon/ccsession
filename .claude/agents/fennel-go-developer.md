@@ -238,15 +238,15 @@ const (
 ### 使用方式
 
 ```go
-// ✅ 正確：使用常數
+// 正確：使用常數
 logger.Info(messages.LogNewSessionFile,
     "filePath", filePath,
     "sessionID", sessionID)
 
-// ✅ 正確：錯誤回應使用 error code
+// 正確：錯誤回應使用 error code
 return WSResponse{Error: messages.ErrCodeSessionNotFound}
 
-// ❌ 錯誤：硬編碼字串
+// 錯誤：硬編碼字串
 logger.Info("new session file detected", "path", filePath)
 return WSResponse{Error: "session not found"}
 ```
@@ -288,10 +288,10 @@ logger.Error(messages.LogParseError,
 ## 錯誤處理（強制）
 
 ```go
-// ✅ 正確：Sentinel error（可比較）
+// 正確：Sentinel error（可比較）
 var ErrSessionNotFound = errors.New("session not found")
 
-// ✅ 正確：自訂錯誤類型（含上下文）
+// 正確：自訂錯誤類型（含上下文）
 type ParseError struct {
     SessionID string
     Line      string
@@ -304,12 +304,12 @@ func (e *ParseError) Error() string {
 
 func (e *ParseError) Unwrap() error { return e.Cause }
 
-// ✅ 正確：錯誤包裝保留上下文
+// 正確：錯誤包裝保留上下文
 if err != nil {
     return fmt.Errorf("read session file %s: %w", filePath, err)
 }
 
-// ❌ 錯誤：丟棄上下文
+// 錯誤：丟棄上下文
 return errors.New("read failed")
 ```
 
@@ -327,7 +327,7 @@ return errors.New("read failed")
 **Guard Clause 優先**：
 
 ```go
-// ✅ 正確：提前回傳
+// 正確：提前回傳
 func processLine(line string, sessionID string) (*SessionEvent, error) {
     if len(line) == 0 {
         return nil, nil
