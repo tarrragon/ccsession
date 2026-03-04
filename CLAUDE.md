@@ -19,6 +19,26 @@
 - **Go Backend**：監控本地 JSONL 檔案變更、解析對話內容、提供 WebSocket server
 - **Flutter Frontend**：即時 UI 呈現，支援 macOS / Windows / Linux / 行動裝置
 
+### 資料夾結構
+
+```
+ccsession/
+├── server/                  # Go 後端
+│   ├── go.mod               # Go module 定義
+│   └── main.go              # 入口點
+├── ui/                      # Flutter 前端
+│   ├── lib/                 # Dart 應用程式碼
+│   ├── test/                # 測試檔案
+│   ├── pubspec.yaml         # Flutter 依賴定義
+│   └── ...                  # 各平台目錄（android/ios/macos/web/...）
+├── docs/                    # 專案文件、工作日誌、Ticket
+├── .claude/                 # Claude Code 配置（規則、hooks、skills）
+├── CLAUDE.md                # 本文件（Claude Code 入口）
+└── README.md                # 專案說明
+```
+
+> 工作時需明確區分語言環境：Go 指令在 `server/` 執行，Flutter 指令在 `ui/` 執行。
+
 ### 核心原理
 
 Claude Code 的所有對話紀錄以 JSONL 格式即時寫入 `~/.claude/` 目錄。
@@ -191,28 +211,27 @@ Phase 4: 重構評估 (cinnamon-refactor-owl) → /tech-debt-capture
 ### 測試執行
 
 ```bash
-# Flutter 全量測試（使用摘要腳本，避免大輸出耗盡 context）
-./.claude/hooks/test-summary.sh
+# Flutter 全量測試（在 ui/ 目錄執行）
+(cd ui && flutter test)
 
 # Flutter 單一測試檔案
-flutter test test/path/to/specific_test.dart
+(cd ui && flutter test test/path/to/specific_test.dart)
 
-# Go 測試（待建立後端後啟用）
-# cd backend && go test ./...
+# Go 測試
+(cd server && go test ./...)
 ```
 
 ### 程式碼分析
 
 ```bash
-# Flutter/Dart
-dart analyze
-flutter analyze
+# Flutter/Dart（在 ui/ 目錄執行）
+(cd ui && dart analyze)
 
-# Go（待建立後端後啟用）
-# cd backend && go vet ./...
+# Go
+(cd server && go vet ./...)
 ```
 
 ---
 
-*最後更新: 2026-03-03*
-*版本: 1.1.0 - 新增核心行為約束、Ticket 工作流、品質基線、TDD 摘要（0.1.0-W1-003）*
+*最後更新: 2026-03-05*
+*版本: 1.2.0 - 新增資料夾結構說明、修正測試指令路徑（server/ ui/ monorepo）*
