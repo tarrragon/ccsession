@@ -50,7 +50,8 @@
 
 1. type 欄位值不在已知列表中
 2. 以 generic 方式處理：保留 raw JSON
-3. 記錄 info 日誌（新的事件類型可能需要支援）
+3. 輸出 WARN log（含 `unknownType`, `hint: "Claude format may have changed"`）
+4. 詳見 UC-011（JSONL 格式變動偵測）
 
 ### A2: 巢狀 Content Array
 

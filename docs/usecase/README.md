@@ -31,16 +31,21 @@ Use Case 是後續 BDD/整合測試、單元測試和實作的基礎。
 | UC-007 | [JSONL 事件解析](./UC-007-jsonl-parsing.md) | Go Backend | P0 |
 | UC-008 | [Session 狀態管理](./UC-008-session-state.md) | Go Backend | P0 |
 | UC-009 | [WebSocket 通訊](./UC-009-websocket-communication.md) | Both | P0 |
+| UC-010 | [結構化日誌輸出](./UC-010-structured-logging.md) | Both | P0 |
+| UC-011 | [JSONL/事件格式變動偵測](./UC-011-format-change-detection.md) | Both | P0 |
 
 ---
 
 ## Use Case 之間的依賴關係
 
 ```
+UC-010 (Structured Logging) <-- 橫切關注點，所有 UC 依賴
+UC-011 (Format Detection)  <-- 橫切關注點，依賴 UC-007, UC-010
+
 UC-006 (File Watching)
     |
     v
-UC-007 (JSONL Parsing)
+UC-007 (JSONL Parsing) ---> UC-011 (Format Detection)
     |
     v
 UC-008 (Session State) ---> UC-009 (WebSocket)
@@ -80,4 +85,4 @@ Use Case 定義（本階段）
 
 ---
 
-*最後更新: 2026-03-03*
+*最後更新: 2026-03-05*
