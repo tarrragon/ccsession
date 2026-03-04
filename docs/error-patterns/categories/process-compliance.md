@@ -72,3 +72,65 @@ if current_version:
 - `sync-push.sh` 應明確排除 `docs/` 目錄（或任何含版本號的專案資料）
 - 框架工具（如 ticket CLI）讀取版本時，應依賴執行環境（`CLAUDE_PROJECT_DIR`/cwd）而非框架內的 hardcode
 - 若框架必須有預設值，應用佔位符（如 `{current_version}`）而非具體版本號
+
+---
+
+## PC-002: get_project_root() 因 pubspec.yaml 搜尋策略在 Go/混合型專案中靜默失效
+
+**發現日期**: 2026-03-05
+**相關 Ticket**: 0.2.0-W4-001.1 (commit 3e59189)
+
+### 症狀
+
+- `ticket create` 將 Ticket 建立在 `.claude/skills/ticket/docs/` 目錄而非專案的 `docs/work-logs/`
+- Ticket 系統行為正常（無報錯），但產出物位置錯誤
+- 修正前首次執行才會發現問題（靜默失效，無任何警告）
+
+### 根因
+
+`paths.py` 的 `get_project_root()` 只向上搜尋 `pubspec.yaml`：
+
+```python
+# 舊實作：只搜尋 pubspec.yaml
+current = Path.cwd()
+while current != current.parent:
+    if (current / "pubspec.yaml").exists():
+        return current
+    current = current.parent
+
+return Path.cwd()  # fallback：回傳當前目錄
+```
+
+在 Go/混合型專案（如 ccsession）中，`pubspec.yaml` 位於 `ui/` 子目錄，不在專案根目錄。搜尋從 `.claude/skills/ticket/` 向上走到 `/`，找不到 `pubspec.yaml`，fallback 回傳 `Path.cwd()`（即 `.claude/skills/ticket/`）。
+
+**靜默失效特性**：函式不拋出例外，也不輸出警告，讓使用方無法察覺路徑已錯誤。
+
+### 解決方案
+
+調整搜尋標記優先級，以 `CLAUDE.md`（所有使用 Claude Code 框架的專案都有）為主要指標：
+
+```python
+# 新實作：依序搜尋通用標記
+markers = ["CLAUDE.md", "go.mod", "pubspec.yaml"]
+current = Path.cwd()
+while current != current.parent:
+    for marker in markers:
+        if (current / marker).exists():
+            return current
+    current = current.parent
+
+return Path.cwd()
+```
+
+### 預防措施
+
+1. 框架工具的「根目錄偵測」**不應假設特定語言的專案結構**（如 `pubspec.yaml` 是 Flutter 專有）
+2. 根目錄偵測失敗時**必須輸出警告**，不可靜默返回 `Path.cwd()`
+3. 新增語言支援（Go、Python 等）時，應同步更新 `get_project_root()` 的搜尋標記清單
+4. 框架設計原則：優先使用**通用標記**（`CLAUDE.md`、`CLAUDE_PROJECT_DIR`），語言特定標記作為 fallback
+
+### 根本問題
+
+> `get_project_root()` 的搜尋策略是**語言耦合**的設計缺陷。
+> 通用框架工具不應依賴特定語言的專案標記（`pubspec.yaml`）來定位專案根目錄。
+> 正確設計應以**框架本身的標記**（`CLAUDE.md`）作為第一優先。
