@@ -431,7 +431,144 @@ max_history_lines: 1000           # 首次載入最大行數
 
 ---
 
-## 7. 參考資源
+## 7. 可觀測性設計
+
+> **設計動機**：Claude Code 的 JSONL 規格為 undocumented，隨版本更新可能新增、修改或移除欄位。
+> 完整的 log 可觀測性確保每個解析環節都有記錄，規格變動時可快速定位需調整的層級。
+
+### 7.1 Log 等級規範
+
+| 等級 | 使用場景 |
+|------|---------|
+| `DEBUG` | 正常流程的詳細執行記錄（讀取行數、事件路由、state 更新） |
+| `INFO` | 重要里程碑（啟動、session 新增/結束、連線建立） |
+| `WARN` | 非預期但可繼續執行（未知 JSONL 欄位、未知事件類型、解析跳過） |
+| `ERROR` | 需要關注的失敗（解析錯誤、檔案讀取失敗、連線異常） |
+
+### 7.2 Go Backend Log 設計
+
+#### File Watcher 層
+
+| 事件 | 等級 | 記錄內容 |
+|------|------|---------|
+| 偵測到新 session 檔案 | INFO | `filePath`, `sessionID` |
+| 讀取新 append 行 | DEBUG | `sessionID`, `offset`, `bytesRead`, `lineCount` |
+| 不完整 JSON 行（等待下次讀取） | DEBUG | `sessionID`, `rawLine` |
+| 檔案讀取失敗 | ERROR | `filePath`, `error` |
+| Session 檔案被刪除 | INFO | `sessionID`, `reason: file_deleted` |
+
+#### JSONL Parser 層
+
+| 事件 | 等級 | 記錄內容 |
+|------|------|---------|
+| 開始解析一行 | DEBUG | `sessionID`, `lineIndex`, `type` |
+| 發現未知 `type` 值 | WARN | `sessionID`, `unknownType`, `rawLine` |
+| content array 出現未知 element type | WARN | `sessionID`, `unknownElementType`, `rawElement` |
+| 遇到未知頂層欄位 | WARN | `sessionID`, `unknownField`, `fieldValue` |
+| 解析成功 | DEBUG | `sessionID`, `type`, `toolName (if tool_use)` |
+| JSON parse 失敗 | ERROR | `sessionID`, `rawLine`, `error` |
+
+```go
+// 未知欄位的 WARN log 範例
+if _, known := knownFields[key]; !known {
+    logger.Warn("unknown JSONL field detected",
+        "field", key,
+        "sessionID", r.sessionID,
+        "hint", "Claude format may have changed")
+}
+```
+
+#### Session Manager 層
+
+| 事件 | 等級 | 記錄內容 |
+|------|------|---------|
+| Session 狀態轉換 | INFO | `sessionID`, `from`, `to`, `reason` |
+| 新增 session 到 registry | INFO | `sessionID`, `projectPath` |
+| Session 移除 | INFO | `sessionID`, `reason` |
+
+#### WebSocket Server 層
+
+| 事件 | 等級 | 記錄內容 |
+|------|------|---------|
+| Client 連線建立 | INFO | `clientAddr`, `totalClients` |
+| Client 連線斷開 | INFO | `clientAddr`, `reason` |
+| 推送事件給 Client | DEBUG | `clientAddr`, `eventType`, `sessionID` |
+| 未知 Client action | WARN | `clientAddr`, `unknownAction` |
+| 廣播失敗 | ERROR | `clientAddr`, `error` |
+
+### 7.3 Flutter Frontend Log 設計
+
+#### WebSocket Client 層
+
+| 事件 | 等級 | 記錄內容 |
+|------|------|---------|
+| 連線建立 | INFO | `serverUrl`, `timestamp` |
+| 連線斷開 | INFO | `reason`, `willRetry`, `retryIn` |
+| 收到訊息 | DEBUG | `type`, `dataSize` |
+| 解析失敗 | ERROR | `rawMessage`, `error` |
+
+#### Event Mapper 層
+
+| 事件 | 等級 | 記錄內容 |
+|------|------|---------|
+| 收到未知 event type | WARN | `unknownType`, `rawData` |
+| 收到未知 content 欄位 | WARN | `eventType`, `unknownField` |
+| 成功映射事件 | DEBUG | `type`, `sessionID` |
+
+#### State Management 層
+
+| 事件 | 等級 | 記錄內容 |
+|------|------|---------|
+| Session 列表更新 | DEBUG | `sessionCount`, `activeCount` |
+| Session 狀態變更 | INFO | `sessionID`, `from`, `to` |
+| UI 狀態不一致 | WARN | `sessionID`, `detail` |
+
+### 7.4 Log 輸出格式
+
+兩端均採用結構化 JSON log，方便工具解析：
+
+```json
+{
+  "level": "WARN",
+  "time": "2026-03-05T10:00:00Z",
+  "layer": "jsonl_parser",
+  "msg": "unknown JSONL field detected",
+  "field": "newUnknownField",
+  "sessionID": "abc-123",
+  "hint": "Claude format may have changed"
+}
+```
+
+**Go**：使用 `log/slog`（標準庫，Go 1.21+）
+**Flutter**：使用 `package:logging`
+
+### 7.5 規格變動偵測流程
+
+當 Claude Code 更新後出現格式異動，可依以下流程快速定位：
+
+```
+發現功能異常
+    |
+    v
+查詢 WARN log（關鍵字: "format may have changed" / "unknown field"）
+    |
+    v
+確認哪個 layer 發出 WARN
+    |
+    +-- jsonl_parser WARN → 更新 Parser 欄位解析邏輯
+    +-- event_mapper WARN → 更新 Flutter event 映射
+    +-- file_watcher WARN → 確認目錄結構是否變更
+    |
+    v
+對照 WARN log 中的 rawLine/rawData 確認新格式
+    |
+    v
+更新對應層的解析邏輯 + 補充測試
+```
+
+---
+
+## 8. 參考資源
 
 ### 社群類似專案
 
@@ -446,5 +583,5 @@ max_history_lines: 1000           # 首次載入最大行數
 
 ---
 
-*最後更新: 2026-03-03*
-*版本: 1.0.0*
+*最後更新: 2026-03-05*
+*版本: 1.1.0 - 新增第 7 節：可觀測性設計（log 分層規範、JSONL 格式變動偵測流程）*
