@@ -3,8 +3,11 @@
 
 提供版本號的取得、解析和驗證功能。
 """
+import logging
 import re
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 from .constants import WORK_LOGS_DIR
 from .paths import get_project_root
@@ -95,9 +98,8 @@ def _parse_todolist_active_version() -> Optional[str]:
             if not version_str.startswith("v"):
                 version_str = f"v{version_str}"
             return version_str
-    except Exception:
-        # YAML 解析失敗時靜默 fallback
-        pass
+    except Exception as e:
+        logger.warning(f"解析 todolist.yaml 失敗 ({type(e).__name__}: {e})，將使用目錄掃描方式偵測版本")
 
     return None
 
@@ -125,6 +127,7 @@ def _scan_worklog_directories() -> Optional[str]:
     ]
 
     if not versions:
+        logger.warning("無法在 work-logs 目錄中找到版本目錄，請確保 docs/work-logs/v*/tickets 目錄存在")
         return None
 
     # 按版本號降序排列
@@ -134,7 +137,14 @@ def _scan_worklog_directories() -> Optional[str]:
         return tuple(int(p) for p in version_parts)
 
     versions.sort(key=version_key, reverse=True)
-    return versions[0]
+    selected_version = versions[0]
+
+    logger.warning(
+        f"使用目錄掃描的版本 {selected_version}（未從 todolist.yaml 找到 active 版本）。"
+        f"提示：確保 docs/todolist.yaml 中 status=active 的版本配置正確"
+    )
+
+    return selected_version
 
 
 def resolve_version(explicit_version: Optional[str] = None) -> Optional[str]:
