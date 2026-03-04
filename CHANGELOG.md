@@ -23,6 +23,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - `.claude/README-subtree-sync.md`：定位為同步機制技術文件
 - `.claude/commands/sync-pull.md`：新增 post-pull 引導步驟
 
+### Fixed
+
+- `paths.py` `get_project_root()`：搜尋標記由單一 `pubspec.yaml` 改為依序搜尋 `CLAUDE.md` -> `go.mod` -> `pubspec.yaml`，修正在 Go/混合型專案中靜默回傳錯誤目錄的問題（PC-002）
+- `version.py`：新增 `current_version` 頂層欄位格式支援，修正非標準 todolist.yaml 格式下版本號偵測污染（PC-001）；fallback 時輸出 WARNING log
+- `sync-claude-push.sh`：rsync 新增排除 `__pycache__`、`*.pyc`、`.pytest_cache`
+- `docs/error-patterns/`：建立錯誤模式知識庫，記錄 PC-001、PC-002
+
 ## [0.1.0] - 2026-03-03
 
 ### Added
