@@ -48,6 +48,10 @@ from lib.hook_messages import WorkflowMessages, CoreMessages, AskUserQuestionMes
 # 否定詞列表（用於避免誤判否定語境）
 NEGATION_WORDS = ["不是", "不需要", "不用", "不要", "沒有", "無需", "不必", "無須"]
 
+# 遠距否定詞搜索窗口大小（字符數）
+# 支援否定詞和關鍵字之間有其他詞彙的情況（如「不是說不用查詢」）
+NEGATION_WINDOW_SIZE = 15
+
 # 查詢類關鍵字對應 → /ticket track 系列
 QUERY_KEYWORDS = {
     "進度如何": "/ticket track summary",
@@ -188,9 +192,30 @@ def resolve_ticket_path(project_root: Path, ticket_id: str) -> Optional[Path]:
 
 
 def _is_keyword_negated(prompt: str, keyword: str) -> bool:
-    """檢查 keyword 在 prompt 中是否緊接在否定詞之後"""
+    """
+    檢查 keyword 在 prompt 中是否被否定詞修飾。
+
+    支援兩種模式：
+    1. 緊鄰模式：否定詞 + 關鍵字（如「不需要查詢」）
+    2. 遠距模式：否定詞出現在關鍵字前 NEGATION_WINDOW_SIZE 字符內
+       （如「完全不需要去查詢」、「我不是說不用查詢進度」）
+
+    Args:
+        prompt: 用戶輸入的提示文本（已轉小寫）
+        keyword: 待檢查的關鍵字
+
+    Returns:
+        True 如果關鍵字被否定詞修飾，否則 False
+    """
     for negation in NEGATION_WORDS:
-        if negation + keyword in prompt:
+        negation_idx = prompt.find(negation)
+        if negation_idx == -1:
+            continue
+        # 取否定詞後的窗口文本（支援遠距否定詞）
+        window_start = negation_idx + len(negation)
+        window_end = window_start + NEGATION_WINDOW_SIZE
+        window_text = prompt[window_start:window_end]
+        if keyword in window_text:
             return True
     return False
 
