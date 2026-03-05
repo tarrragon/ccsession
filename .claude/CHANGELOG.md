@@ -1,3 +1,42 @@
+## [1.1.31] - 2026-03-05
+
+### Summary
+chore: W1-014/015/016 sync 腳本修正、project-init Python 3.14、IMP-016 error-pattern
+
+---
+
+## [1.1.30] - 2026-03-05
+
+### Summary
+docs: 新增 PC-003 錯誤模式 + CLI 失敗調查流程改進（decision-tree, incident-response）
+
+---
+
+
+## [1.1.29] - 2026-03-05
+
+### Summary
+docs: 新增 IMP-015 腳本自我刪除錯誤模式
+
+---
+
+
+## [1.1.28] - 2026-03-05
+
+### Summary
+fix: sync-push 移除 rsync verbose，防止 31KB 輸出溢出
+
+---
+
+
+## [1.1.27] - 2026-03-05
+
+### Summary
+fix: sync-claude-pull.sh 修復自我刪除風險、untracked 誤判、clone timeout + 同步 v1.1.26 更新
+
+---
+
+
 ## [1.1.26] - 2026-03-05
 
 ### Summary
