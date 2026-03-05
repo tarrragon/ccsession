@@ -1,3 +1,43 @@
+## [1.1.26] - 2026-03-05
+
+### Summary
+feat: 新增 incident-response 修復三階段規則 + 測試金字塔驗證順序 + PC-004 error-pattern (W1-009)
+
+---
+
+
+## [1.1.25] - 2026-03-05
+
+### Summary
+fix: 跨版本任務遺漏防護
+
+---
+
+
+## [1.1.24] - 2026-03-05
+
+### Summary
+fix: 修正 Stop hook reason 欄位被 Claude 解讀為命令導致自動執行 resume (IMP-014)
+
+---
+
+
+## [1.1.23] - 2026-03-05
+
+### Summary
+fix: 修正框架路徑偵測 - get_project_root() 支援 Go/混合型專案（CLAUDE.md/go.mod 搜尋），version.py 加入 fallback WARNING log，sync-push 排除 Python 暫存目錄
+
+---
+
+
+## [1.1.22] - 2026-03-05
+
+### Summary
+feat: 新增 Go 代理人 + i18n/常數規範 + 移除 emoji
+
+---
+
+
 ## [1.1.21] - 2026-03-05
 
 ### Summary
