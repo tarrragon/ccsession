@@ -1,3 +1,31 @@
+## [1.1.35] - 2026-03-05
+
+### Summary
+fix: sync-pull 補齊 symlink 檢查 + git 返回碼驗證
+
+---
+
+## [1.1.34] - 2026-03-05
+
+### Summary
+feat: sync-pull 新增遠端已刪除檔案清理機制
+
+---
+
+## [1.1.33] - 2026-03-05
+
+### Summary
+fix: escape sequence warning + 移除舊 .sh 腳本
+
+---
+
+## [1.1.32] - 2026-03-05
+
+### Summary
+refactor: 移除舊 sync .sh 腳本，統一使用 .py 版本
+
+---
+
 ## [1.1.31] - 2026-03-05
 
 ### Summary
