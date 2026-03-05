@@ -88,7 +88,7 @@
 | action | 參數 | 說明 |
 |--------|------|------|
 | `get_session_list` | 無 | 請求所有 session 列表 |
-| `get_session_history` | sessionId, limit | 請求指定 session 歷史 |
+| `get_session_history` | sessionId, limit, before (optional) | 請求指定 session 歷史；before 為 timestamp，用於載入此時間點之前的訊息 |
 | `subscribe_session` | sessionId | 訂閱即時事件 |
 | `unsubscribe_session` | sessionId | 取消訂閱 |
 
@@ -101,6 +101,11 @@
 | `session_history` | SessionEvent[] | 主動請求 |
 | `session_status_change` | sessionId, newStatus | 狀態變更 |
 | `error` | message, code | 請求處理失敗 |
+
+**[Phase 3+ 預留] 後端搜尋支援**：
+- 搜尋功能在 Phase 1-2 採用純前端實現（搜尋已載入內容）
+- Phase 3+ 若需要搜尋完整歷史記錄，後續可擴充 WebSocket 協議，新增 `search_session` action 和對應的 `search_results` 回應訊息
+- 目前在 Phase 1-2 範圍內不需要此訊息類型
 
 ---
 
@@ -150,4 +155,4 @@
 
 ---
 
-*最後更新: 2026-03-03*
+*最後更新: 2026-03-05*

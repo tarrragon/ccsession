@@ -193,7 +193,8 @@ Client → Server：
 {
   "action": "subscribe_session | unsubscribe_session | get_session_list | get_session_history",
   "sessionId": "uuid (optional)",
-  "limit": 100
+  "limit": 100,
+  "before": "timestamp (optional) - 用於 get_session_history，載入此時間戳之前的訊息"
 }
 ```
 

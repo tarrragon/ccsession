@@ -59,6 +59,23 @@
 2. 為每個元素產生一個子事件
 3. 保持原始順序
 
+#### A2 子事件詳細規則
+
+**子事件識別欄位**：
+
+| 欄位 | 說明 | 產生規則 |
+|------|------|---------|
+| messageId | 原始 message 唯一識別碼 | sessionID + timestamp + lineNumber |
+| contentIndex | 子事件在 content array 中的位置 | 0-indexed |
+
+**順序保證**：子事件的發送順序必須與 content array 的索引順序一致。
+
+**前端重組規則**：
+- 前端根據 messageId 對子事件進行分組
+- 同一 messageId 的子事件按 contentIndex 排序後合併顯示
+- 新子事件到達時，檢查是否屬於已存在的 message group
+
+
 ---
 
 ## 例外流程
@@ -107,6 +124,8 @@
 - [ ] 不完整 JSON 行不導致崩潰
 - [ ] 未知事件類型保留 raw JSON 通過
 - [ ] 缺少欄位時優雅降級
+- [ ] assistant 含多個內容元素（如 text + tool_use + text）時，子事件正確拆分並保持原始順序
+- [ ] 子事件包含 messageId 和 contentIndex 識別欄位
 
 ---
 
