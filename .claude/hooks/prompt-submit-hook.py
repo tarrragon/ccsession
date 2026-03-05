@@ -229,15 +229,24 @@ def check_handoff_keywords(prompt: str) -> Optional[str]:
         if len(keywords) == 1:
             # 單一關鍵字
             if keywords[0] in prompt:
+                # 若關鍵字被否定詞修飾，跳過此匹配（避免誤判否定語境）
+                if _is_keyword_negated(prompt, keywords[0]):
+                    continue
                 return skill_cmd
         elif len(keywords) == 2:
             # 組合關鍵字（都需要出現）
             # 處理特殊情況：("go back", "") 只需要檢查第一個關鍵字
             if keywords[1] == "":
                 if keywords[0] in prompt:
+                    # 若關鍵字被否定詞修飾，跳過此匹配（避免誤判否定語境）
+                    if _is_keyword_negated(prompt, keywords[0]):
+                        continue
                     return skill_cmd
             else:
                 if keywords[0] in prompt and keywords[1] in prompt:
+                    # 若任一關鍵字被否定詞修飾，跳過此匹配（避免誤判否定語境）
+                    if _is_keyword_negated(prompt, keywords[0]) or _is_keyword_negated(prompt, keywords[1]):
+                        continue
                     return skill_cmd
     return None
 
@@ -255,9 +264,15 @@ def check_decision_keywords(prompt: str) -> Optional[str]:
     for keywords, scenario in DECISION_KEYWORDS.items():
         if len(keywords) == 1:
             if keywords[0] in prompt:
+                # 若關鍵字被否定詞修飾，跳過此匹配（避免誤判否定語境）
+                if _is_keyword_negated(prompt, keywords[0]):
+                    continue
                 return scenario
         elif len(keywords) == 2:
             if keywords[0] in prompt and keywords[1] in prompt:
+                # 若任一關鍵字被否定詞修飾，跳過此匹配（避免誤判否定語境）
+                if _is_keyword_negated(prompt, keywords[0]) or _is_keyword_negated(prompt, keywords[1]):
+                    continue
                 return scenario
     return None
 
@@ -296,6 +311,9 @@ def check_skill_suggestion(prompt: str) -> Optional[tuple]:
     # 2. 檢查查詢類關鍵字
     for keyword, skill_cmd in QUERY_KEYWORDS.items():
         if keyword in prompt_lower:
+            # 若關鍵字被否定詞修飾，跳過此匹配（避免誤判否定語境）
+            if _is_keyword_negated(prompt_lower, keyword):
+                continue
             return (skill_cmd, "query")
 
     # 3. 檢查操作類關鍵字
