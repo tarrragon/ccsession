@@ -148,6 +148,7 @@ Error Patterns 是五重文件系統的核心組件之一，用於：
 | IMP-012 | 重新發明標準庫功能而不初始化 | 中 | v0.31.1 |
 | IMP-013 | 重構設計意圖盲視 | 中 | v0.31.1 |
 | IMP-014 | Stop Hook reason 欄位被 Claude 解讀為命令 | 中 | v0.3.0 |
+| IMP-015 | uv tool install --force 不更新已安裝套件程式碼 | 中 | v0.3.0 |
 
 ### 流程合規 (PC)
 
