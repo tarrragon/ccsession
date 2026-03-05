@@ -42,6 +42,15 @@ Developer 開啟應用程式後，能在 sidebar 看到所有 Claude Code sessio
    - 狀態指示燈（綠/黃/灰）
 6. Developer 點擊某個 session → 觸發 UC-002
 
+### 摘要顯示邏輯
+
+Session 摘要顯示遵循 UC-008 定義的元資料來源優先級：
+- 優先來源：sessions-index.json 的 `summary` 欄位
+- 備用來源：history.jsonl 的第一個 user message（截取前 100 字元）
+- 最終 Fallback：無有效摘要時顯示 "(unnamed session)"
+
+若無摘要欄位，Frontend 應顯示第一個 user prompt 的前 100 字元，提供有意義的 session 識別。
+
 ---
 
 ## 替代流程
@@ -83,6 +92,7 @@ Developer 開啟應用程式後，能在 sidebar 看到所有 Claude Code sessio
 - [ ] 新 session 出現時列表即時更新
 - [ ] Session 狀態變更時自動移動到正確群組
 - [ ] 無 session 時顯示友善的空狀態提示
+- [ ] 無摘要時正確顯示第一個 user prompt 或 "(unnamed session)"
 
 ---
 
@@ -110,8 +120,10 @@ Developer 開啟應用程式後，能在 sidebar 看到所有 Claude Code sessio
 [G] = 綠色指示燈
 [Y] = 黃色指示燈
 [X] = 灰色指示燈
+
+若無摘要：在摘要位置顯示第一個 user prompt 的前 100 字元
 ```
 
 ---
 
-*最後更新: 2026-03-03*
+*最後更新: 2026-03-05*
