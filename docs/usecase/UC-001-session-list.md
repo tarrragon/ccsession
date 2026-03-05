@@ -46,10 +46,10 @@ Developer 開啟應用程式後，能在 sidebar 看到所有 Claude Code sessio
 
 Session 摘要顯示遵循 UC-008 定義的元資料來源優先級：
 - 優先來源：sessions-index.json 的 `summary` 欄位
-- 備用來源：history.jsonl 的第一個 user message（截取前 100 字元）
+- 備用來源：該 session 的 JSONL 檔案中第一個 user prompt（截取前 100 字元）
 - 最終 Fallback：無有效摘要時顯示 "(unnamed session)"
 
-若無摘要欄位，Frontend 應顯示第一個 user prompt 的前 100 字元，提供有意義的 session 識別。
+若 sessions-index.json 無 `summary` 欄位，Frontend 應顯示第一個 user prompt 的前 100 字元，提供有意義的 session 識別。此處「第一個 user prompt」來自該 session 對應的 JSONL 對話紀錄檔，由 Backend 解析後透過 metadata 提供（詳見 UC-008 Session Metadata 來源優先級）。
 
 ---
 
@@ -61,11 +61,20 @@ Session 摘要顯示遵循 UC-008 定義的元資料來源優先級：
 2. Backend 推送 `session_status_change` 訊息
 3. Frontend 動態新增 session 到列表中（Active 群組）
 
-### A2: Session 狀態變更
+### A2: Session 狀態降級（active → idle → completed）
 
 1. Backend 偵測到某 session 超過閾值無新事件
 2. Backend 推送 `session_status_change` 訊息（active → idle 或 idle → completed）
-3. Frontend 將該 session 移動到對應的狀態群組
+3. Frontend 將該 session 從原群組移除，以動畫過渡插入到目標狀態群組
+4. 動畫建議：使用 slide + fade 過渡（約 300ms），讓使用者能追蹤 session 的位置變化
+
+### A4: Session 從 completed 回到 active（狀態回升）
+
+1. Backend 偵測到已 completed 的 session 出現新事件（使用者重新開啟對話）
+2. Backend 推送 `session_status_change` 訊息（completed → active）
+3. Frontend 將該 session 從 Completed 群組移除，以動畫過渡插入到 Active 群組頂部
+4. 建議以視覺強調（如短暫高亮 1 秒）標示該 session 剛回到 active，幫助使用者注意到變化
+5. 同理適用於 idle → active 的回升情境
 
 ### A3: 無任何 Session
 
@@ -93,6 +102,24 @@ Session 摘要顯示遵循 UC-008 定義的元資料來源優先級：
 - [ ] Session 狀態變更時自動移動到正確群組
 - [ ] 無 session 時顯示友善的空狀態提示
 - [ ] 無摘要時正確顯示第一個 user prompt 或 "(unnamed session)"
+
+---
+
+## 列表動畫規範
+
+Session 列表在狀態變更時應提供視覺過渡，幫助使用者追蹤 session 位置變化。
+
+| 事件 | 動畫類型 | 時長 | 說明 |
+|------|---------|------|------|
+| 新 Session 加入 | fade-in + slide-down | 300ms | 新項目從 Active 群組頂部滑入 |
+| 狀態降級（active→idle, idle→completed） | slide + fade 過渡 | 300ms | 從原群組移除，插入目標群組 |
+| 狀態回升（completed→active, idle→active） | slide + fade 過渡 + 短暫高亮 | 300ms 過渡 + 1000ms 高亮 | 插入 Active 群組頂部，高亮提示使用者注意 |
+| Session 移除（JSONL 檔案刪除） | fade-out + slide-up | 200ms | 項目從列表中淡出 |
+
+**設計原則**：
+- 動畫應輔助使用者感知變化，不應造成視覺干擾
+- 當短時間內發生多次狀態變更（如批量 session 到期），應合併動畫避免列表頻繁跳動
+- 動畫期間使用者仍可點擊其他 session（不阻擋互動）
 
 ---
 
@@ -126,4 +153,4 @@ Session 摘要顯示遵循 UC-008 定義的元資料來源優先級：
 
 ---
 
-*最後更新: 2026-03-05*
+*最後更新: 2026-03-05 (W1-009: 補充 H3 狀態回升 + M11 摘要來源統一 + L1 列表動畫)*

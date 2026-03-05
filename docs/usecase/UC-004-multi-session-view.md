@@ -90,6 +90,61 @@ Split Horizontal:        Split Vertical:        Grid 2x2:
 
 ---
 
+## 狀態持久化定義
+
+### 持久化資料模型
+
+應用關閉或重啟後需恢復的多 Panel 版面狀態：
+
+| 欄位 | 型別 | 說明 | 範例值 |
+|------|------|------|--------|
+| layoutMode | enum | 當前分割模式 | `single`, `splitHorizontal`, `splitVertical`, `grid2x2` |
+| panels | list | 各面板狀態清單（依顯示順序） | 見下方 Panel 結構 |
+
+**Panel 結構**：
+
+| 欄位 | 型別 | 說明 | 範例值 |
+|------|------|------|--------|
+| panelIndex | int | 面板位置索引（0-based） | `0`, `1`, `2`, `3` |
+| sessionId | string? | 面板綁定的 session UUID，null 表示空面板 | `"abc-123-def"` |
+| scrollPosition | double? | 捲動位置（Phase 4） | `0.85` |
+
+### 持久化行為規則
+
+| 事件 | 持久化動作 |
+|------|-----------|
+| 切換分割模式 | 立即寫入新的 layoutMode + 更新 panels 清單 |
+| 面板選擇/切換 session | 立即寫入該 panel 的 sessionId |
+| 面板關閉 | 移除該 panel，更新 layoutMode（若面板數變化導致模式降級） |
+| 應用關閉 | 無額外動作（所有變更已即時寫入） |
+
+### 恢復行為規則
+
+| 情境 | 恢復行為 |
+|------|---------|
+| 正常重啟 | 讀取持久化狀態，還原 layoutMode 和各 panel 的 sessionId |
+| 持久化 sessionId 對應的 session 已不存在 | 保留面板位置，sessionId 設為 null（空面板），由使用者重新選擇 |
+| 持久化檔案不存在或損壞 | 回退到預設狀態：layoutMode = `single`，panels 為空 |
+| 持久化面板數與 layoutMode 不一致 | 以 layoutMode 為準，多餘面板捨棄，不足面板補空 |
+
+### Phase 1 vs Phase 4 持久化範圍
+
+| 持久化項目 | Phase 1 | Phase 4 |
+|-----------|---------|---------|
+| layoutMode（分割模式） | 納入 | 納入 |
+| panels[].sessionId（面板綁定的 session） | 納入 | 納入 |
+| panels[].scrollPosition（捲動位置） | 不納入 | 納入 |
+| 面板自訂大小比例 | 不納入 | 納入 |
+| 最大化面板狀態 | 不納入 | 納入 |
+
+**Phase 1 最小可用範圍**：僅持久化分割模式和各面板的 sessionId，重啟後能恢復「誰在看哪個 session」的基本佈局。面板大小、捲動位置等細節留待 Phase 4 補充。
+
+### 儲存位置
+
+持久化資料儲存於 Flutter 端本地（如 `shared_preferences` 或本地 JSON 檔案），不經過 Go Backend。這是純前端的 UI 偏好設定，與後端的 session 資料無關。
+
+---
+
 ## 驗收條件
 
 - [ ] 支援 4 種佈局模式切換
@@ -98,8 +153,11 @@ Split Horizontal:        Split Vertical:        Grid 2x2:
 - [ ] 面板大小可拖拉調整
 - [ ] 面板可最大化/還原
 - [ ] 面板可關閉，剩餘面板自動填滿
-- [ ] 分割狀態在應用重啟後可恢復（Phase 4 配置持久化）
+- [ ] 分割模式（layoutMode）在應用重啟後可恢復
+- [ ] 各面板綁定的 sessionId 在應用重啟後可恢復
+- [ ] 持久化 sessionId 對應的 session 不存在時，面板顯示為空（優雅降級）
+- [ ] 持久化檔案不存在或損壞時，回退到預設單面板模式
 
 ---
 
-*最後更新: 2026-03-03*
+*最後更新: 2026-03-05*

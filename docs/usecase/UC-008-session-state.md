@@ -63,7 +63,7 @@
 
 1. 某 project 目錄下沒有 sessions-index.json
 2. 從 JSONL 檔名推斷 session ID
-3. 摘要使用第一個 user message 的文字（截取前 100 字元）
+3. 摘要使用 session JSONL 檔案中第一個 type 為 `user` 的 message 文字（截取前 100 字元）
 4. Git branch 標記為未知
 5. 使用備用來源填補缺失欄位，確保 session 基本資訊可用
 
@@ -100,19 +100,19 @@
 |------|---------|---------|--------------|
 | sessionId | JSONL 檔名解碼 | - | - |
 | projectPath | 目錄結構反推 | sessions-index.json | 編碼目錄名 |
-| summary | sessions-index.json `summary` | 第一個 user prompt（前 100 字元） | "(unnamed session)" |
+| summary | sessions-index.json `summary` | session JSONL 第一個 user prompt（前 100 字元） | "(unnamed session)" |
 | gitBranch | sessions-index.json `gitBranch` | - | "(unknown)" |
 | lastEventAt | 最新 JSONL 事件 timestamp | 檔案修改時間 | 檔案建立時間 |
-| eventCount | JSONL 行數計數 | sessions-index.json 記錄 | 0 |
+| eventCount | session JSONL 成功解析事件數 | sessions-index.json 記錄 | 0 |
 | status | 狀態機計算（基於 timeout） | - | - |
 
 ### 優先級邏輯說明
 
-- **Summary**：優先從 sessions-index.json 讀取。若無，則解析 history.jsonl 的第一個 user message，截取前 100 字元。若檔案為空或不存在，顯示預設值。
+- **Summary**（canonical 定義，UC-001 等前端 UC 應引用本定義）：優先從 sessions-index.json 讀取。若無，則解析該 session 的 JSONL 檔案（`[session-uuid].jsonl`）中第一個 type 為 `user` 的 message，截取前 100 字元作為摘要。若檔案為空或不存在，顯示預設值 "(unnamed session)"。注意：此處的來源是 per-session JSONL 檔案，而非全域的 `history.jsonl`（後者僅用於 session-to-project 映射）。
 - **Git Branch**：僅來自 sessions-index.json。若無，顯示 "(unknown)"，而非空值。
 - **Project Path**：優先通過目錄編碼反推。若編碼不存在或破損，可從 sessions-index.json 補救。
 - **Last Active**：以 JSONL 最後事件的 timestamp 為準（最精確）。若 JSONL 為空，使用檔案修改時間。
-- **Event Count**：通過讀取 JSONL 行數動態計算，避免依賴 sessions-index.json 的過時記錄。
+- **Event Count**：計算 session JSONL 檔案中**成功解析為合法 JSON 物件的事件行數**，而非原始行數。空行、格式錯誤行不計入。此值動態計算，避免依賴 sessions-index.json 的過時記錄。
 
 ---
 
