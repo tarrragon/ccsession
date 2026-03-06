@@ -62,12 +62,11 @@ CLI 或內部工具報錯時，禁止假設歸因，必須依序調查：
 |------|------|------|
 | incident-response 調查步驟 | 第六層新增工具失敗 vs 邏輯失敗分流 | .claude/rules/flows/incident-response.md |
 | decision-tree 分流 | 第六層區分 CLI 報錯和邏輯錯誤 | .claude/rules/core/decision-tree.md |
+| PostToolUse Hook | Bash 非零退出碼時自動提醒查 --help | .claude/hooks/cli-failure-help-reminder-hook.py |
 
 ### 待實作
 
-| 措施 | 說明 | Ticket |
-|------|------|--------|
-| PostToolUse Hook | Bash 非零退出碼時自動提醒查 --help | 0.1.0-W2-004 |
+（無）
 
 ---
 
