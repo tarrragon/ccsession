@@ -64,6 +64,7 @@ class TestWaveFilter:
         args.completed = False
         args.blocked = False
         args.wave = 1
+        args.status = None
         args.format = "table"
         args.version = "0.31.0"
 
@@ -106,6 +107,7 @@ class TestWaveFilter:
         args.completed = False
         args.blocked = False
         args.wave = 99
+        args.status = None
         args.format = "table"
         args.version = "0.31.0"
 
@@ -325,7 +327,7 @@ class TestBuildStatusFilters:
     def test_status_filter_pending(self):
         """Given: --status pending，Then: 應返回 STATUS_PENDING"""
         args = Mock()
-        args.status = "pending"
+        args.status = ["pending"]
         args.pending = False
         args.in_progress = False
         args.completed = False
@@ -339,7 +341,7 @@ class TestBuildStatusFilters:
     def test_status_filter_in_progress(self):
         """Given: --status in_progress，Then: 應返回 STATUS_IN_PROGRESS"""
         args = Mock()
-        args.status = "in_progress"
+        args.status = ["in_progress"]
         args.pending = False
         args.in_progress = False
         args.completed = False
@@ -352,7 +354,7 @@ class TestBuildStatusFilters:
     def test_status_filter_completed(self):
         """Given: --status completed，Then: 應返回 STATUS_COMPLETED"""
         args = Mock()
-        args.status = "completed"
+        args.status = ["completed"]
         args.pending = False
         args.in_progress = False
         args.completed = False
@@ -365,7 +367,7 @@ class TestBuildStatusFilters:
     def test_status_filter_blocked(self):
         """Given: --status blocked，Then: 應返回 STATUS_BLOCKED"""
         args = Mock()
-        args.status = "blocked"
+        args.status = ["blocked"]
         args.pending = False
         args.in_progress = False
         args.completed = False
