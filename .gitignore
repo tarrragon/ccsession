@@ -75,3 +75,4 @@ server/go.work.sum
 .claude/hook-logs/
 .claude/worktrees/
 .claude/tool-results/
+.claude/handoff/archive/
