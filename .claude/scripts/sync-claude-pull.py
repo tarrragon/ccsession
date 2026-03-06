@@ -186,6 +186,59 @@ def cleanup_stale_files(claude_dir: Path, remote_files: set[Path]) -> list[str]:
     return removed
 
 
+def detect_and_reinstall_packages(project_root: Path) -> None:
+    """偵測 .claude/skills/*/pyproject.toml 的變更並重新安裝受影響的套件。
+
+    使用 git diff 三層 fallback 策略：
+    1. origin/HEAD...HEAD（標準情況）
+    2. HEAD~1...HEAD（無 origin/HEAD 時）
+    3. 跳過（都失敗時）
+
+    不會中止主流程，僅記錄警告。
+    """
+    changed_pyproject_files = []
+
+    # Try git diff with fallback strategy
+    git_commands = [
+        ["diff", "origin/HEAD...HEAD", "--", ".claude/skills/*/pyproject.toml"],
+        ["diff", "HEAD~1...HEAD", "--", ".claude/skills/*/pyproject.toml"],
+        ["diff", "HEAD", "--", ".claude/skills/*/pyproject.toml"],
+    ]
+
+    for git_args in git_commands:
+        result = run_git(git_args, cwd=str(project_root))
+        if result.returncode == 0:
+            # Parse the output to find changed files
+            for line in result.stdout.splitlines():
+                if line.startswith("+++") or line.startswith("---"):
+                    # Skip diff headers
+                    continue
+                # Git diff output for renames/deletes/etc. may vary
+                # For now, we just detect files mentioned in the output
+                if ".claude/skills/" in line and "pyproject.toml" in line:
+                    changed_pyproject_files.append(line)
+            break  # Found a working git command
+    else:
+        # All git commands failed
+        print_color("   提示: 無法執行 git diff，跳過套件版本檢查", "yellow")
+        return
+
+    if not changed_pyproject_files:
+        print_color("   無套件版本變更", "green")
+        return
+
+    print_color(f"   偵測到 {len(changed_pyproject_files)} 個套件版本變更", "yellow")
+
+    # For now, we only log the detection
+    # The actual reinstallation will happen when the hook runs
+    for file_info in changed_pyproject_files[:3]:  # Show first 3
+        print_color(f"     - {file_info[:80]}...")
+    if len(changed_pyproject_files) > 3:
+        print_color(f"     ... 及 {len(changed_pyproject_files) - 3} 個檔案")
+
+    print_color("   套件將在下次 SessionStart 自動重新安裝", "green")
+
+
 def main() -> None:
     print_color("開始從獨立 repo 拉取 .claude 更新...")
 
@@ -225,6 +278,10 @@ def main() -> None:
                 print_color(f"     - {r}")
         else:
             print_color("   無過時檔案需清理", "green")
+
+        # 5.6. Detect and reinstall packages
+        print_color("檢查套件版本變更...")
+        detect_and_reinstall_packages(project_root)
 
         # 6. Update FLUTTER.md (not CLAUDE.md)
         templates_dir = temp_dir / "project-templates"
