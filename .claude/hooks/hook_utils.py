@@ -260,6 +260,69 @@ def _setup_logger_handlers(logger: logging.Logger, log_base_dir: Path,
 # ============================================================================
 
 
+def get_project_root() -> Path:
+    """取得專案根目錄
+
+    優先順序：
+    1. 環境變數 CLAUDE_PROJECT_DIR
+    2. 從 cwd 向上搜尋 CLAUDE.md（最多 5 層）
+    3. os.getcwd() fallback（永不失敗）
+
+    Returns:
+        Path: 專案根目錄路徑
+    """
+    return _find_project_root()
+
+
+def run_git(
+    args: list,
+    cwd: "str | Path | None" = None,
+    timeout: int = 5,
+    logger: "logging.Logger | None" = None,
+) -> "str | None":
+    """執行 git 命令並回傳 stdout
+
+    Args:
+        args: git 子命令和參數，如 ["log", "-1", "--format=%ct"]
+        cwd: 工作目錄（預設為當前目錄）
+        timeout: 執行超時秒數（預設 5）
+        logger: 可選日誌物件，失敗時記錄 warning
+
+    Returns:
+        stdout 輸出（stripped），或 None 若執行失敗
+    """
+    import subprocess
+
+    try:
+        result = subprocess.run(
+            args,
+            capture_output=True,
+            text=True,
+            cwd=cwd,
+            timeout=timeout,
+        )
+        if result.returncode == 0:
+            return result.stdout.strip()
+        else:
+            if logger:
+                logger.warning("git 命令失敗: {} (exit code: {})".format(
+                    " ".join(args), result.returncode
+                ))
+            return None
+    except subprocess.TimeoutExpired:
+        if logger:
+            logger.warning("git 命令超時: {}".format(" ".join(args)))
+        return None
+    except FileNotFoundError:
+        if logger:
+            logger.warning("git 命令未找到")
+        return None
+    except OSError as e:
+        if logger:
+            logger.warning("執行 git 命令失敗: {}".format(e))
+        return None
+
+
 def setup_hook_logging(hook_name: str) -> logging.Logger:
     """建立並設定 Hook 日誌系統
 

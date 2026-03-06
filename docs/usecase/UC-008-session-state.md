@@ -63,8 +63,9 @@
 
 1. 某 project 目錄下沒有 sessions-index.json
 2. 從 JSONL 檔名推斷 session ID
-3. 摘要使用第一個 user message 的文字
+3. 摘要使用 session JSONL 檔案中第一個 type 為 `user` 的 message 文字（截取前 100 字元）
 4. Git branch 標記為未知
+5. 使用備用來源填補缺失欄位，確保 session 基本資訊可用
 
 ### A2: 定期狀態掃描
 
@@ -93,17 +94,25 @@
 
 ---
 
-## Session Metadata 來源
+## Session Metadata 來源優先級
 
-| 欄位 | 主要來源 | 備用來源 |
-|------|---------|---------|
-| sessionId | JSONL 檔名 | - |
-| projectPath | 目錄路徑解碼 | history.jsonl |
-| summary | sessions-index.json | 第一個 user prompt |
-| gitBranch | sessions-index.json | 無 |
-| lastEventAt | 最新事件 timestamp | 檔案修改時間 |
-| eventCount | 累計計數 | JSONL 行數 |
-| status | 狀態機計算 | - |
+| 欄位 | 優先來源 | 備用來源 | 最終 Fallback |
+|------|---------|---------|--------------|
+| sessionId | JSONL 檔名解碼 | - | - |
+| projectPath | 目錄結構反推 | sessions-index.json | 編碼目錄名 |
+| summary | sessions-index.json `summary` | session JSONL 第一個 user prompt（前 100 字元） | "(unnamed session)" |
+| gitBranch | sessions-index.json `gitBranch` | - | "(unknown)" |
+| lastEventAt | 最新 JSONL 事件 timestamp | 檔案修改時間 | 檔案建立時間 |
+| eventCount | session JSONL 成功解析事件數 | sessions-index.json 記錄 | 0 |
+| status | 狀態機計算（基於 timeout） | - | - |
+
+### 優先級邏輯說明
+
+- **Summary**（canonical 定義，UC-001 等前端 UC 應引用本定義）：優先從 sessions-index.json 讀取。若無，則解析該 session 的 JSONL 檔案（`[session-uuid].jsonl`）中第一個 type 為 `user` 的 message，截取前 100 字元作為摘要。若檔案為空或不存在，顯示預設值 "(unnamed session)"。注意：此處的來源是 per-session JSONL 檔案，而非全域的 `history.jsonl`（後者僅用於 session-to-project 映射）。
+- **Git Branch**：僅來自 sessions-index.json。若無，顯示 "(unknown)"，而非空值。
+- **Project Path**：優先通過目錄編碼反推。若編碼不存在或破損，可從 sessions-index.json 補救。
+- **Last Active**：以 JSONL 最後事件的 timestamp 為準（最精確）。若 JSONL 為空，使用檔案修改時間。
+- **Event Count**：計算 session JSONL 檔案中**成功解析為合法 JSON 物件的事件行數**，而非原始行數。空行、格式錯誤行不計入。此值動態計算，避免依賴 sessions-index.json 的過時記錄。
 
 ---
 
@@ -113,10 +122,10 @@
 - [ ] 新 session 建立時自動註冊
 - [ ] 狀態自動從 active → idle → completed 轉換
 - [ ] 新事件能讓 completed session 回到 active
-- [ ] sessions-index.json 缺失時優雅降級
+- [ ] sessions-index.json 缺失時優雅降級，備用來源填補缺失欄位
 - [ ] 狀態變更時推送通知
 - [ ] 並發安全（多個 goroutine 同時存取 registry）
 
 ---
 
-*最後更新: 2026-03-03*
+*最後更新: 2026-03-05*

@@ -88,7 +88,7 @@
 | action | 參數 | 說明 |
 |--------|------|------|
 | `get_session_list` | 無 | 請求所有 session 列表 |
-| `get_session_history` | sessionId, limit | 請求指定 session 歷史 |
+| `get_session_history` | sessionId, limit, before (optional) | 請求指定 session 歷史；before 為 timestamp，用於載入此時間點之前的訊息 |
 | `subscribe_session` | sessionId | 訂閱即時事件 |
 | `unsubscribe_session` | sessionId | 取消訂閱 |
 
@@ -101,6 +101,13 @@
 | `session_history` | SessionEvent[] | 主動請求 |
 | `session_status_change` | sessionId, newStatus | 狀態變更 |
 | `error` | message, code | 請求處理失敗 |
+
+**[Phase 3+ 預留] 後端搜尋支援**：
+- 搜尋功能在 Phase 1-2 採用純前端實現（搜尋已載入內容），Phase 3+ 擴充後端全文搜尋
+- 預留 Client -> Server action：`search_session`，參數為 `sessionId`（必填）、`query`（搜尋字串，必填）、`limit`（回傳上限，選填，預設 50）、`before`（時間戳游標，選填，用於分頁）
+- 預留 Server -> Client type：`search_results`，data 內容為 `{ sessionId, query, matches: [{ event: SessionEvent, highlights: [{ field, offset, length }] }], hasMore: boolean }`
+- `highlights` 陣列標記匹配文字在 event content 中的位置，供前端高亮渲染
+- 目前在 Phase 1-2 範圍內不實作此訊息類型，Phase 3+ 啟動時再定義完整的錯誤處理和效能需求
 
 ---
 
@@ -125,13 +132,65 @@
 
 ---
 
+## WebSocket 架構預期
+
+### 使用場景定位
+
+本系統為本地監控工具（非 SaaS），Go Backend 運行在開發者本機。
+典型使用情境：1 位開發者開啟 1-2 個瀏覽器分頁，監控多個 Claude Code session。
+
+### 同時連線數預期
+
+| 場景 | 預期連線數 | 說明 |
+|------|-----------|------|
+| 典型使用 | 1-2 | 單一開發者，1 個主監控分頁 + 偶爾第 2 分頁 |
+| 多裝置 | 3-5 | 桌面瀏覽器 + 行動裝置 + 額外分頁 |
+| 設計上限 | 10 | 預留充足餘量，超過此數量不保證效能 |
+
+設計決策：以 5 個連線為效能調校基準，10 個連線為設計上限。
+不需要考慮數百或數千連線的高併發場景。
+
+### 每連線記憶體預算
+
+| 項目 | 預算 | 說明 |
+|------|------|------|
+| WebSocket 連線本身 | ~4 KB | goroutine stack + 連線狀態 |
+| 讀寫緩衝區 | ~8 KB | 讀 4 KB + 寫 4 KB |
+| 訂閱狀態 | ~1 KB | 訂閱的 session ID 集合 |
+| 發送佇列 | ~16 KB | 待發送訊息緩衝（channel buffer） |
+| **單連線合計** | **~29 KB** | |
+| **10 連線合計** | **~290 KB** | 遠低於本地應用可用記憶體 |
+
+注意：Session 資料快取（已解析的 JSONL 內容）為全域共享，不計入單連線預算。
+全域快取大小取決於監控的 session 數量，與連線數無關。
+
+### 連線管理策略
+
+| 機制 | 參數 | 說明 |
+|------|------|------|
+| 心跳間隔 | 30 秒 | Backend 發送 ping，Frontend 回應 pong |
+| 心跳超時 | 連續 3 次無回應（90 秒） | Backend 主動關閉該連線，釋放資源 |
+| 閒置超時 | 不設定 | 本地工具無需閒置斷線，由心跳機制處理假死 |
+| 斷線重連（Frontend） | 指數退避 1s-30s | 詳見替代流程 A2 |
+| 連線數上限檢查 | 超過 10 時拒絕新連線 | 回傳 HTTP 503，附帶 error message |
+
+### 廣播策略
+
+事件推送採用扇出（fan-out）模式：每個 session 事件向所有訂閱該 session 的 Client 廣播。
+單一 Client 發送失敗不影響其他 Client 接收。
+發送佇列滿時丟棄最舊訊息（而非阻塞其他 Client）。
+
+---
+
 ## 效能需求
 
-| 指標 | 目標值 |
-|------|--------|
-| 同時連線數 | >= 10 |
-| 訊息延遲 | < 50ms（本地） |
-| 重連時間 | < 5s（首次重試） |
+| 指標 | 目標值 | 說明 |
+|------|--------|------|
+| 同時連線數 | >= 10 | 設計上限，典型使用 1-5 |
+| 事件推送延遲 | < 50ms（本地） | 從檔案變更偵測到 Client 接收 |
+| 重連時間 | < 5s（首次重試） | Frontend 指數退避策略 |
+| 單連線記憶體 | < 32 KB | 含緩衝區和訂閱狀態 |
+| 廣播延遲（10 連線） | < 10ms | 扇出到所有已訂閱 Client 的額外開銷 |
 
 ---
 
@@ -150,4 +209,4 @@
 
 ---
 
-*最後更新: 2026-03-03*
+*最後更新: 2026-03-05*

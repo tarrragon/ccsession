@@ -40,3 +40,43 @@ tech_debt:
     risk: 中
     priority: P2
     status: pending
+
+  - id: TD-007
+    description: "package-version-sync-hook.py main() 認知負擔超標（60 行，指數 17）- 拆分為 _get_project_root(), _sync_packages(), _process_package()"
+    source_version: v0.1.0
+    source_ticket: 0.1.0-W1-017
+    risk: 中
+    priority: P2
+    status: pending
+
+  - id: TD-008
+    description: "sync-claude-pull.py main() 認知負擔超標（75 行，指數 20）- 拆分為 _sync_with_backup(), _finalize_sync()"
+    source_version: v0.1.0
+    source_ticket: 0.1.0-W1-017
+    risk: 中
+    priority: P2
+    status: pending
+
+  - id: TD-009
+    description: "package-version-sync-hook.py 和 sync-claude-pull.py 魔法數字未提取為常數（timeout 30/120, git 設定 1000/30, display 上限 3）"
+    source_version: v0.1.0
+    source_ticket: 0.1.0-W1-017
+    risk: 低
+    priority: P3
+    status: pending
+
+  - id: TD-010
+    description: "sync-claude-pull.py 6 個函式缺乏 docstring"
+    source_version: v0.1.0
+    source_ticket: 0.1.0-W1-017
+    risk: 低
+    priority: P3
+    status: pending
+
+  - id: TD-011
+    description: "sync-claude-pull.py EXCLUDE_FROM_SYNC 和 LOCAL_ONLY 集合設計可優化為 LOCAL_ONLY = EXCLUDE_FROM_SYNC | {...}"
+    source_version: v0.1.0
+    source_ticket: 0.1.0-W1-017
+    risk: 低
+    priority: P3
+    status: pending

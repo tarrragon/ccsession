@@ -51,6 +51,20 @@ from ticket_system.lib.chain_analyzer import ChainAnalyzer, Recommendation
 
 
 # ============================================================================
+# 模組級常數
+# ============================================================================
+
+# 方向到訊息模板和參數名稱的映射表（消除三分支結構重複）
+# 結構：direction -> (message_template, param_name)
+# 適用於 to-child、to-sibling、to-parent 三個方向，統一參數名稱為目標 ID
+_DIRECTION_MESSAGE_MAP = {
+    "to-child": (HandoffMessages.RECOMMENDATION_ENTER_CHILD, "child_id"),
+    "to-sibling": (HandoffMessages.RECOMMENDATION_SWITCH_SIBLING, "sibling_id"),
+    "to-parent": (HandoffMessages.RECOMMENDATION_RETURN_PARENT, "parent_id"),
+}
+
+
+# ============================================================================
 # 輔助函式
 # ============================================================================
 
@@ -498,21 +512,34 @@ def _resolve_direction_from_args(args: argparse.Namespace) -> str:
 
 
 
-def _print_status(ticket: dict) -> int:
+def _extract_version_from_ticket_id(ticket_id: str) -> Optional[str]:
     """
-    列印 handoff 狀態資訊。
+    從 Ticket ID 提取版本號。
+
+    格式: 0.31.0-W4-010 → 0.31.0
+
+    Args:
+        ticket_id: Ticket ID
+
+    Returns:
+        Optional[str]: 版本號，無法解析時回傳 None
+    """
+    return ticket_id.split("-W")[0] if "-W" in ticket_id else None
+
+
+def _print_header(ticket: dict) -> None:
+    """
+    列印 handoff 狀態的基本資訊。
+
+    包含 ticket_id、title、status、depth 和 chain 資訊。
 
     Args:
         ticket: Ticket 資料
-
-    Returns:
-        int: exit code 0
     """
     ticket_id = ticket.get("id")
     status = ticket.get("status")
     title = ticket.get("title")
     chain = ticket.get("chain", {})
-    children = ticket.get("children", [])
 
     print(format_msg(HandoffMessages.STATUS_HEADER_TICKET_ID, ticket_id=ticket_id))
     print(format_msg(HandoffMessages.STATUS_HEADER_TITLE, title=title))
@@ -524,63 +551,146 @@ def _print_status(ticket: dict) -> int:
     print(format_msg(HandoffMessages.STATUS_CHAIN_PARENT, parent=chain.get('parent', 'N/A')))
     print()
 
-    if children:
-        print(format_msg(HandoffMessages.STATUS_CHILDREN_COUNT, count=len(children)))
-        # 從 ticket_id 提取 version (格式: 0.31.0-W4-010)
-        version = ticket_id.split("-W")[0] if "-W" in ticket_id else None
-        for child_id in children:
-            # children 是 ID 字串列表，需要載入實際 ticket
-            if isinstance(child_id, str):
-                child_ticket = load_ticket(version, child_id) if version else None
-                if child_ticket:
-                    child_status = child_ticket.get("status", "unknown")
-                    print(format_msg(HandoffMessages.STATUS_CHILD_ITEM, child_id=child_id, status=child_status))
-                else:
-                    print(format_msg(HandoffMessages.STATUS_CHILD_NOT_FOUND, child_id=child_id))
-            elif isinstance(child_id, dict):
-                # 相容舊格式（如果 children 是 dict 列表）
-                print(format_msg(HandoffMessages.STATUS_CHILD_ITEM, child_id=child_id.get('id', 'unknown'), status=child_id.get('status', 'unknown')))
 
-    print()
-    print(HandoffMessages.STATUS_OPTIONS)
-    # 從 ticket_id 提取 version
-    version = ticket_id.split("-W")[0] if "-W" in ticket_id else None
-    direction = ChainAnalyzer.determine_direction(ticket, version)
+def _print_children_info(children: list, version: Optional[str]) -> None:
+    """
+    列印子任務資訊。
+
+    args:
+        children: 子任務 ID 清單（可能是字串或 dict）
+        version: 版本號（用於載入子任務詳細資訊）
+    """
+    if not children:
+        return
+
+    print(format_msg(HandoffMessages.STATUS_CHILDREN_COUNT, count=len(children)))
+    for child_id in children:
+        # children 是 ID 字串列表，需要載入實際 ticket
+        if isinstance(child_id, str):
+            child_ticket = load_ticket(version, child_id) if version else None
+            if child_ticket:
+                child_status = child_ticket.get("status", "unknown")
+                print(format_msg(HandoffMessages.STATUS_CHILD_ITEM, child_id=child_id, status=child_status))
+            else:
+                print(format_msg(HandoffMessages.STATUS_CHILD_NOT_FOUND, child_id=child_id))
+        elif isinstance(child_id, dict):
+            # 相容舊格式（如果 children 是 dict 列表）
+            print(format_msg(HandoffMessages.STATUS_CHILD_ITEM, child_id=child_id.get('id', 'unknown'), status=child_id.get('status', 'unknown')))
+
+
+def _print_direction_options(
+    ticket: dict,
+    direction: str,
+    version: Optional[str],
+    children: list,
+) -> None:
+    """
+    列印根據交接方向可用的 handoff 選項。
+
+    處理 5 種方向：to-parent、to-child、to-sibling、wait、completed。
+
+    Args:
+        ticket: Ticket 資料
+        direction: 由 ChainAnalyzer 決定的交接方向
+        version: 版本號
+        children: 子任務清單
+    """
+    ticket_id = ticket.get("id")
+    chain = ticket.get("chain", {})
 
     if direction == "to-parent" and chain.get("parent"):
         print(format_msg(HandoffMessages.STATUS_USE_TO_PARENT, ticket_id=ticket_id))
     elif direction == "to-child":
-        for child_id in children:
-            # children 可能是 ID 字串或 dict
-            if isinstance(child_id, str):
-                print(format_msg(HandoffMessages.STATUS_USE_TO_CHILD, ticket_id=ticket_id, child_id=child_id))
-            elif isinstance(child_id, dict):
-                print(format_msg(HandoffMessages.STATUS_USE_TO_CHILD, ticket_id=ticket_id, child_id=child_id.get('id')))
+        _print_to_child_options(ticket_id, children)
     elif direction == "to-sibling":
-        # 從父任務載入兄弟列表
-        parent_id = chain.get("parent")
-        if parent_id and version:
-            parent_ticket = load_ticket(version, parent_id)
-            if parent_ticket:
-                siblings = parent_ticket.get("children", [])
-                for sibling_id in siblings:
-                    if isinstance(sibling_id, str):
-                        if sibling_id == ticket_id:
-                            continue
-                        sibling_ticket = load_ticket(version, sibling_id)
-                        if sibling_ticket and sibling_ticket.get("status") != STATUS_COMPLETED:
-                            print(format_msg(HandoffMessages.STATUS_USE_TO_SIBLING, ticket_id=ticket_id, sibling_id=sibling_id))
-                    elif isinstance(sibling_id, dict):
-                        if sibling_id.get("id") == ticket_id:
-                            continue
-                        if sibling_id.get("status") != STATUS_COMPLETED:
-                            print(format_msg(HandoffMessages.STATUS_USE_TO_SIBLING, ticket_id=ticket_id, sibling_id=sibling_id.get('id')))
+        _print_to_sibling_options(ticket_id, chain, version)
     elif direction == "wait":
         print(HandoffMessages.STATUS_WAIT_DEPENDENCIES)
     elif direction == "completed":
         print(HandoffMessages.STATUS_NO_PENDING_TASKS)
 
-    # 建議下一步
+
+def _print_to_child_options(ticket_id: str, children: list) -> None:
+    """
+    列印 to-child 方向的子任務選項。
+
+    Args:
+        ticket_id: 當前 Ticket ID
+        children: 子任務清單（可能是字串或 dict）
+    """
+    for child_id in children:
+        # children 可能是 ID 字串或 dict
+        if isinstance(child_id, str):
+            print(format_msg(HandoffMessages.STATUS_USE_TO_CHILD, ticket_id=ticket_id, child_id=child_id))
+        elif isinstance(child_id, dict):
+            print(format_msg(HandoffMessages.STATUS_USE_TO_CHILD, ticket_id=ticket_id, child_id=child_id.get('id')))
+
+
+def _print_to_sibling_options(ticket_id: str, chain: dict, version: Optional[str]) -> None:
+    """
+    列印 to-sibling 方向的兄弟任務選項。
+
+    從父任務載入兄弟列表，過濾掉自己和已完成的兄弟。
+
+    Args:
+        ticket_id: 當前 Ticket ID
+        chain: Ticket 的 chain 資訊（含 parent）
+        version: 版本號
+    """
+    parent_id = chain.get("parent")
+    if not (parent_id and version):
+        return
+
+    parent_ticket = load_ticket(version, parent_id)
+    if not parent_ticket:
+        return
+
+    siblings = parent_ticket.get("children", [])
+    for sibling_id in siblings:
+        if isinstance(sibling_id, str):
+            if sibling_id == ticket_id:
+                continue
+            sibling_ticket = load_ticket(version, sibling_id)
+            if sibling_ticket and sibling_ticket.get("status") != STATUS_COMPLETED:
+                print(format_msg(HandoffMessages.STATUS_USE_TO_SIBLING, ticket_id=ticket_id, sibling_id=sibling_id))
+        elif isinstance(sibling_id, dict):
+            if sibling_id.get("id") == ticket_id:
+                continue
+            if sibling_id.get("status") != STATUS_COMPLETED:
+                print(format_msg(HandoffMessages.STATUS_USE_TO_SIBLING, ticket_id=ticket_id, sibling_id=sibling_id.get('id')))
+
+
+def _print_status(ticket: dict) -> int:
+    """
+    列印 handoff 狀態資訊。
+
+    整合子函式的完整流程，包括基本資訊、子任務、方向選項和建議。
+
+    Args:
+        ticket: Ticket 資料
+
+    Returns:
+        int: exit code 0
+    """
+    ticket_id = ticket.get("id")
+    children = ticket.get("children", [])
+
+    # 版本號提取一次，傳入各子函式
+    version = _extract_version_from_ticket_id(ticket_id)
+
+    # 列印基本資訊
+    _print_header(ticket)
+
+    # 列印子任務資訊
+    _print_children_info(children, version)
+    print()
+
+    # 列印交接方向選項
+    print(HandoffMessages.STATUS_OPTIONS)
+    direction = ChainAnalyzer.determine_direction(ticket, version)
+    _print_direction_options(ticket, direction, version, children)
+
+    # 列印建議下一步
     print()
     print("=" * 50)
     print(SectionHeaders.SUGGESTED_NEXT_STEP)
@@ -590,16 +700,48 @@ def _print_status(ticket: dict) -> int:
     return 0
 
 
+def _print_direction_recommendation(
+    rec: Recommendation,
+    msg_template: str,
+    param_name: str,
+) -> None:
+    """列印方向建議（to-child/to-sibling/to-parent）。使用映射表消除重複。"""
+    kwargs = {param_name: rec.next_target_id}
+    print(format_msg(msg_template, **kwargs))
+    if rec.next_target_title:
+        print(format_msg(HandoffMessages.RECOMMENDATION_TITLE, title=rec.next_target_title))
+    print(format_msg(HandoffMessages.RECOMMENDATION_REASON, reason=rec.reason))
+
+
+def _print_execute_command(rec: Recommendation) -> None:
+    """列印建議執行的命令，根據方向添加對應註解。"""
+    if not rec.command:
+        return
+
+    # 選擇註解文字
+    if rec.direction == "wait" and rec.blocked_by:
+        comment = HandoffMessages.RECOMMENDATION_EXECUTE_COMMENT_CHECK
+    elif rec.direction == "completed":
+        comment = HandoffMessages.RECOMMENDATION_EXECUTE_COMMENT_COMPLETE
+    else:
+        comment = None
+
+    # 列印命令
+    if comment:
+        print(format_msg(
+            HandoffMessages.RECOMMENDATION_EXECUTE_WITH_COMMENT,
+            command=rec.command,
+            comment=comment,
+        ))
+    else:
+        print(format_msg(HandoffMessages.RECOMMENDATION_EXECUTE, command=rec.command))
+
+
 def _print_recommendation(ticket: dict, direction: str, version: str = None) -> None:
     """
     列印建議下一步行動。
 
-    根據 ticket-lifecycle.md 的設計，分析優先級為：
-    1. 有子 Ticket 可開始
-    2. 有被解除阻塞的 Ticket
-    3. 有同層兄弟 Ticket
-    4. 同 Wave 有其他 pending
-    5. 任務鏈全部完成
+    使用模組級映射表消除 to-child/to-sibling/to-parent 三分支的結構性重複。
 
     Args:
         ticket: Ticket 資料
@@ -609,41 +751,29 @@ def _print_recommendation(ticket: dict, direction: str, version: str = None) -> 
     recommendation = ChainAnalyzer.get_recommendation(direction, ticket, version)
 
     # 根據方向類型輸出對應資訊
-    if recommendation.direction == "to-child":
-        print(format_msg(HandoffMessages.RECOMMENDATION_ENTER_CHILD, child_id=recommendation.next_target_id))
-        if recommendation.next_target_title:
-            print(format_msg(HandoffMessages.RECOMMENDATION_TITLE, title=recommendation.next_target_title))
-        print(format_msg(HandoffMessages.RECOMMENDATION_REASON, reason=recommendation.reason))
-    elif recommendation.direction == "to-sibling":
-        print(format_msg(HandoffMessages.RECOMMENDATION_SWITCH_SIBLING, sibling_id=recommendation.next_target_id))
-        if recommendation.next_target_title:
-            print(format_msg(HandoffMessages.RECOMMENDATION_TITLE, title=recommendation.next_target_title))
-        print(format_msg(HandoffMessages.RECOMMENDATION_REASON, reason=recommendation.reason))
-    elif recommendation.direction == "to-parent":
-        print(format_msg(HandoffMessages.RECOMMENDATION_RETURN_PARENT, parent_id=recommendation.next_target_id))
-        if recommendation.next_target_title:
-            print(format_msg(HandoffMessages.RECOMMENDATION_TITLE, title=recommendation.next_target_title))
-        print(format_msg(HandoffMessages.RECOMMENDATION_REASON, reason=recommendation.reason))
+    if recommendation.direction in _DIRECTION_MESSAGE_MAP:
+        msg_template, param_name = _DIRECTION_MESSAGE_MAP[recommendation.direction]
+        _print_direction_recommendation(recommendation, msg_template, param_name)
     elif recommendation.direction == "wait":
         print(HandoffMessages.RECOMMENDATION_WAIT)
         if recommendation.blocked_by:
-            print(format_msg(HandoffMessages.RECOMMENDATION_BLOCKED_BY, blocked_by=', '.join(recommendation.blocked_by)))
+            print(format_msg(
+                HandoffMessages.RECOMMENDATION_BLOCKED_BY,
+                blocked_by=', '.join(recommendation.blocked_by),
+            ))
         print(format_msg(HandoffMessages.RECOMMENDATION_REASON, reason=recommendation.reason))
     elif recommendation.direction == "completed":
-        print(format_msg(HandoffMessages.RECOMMENDATION_COMPLETED, root_id=recommendation.next_target_id))
+        print(format_msg(
+            HandoffMessages.RECOMMENDATION_COMPLETED,
+            root_id=recommendation.next_target_id,
+        ))
         print(format_msg(HandoffMessages.RECOMMENDATION_REASON, reason=recommendation.reason))
     else:
         print(format_msg(HandoffMessages.RECOMMENDATION_REASON, reason=recommendation.reason))
 
     # 輸出執行命令
     print()
-    if recommendation.command:
-        if recommendation.direction == "wait" and recommendation.blocked_by:
-            print(format_msg(HandoffMessages.RECOMMENDATION_EXECUTE, command=recommendation.command) + "  " + HandoffMessages.RECOMMENDATION_EXECUTE_COMMENT_CHECK)
-        elif recommendation.direction == "completed":
-            print(format_msg(HandoffMessages.RECOMMENDATION_EXECUTE, command=recommendation.command) + "  " + HandoffMessages.RECOMMENDATION_EXECUTE_COMMENT_COMPLETE)
-        else:
-            print(format_msg(HandoffMessages.RECOMMENDATION_EXECUTE, command=recommendation.command))
+    _print_execute_command(recommendation)
 
 
 def _find_completed_tickets(version: str) -> list[Dict[str, Any]]:

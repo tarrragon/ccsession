@@ -58,7 +58,26 @@
 | `/home/user/my-project` | `-home-user-my-project` |
 | `/Users/tarragon/Projects/ccsession` | `-Users-tarragon-Projects-ccsession` |
 
-### 2.3 JSONL 事件結構
+### 2.3 時間戳格式定義
+
+本系統所有時間戳統一使用 **ISO 8601 格式（UTC，毫秒精度）**：
+
+```
+格式：YYYY-MM-DDTHH:mm:ss.sssZ
+範例：2026-03-05T10:30:45.937Z
+```
+
+| 使用位置 | 格式 | 說明 |
+|---------|------|------|
+| JSONL 來源 `timestamp` 欄位 | ISO 8601 UTC（毫秒） | Claude Code 原生格式，直接沿用 |
+| WebSocket 協議所有時間欄位 | ISO 8601 UTC（毫秒） | 包含 session_event、session_history、session_list 中的時間 |
+| Go Backend 內部 | `time.Time` | 解析 ISO 8601 字串為 Go 原生型別 |
+| Flutter Frontend | `DateTime.parse()` | 解析 ISO 8601 字串為 Dart DateTime |
+| `get_session_history` 的 `before` 參數 | ISO 8601 UTC（毫秒） | 用於 timestamp-based cursor 分頁 |
+
+**選擇 ISO 8601 而非 Unix 毫秒的理由**：Claude Code JSONL 原生使用 ISO 8601 格式，沿用可避免轉換成本和精度損失，且人類可讀性更佳，便於除錯。
+
+### 2.4 JSONL 事件結構
 
 每行一個 JSON 物件，基本結構：
 
@@ -73,23 +92,40 @@
 }
 ```
 
-#### 事件類型
+#### 頂層事件類型
 
-| type | 說明 | content 格式 |
-|------|------|-------------|
-| `user` | 使用者訊息 | string |
-| `assistant` | 助手回應 | content array |
+| type | 說明 | message.content 格式 |
+|------|------|---------------------|
+| `user` | 使用者訊息 | string（純文字） |
+| `assistant` | 助手回應 | content array（見下表） |
+| `tool_result` | 工具執行結果 | content array，元素含 `tool_use_id` + `type: "tool_result"` |
+
+> 注意：JSONL 中還存在 `progress`、`queue-operation`、`file-history-snapshot` 等輔助類型，
+> 這些類型不包含對話內容，Backend 解析時應忽略。
+
+#### JSONL 頂層常見欄位
+
+每個 JSONL 行除了 `type` 和 `message` 之外，還包含以下常見欄位：
+
+| 欄位 | 說明 | 範例 |
+|------|------|------|
+| `uuid` | 該行的唯一識別符 | `"3809ab6c-f022-4e5b-87bb-a2c8bab2d5db"` |
+| `sessionId` | 所屬 session UUID | `"f635f2ad-9e19-4fca-ba65-4f836ab7b737"` |
+| `timestamp` | ISO 8601 UTC 毫秒時間戳 | `"2026-03-05T04:44:24.361Z"` |
+| `parentUuid` | 父訊息 UUID（對話樹結構） | `"0adb42a3-..."` 或 `null` |
+| `version` | Claude Code 版本號 | `"2.1.69"` |
+| `gitBranch` | 當前 Git 分支 | `"feat/my-feature"` |
+| `cwd` | 當前工作目錄 | `"/Users/user/project"` |
 
 #### Assistant content array 元素類型
 
 | type | 說明 | 關鍵欄位 |
 |------|------|---------|
-| `text` | 文字回應 | `text` |
-| `tool_use` | 工具呼叫 | `name`, `input` |
-| `tool_result` | 工具結果 | `content` |
-| `thinking` | 思考過程 | `thinking` |
+| `text` | 文字回應 | `text`（string） |
+| `tool_use` | 工具呼叫 | `id`（工具呼叫 ID）, `name`（工具名稱）, `input`（參數 object） |
+| `thinking` | 思考過程 | `thinking`（string） |
 
-### 2.4 sessions-index.json 結構
+### 2.5 sessions-index.json 結構
 
 ```json
 {
@@ -106,7 +142,7 @@
 }
 ```
 
-### 2.5 history.jsonl 結構
+### 2.6 history.jsonl 結構
 
 每行包含：
 
@@ -168,14 +204,35 @@ type SessionFileReader struct {
 
 ```go
 type SessionEvent struct {
-    SessionID   string          `json:"sessionId"`
-    ProjectPath string          `json:"projectPath"`
-    Type        string          `json:"type"`        // user, assistant, tool_use, tool_result
-    Timestamp   time.Time       `json:"timestamp"`
-    Content     json.RawMessage `json:"content"`
-    ToolName    string          `json:"toolName,omitempty"`
+    SessionID     string          `json:"sessionId"`
+    ProjectPath   string          `json:"projectPath"`
+    Type          string          `json:"type"`         // user, assistant, tool_use, tool_result, thinking
+    Timestamp     time.Time       `json:"timestamp"`
+    MessageID     string          `json:"messageId"`    // JSONL 行的 uuid，用於去重和排序
+    ContentIndex  int             `json:"contentIndex"` // 在 assistant content array 中的索引（非 assistant 類型為 -1）
+    IsLastContent bool            `json:"isLastContent"` // 是否為該 messageId 下的最後一個子事件
+    Content       EventContent    `json:"content"`
+    ToolName      string          `json:"toolName,omitempty"`
 }
 ```
+
+#### EventContent 定義
+
+SessionEvent.Content 的結構依 Type 而異：
+
+| Type | Content 結構 | 欄位說明 |
+|------|-------------|---------|
+| `user` | `{ "text": string }` | `text`: 使用者輸入的完整文字 |
+| `assistant` | `{ "text": string }` | `text`: 助手的文字回應內容 |
+| `tool_use` | `{ "toolName": string, "toolInput": object, "toolUseId": string }` | `toolName`: 工具名稱（如 "Read", "Bash"）；`toolInput`: 工具呼叫參數（原始 JSON）；`toolUseId`: 工具呼叫的唯一識別符，用於與 tool_result 配對 |
+| `tool_result` | `{ "toolUseId": string, "output": string, "isError": bool }` | `toolUseId`: 對應 tool_use 的 ID；`output`: 工具執行結果文字；`isError`: 是否為錯誤結果 |
+| `thinking` | `{ "text": string }` | `text`: 模型的思考過程文字 |
+
+**ContentIndex 說明**：一個 assistant JSONL 行的 `message.content` 陣列可能包含多個元素（例如先 text 再 tool_use）。Backend 將陣列展開為多個 SessionEvent 時，`contentIndex` 記錄該元素在原始陣列中的位置（0-based）。非 assistant 類型（user、tool_result）的 `contentIndex` 固定為 -1。
+
+**MessageID 說明**：對應 JSONL 行的 `uuid` 欄位。用於：(1) 事件去重（同一 JSONL 行展開的多個 SessionEvent 共享同一 messageId）；(2) 配合 contentIndex 可精確定位原始資料。
+
+**IsLastContent 說明**：當一個 assistant JSONL 行的 `message.content` 陣列包含多個元素時，Backend 會為每個元素產生一個子事件。`isLastContent` 在最後一個子事件上設置為 true（即 contentIndex == len(content) - 1），其餘為 false。Frontend 可根據此信號知道何時 message 完整，進行最終組裝和呈現。此欄位實現了「Boundary 信號方案」（詳見 UC-007 A2 和 W1-008 設計決策），使 Backend 主動告知 Frontend message 邊界。
 
 ### 3.3 WebSocket Server
 
@@ -193,7 +250,8 @@ Client → Server：
 {
   "action": "subscribe_session | unsubscribe_session | get_session_list | get_session_history",
   "sessionId": "uuid (optional)",
-  "limit": 100
+  "limit": 100,
+  "before": "ISO 8601 timestamp (optional)"
 }
 ```
 
@@ -206,13 +264,28 @@ Server → Client：
 }
 ```
 
+#### get_session_history 參數說明
+
+| 參數 | 類型 | 必填 | 預設值 | 說明 |
+|------|------|------|-------|------|
+| `sessionId` | string | 是 | - | 目標 session 的 UUID |
+| `limit` | int | 否 | 100 | 回傳的最大事件數量，上限為 `max_history_lines`（預設 1000） |
+| `before` | string | 否 | null | ISO 8601 時間戳，回傳此時間之前的事件（用於向前分頁） |
+
+**before=null 語義**：當 `before` 為 null 或未提供時，回傳該 session **最新的** `limit` 筆事件（從尾端算起）。等同於「載入最近的對話」。
+
+**首次載入 vs 分頁載入**：
+- 首次開啟 session 時，Frontend 發送 `get_session_history(sessionId)`（不帶 before），Backend 回傳最新 100 筆事件
+- 使用者點擊「載入更早的訊息」時，Frontend 以已載入最早事件的 timestamp 作為 `before` 參數，每次載入 100 筆
+- `max_history_lines`（配置值，預設 1000）為 Backend 單一 session 在記憶體中保留的最大事件數上限
+
 #### 訊息類型說明
 
 | 類型 | 觸發時機 | data 內容 |
 |------|---------|----------|
 | `session_list` | Client 連線時 / 請求時 | 所有 session 列表及 metadata |
 | `session_event` | 新事件寫入 JSONL | 單一 SessionEvent |
-| `session_history` | Client 請求指定 session | SessionEvent 陣列 |
+| `session_history` | Client 請求指定 session | SessionEvent 陣列（依 timestamp 升序排列） |
 | `session_status_change` | Session 狀態變更 | session ID + 新狀態 |
 
 #### 連線管理
@@ -260,7 +333,7 @@ port: 8765                        # WebSocket 監聽 port
 project_filter: []                # 限制監控的專案路徑（空 = 全部）
 idle_timeout: "2m"                # active -> idle 閾值
 completed_timeout: "30m"          # idle -> completed 閾值
-max_history_lines: 1000           # 首次載入最大行數
+max_history_lines: 1000           # 單一 session 記憶體保留最大事件數上限
 ```
 
 支援 CLI flag 覆蓋：
@@ -584,4 +657,4 @@ if _, known := knownFields[key]; !known {
 ---
 
 *最後更新: 2026-03-05*
-*版本: 1.1.0 - 新增第 7 節：可觀測性設計（log 分層規範、JSONL 格式變動偵測流程）*
+*版本: 1.3.0 - 新增 IsLastContent 欄位（Boundary 信號方案，W1-008 決策）；補充 thinking 事件類型*

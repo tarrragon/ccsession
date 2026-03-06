@@ -56,7 +56,31 @@ Go Backend 啟動後，持續監控 `~/.claude/projects/` 目錄下所有 `.json
 
 1. Developer 首次在某專案使用 Claude Code
 2. `~/.claude/projects/` 下新增一個編碼後的 project 子目錄
-3. Backend 偵測到新子目錄，開始監控其下的檔案
+3. Backend 偵測到新子目錄
+4. 掃描該目錄下所有既存 `.jsonl` 檔案
+5. 對每個既存檔案執行初始載入（同 A3 流程）
+6. 為該目錄建立 watcher，開始監控後續檔案變更
+
+#### A2 既存 JSONL 掃描規則
+
+新 project 目錄被偵測時，目錄內可能已包含多個 `.jsonl` 檔案（Developer 可能已使用 Claude Code 一段時間後才啟動 Monitor）。掃描規則如下：
+
+| 規則 | 說明 |
+|------|------|
+| 掃描範圍 | 目錄下所有 `*.jsonl` 檔案（不遞迴子目錄） |
+| 檔案過濾 | 僅處理副檔名為 `.jsonl` 的檔案，忽略 `.json` 等其他檔案（如 `sessions-index.json`） |
+| 載入順序 | 依檔案修改時間（mtime）由舊到新排序載入，確保 Session Registry 按時間順序建立 session |
+| 單檔載入方式 | 同 A3：讀取最後 N 行（可配置，預設 1000 行），offset 設為檔案結尾 |
+| 並行控制 | 同一 project 目錄內的多個檔案以序列方式逐一載入，避免啟動瞬間 I/O 暴增 |
+
+#### A2 多 JSONL 檔案處理方式
+
+每個 project 目錄下可能同時存在多個 `.jsonl` 檔案，對應不同的 session。處理方式：
+
+1. **一檔一 Session**：每個 `.jsonl` 檔案對應一個獨立的 session（檔案名即 session UUID）
+2. **獨立 goroutine**：每個檔案由獨立的 reader goroutine 負責後續增量讀取
+3. **獨立 offset**：每個檔案維護各自的讀取 offset，互不影響
+4. **總量限制**：單一 project 目錄下同時監控的檔案數上限為可配置值（預設 50），超過時按 mtime 保留最新的檔案，舊檔案僅建立 session 元資料但不持續監控
 
 ### A3: 既有檔案的初始載入
 
@@ -122,4 +146,4 @@ Go Backend 啟動後，持續監控 `~/.claude/projects/` 目錄下所有 `.json
 
 ---
 
-*最後更新: 2026-03-03*
+*最後更新: 2026-03-05*

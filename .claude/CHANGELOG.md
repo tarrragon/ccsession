@@ -1,3 +1,110 @@
+## [1.1.35] - 2026-03-05
+
+### Summary
+fix: sync-pull 補齊 symlink 檢查 + git 返回碼驗證
+
+---
+
+## [1.1.34] - 2026-03-05
+
+### Summary
+feat: sync-pull 新增遠端已刪除檔案清理機制
+
+---
+
+## [1.1.33] - 2026-03-05
+
+### Summary
+fix: escape sequence warning + 移除舊 .sh 腳本
+
+---
+
+## [1.1.32] - 2026-03-05
+
+### Summary
+refactor: 移除舊 sync .sh 腳本，統一使用 .py 版本
+
+---
+
+## [1.1.31] - 2026-03-05
+
+### Summary
+chore: W1-014/015/016 sync 腳本修正、project-init Python 3.14、IMP-016 error-pattern
+
+---
+
+## [1.1.30] - 2026-03-05
+
+### Summary
+docs: 新增 PC-003 錯誤模式 + CLI 失敗調查流程改進（decision-tree, incident-response）
+
+---
+
+
+## [1.1.29] - 2026-03-05
+
+### Summary
+docs: 新增 IMP-015 腳本自我刪除錯誤模式
+
+---
+
+
+## [1.1.28] - 2026-03-05
+
+### Summary
+fix: sync-push 移除 rsync verbose，防止 31KB 輸出溢出
+
+---
+
+
+## [1.1.27] - 2026-03-05
+
+### Summary
+fix: sync-claude-pull.sh 修復自我刪除風險、untracked 誤判、clone timeout + 同步 v1.1.26 更新
+
+---
+
+
+## [1.1.26] - 2026-03-05
+
+### Summary
+feat: 新增 incident-response 修復三階段規則 + 測試金字塔驗證順序 + PC-004 error-pattern (W1-009)
+
+---
+
+
+## [1.1.25] - 2026-03-05
+
+### Summary
+fix: 跨版本任務遺漏防護
+
+---
+
+
+## [1.1.24] - 2026-03-05
+
+### Summary
+fix: 修正 Stop hook reason 欄位被 Claude 解讀為命令導致自動執行 resume (IMP-014)
+
+---
+
+
+## [1.1.23] - 2026-03-05
+
+### Summary
+fix: 修正框架路徑偵測 - get_project_root() 支援 Go/混合型專案（CLAUDE.md/go.mod 搜尋），version.py 加入 fallback WARNING log，sync-push 排除 Python 暫存目錄
+
+---
+
+
+## [1.1.22] - 2026-03-05
+
+### Summary
+feat: 新增 Go 代理人 + i18n/常數規範 + 移除 emoji
+
+---
+
+
 ## [1.1.21] - 2026-03-05
 
 ### Summary

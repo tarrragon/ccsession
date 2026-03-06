@@ -10,6 +10,7 @@
 | **優先級** | P0 |
 | **元件** | Go Backend |
 | **依賴** | UC-006 (File Watching) |
+| **相關決策** | W1-008（子事件重組設計決策：採用 Boundary 信號方案） |
 
 ---
 
@@ -40,7 +41,7 @@
    - `tool_result` → 提取 content
    - `thinking` → 提取 thinking 欄位
 6. 組裝為統一的 SessionEvent 結構
-7. 傳送到 event channel
+7. 推送到 event channel（與 Boundary 信號機制配合，見 A2）
 
 ---
 
@@ -53,11 +54,36 @@
 3. 輸出 WARN log（含 `unknownType`, `hint: "Claude format may have changed"`）
 4. 詳見 UC-011（JSONL 格式變動偵測）
 
-### A2: 巢狀 Content Array
+### A2: 巢狀 Content Array（Boundary 信號方案）
 
 1. assistant content array 包含多個不同類型的元素
 2. 為每個元素產生一個子事件
 3. 保持原始順序
+4. Backend 在推送最後一個子事件時，設置 `isLastContent: true` 信號
+
+#### A2 子事件詳細規則
+
+**子事件識別欄位**：
+
+| 欄位 | 說明 | 產生規則 |
+|------|------|---------|
+| messageId | 原始 message 唯一識別碼 | sessionID + timestamp + lineNumber |
+| contentIndex | 子事件在 content array 中的位置 | 0-indexed |
+| isLastContent | 是否為該 messageId 下的最後一個子事件 | true: 當 contentIndex == len(content) - 1；false: 其他 |
+
+**順序保證**：子事件的發送順序必須與 content array 的索引順序一致。
+
+**設計決策**（W1-008）：
+- Backend 推送 Boundary 信號：在最後一個子事件上設置 `isLastContent: true`
+- Frontend 根據 messageId 和 isLastContent 進行重組（見下方規則）
+- 此方案相比「前端自行猜測」的設計，在 Backend 層明確定義了邊界，更符合清晰的架構思維
+
+**前端重組規則**：
+- 前端根據 messageId 對子事件進行分組
+- 同一 messageId 的子事件按 contentIndex 排序後合併顯示
+- 收到 `isLastContent: true` 時，標記該 message group 為完整，執行最終呈現
+- 若邊界信號缺失，Frontend 可使用超時機制（如 300ms）降級處理
+
 
 ---
 
@@ -107,7 +133,10 @@
 - [ ] 不完整 JSON 行不導致崩潰
 - [ ] 未知事件類型保留 raw JSON 通過
 - [ ] 缺少欄位時優雅降級
+- [ ] assistant 含多個內容元素時，子事件正確拆分並保持原始順序
+- [ ] 子事件包含 messageId、contentIndex、isLastContent 識別欄位
+- [ ] Backend 正確設置 isLastContent 信號（content array 的最後一個元素為 true）
 
 ---
 
-*最後更新: 2026-03-03*
+*最後更新: 2026-03-05（W1-008 設計決策：採用 Boundary 信號方案）*
