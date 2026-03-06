@@ -58,6 +58,14 @@ except ImportError:
 
 SKILLS_DIR_NAME = ".claude/skills"
 PYPROJECT_FILENAME = "pyproject.toml"
+HOOK_NAME = "package-version-sync-hook"
+
+# Timeout constants (in seconds)
+SHORT_OPERATION_TIMEOUT_SECONDS = 30  # For uv tool list, uninstall, cache clean
+INSTALL_OPERATION_TIMEOUT_SECONDS = 120  # For uv tool install with --reinstall
+
+# Output formatting
+SEPARATOR_LINE_WIDTH = 60
 
 
 
@@ -94,7 +102,7 @@ def scan_skill_packages(project_root: Path, logger: Optional[object] = None) -> 
 
     # 如果未提供 logger，建立一次
     if logger is None:
-        logger = setup_hook_logging("package-version-sync-hook")
+        logger = setup_hook_logging(HOOK_NAME)
 
     if not skills_dir.exists():
         return packages
@@ -172,14 +180,14 @@ def get_installed_uv_tools() -> Dict[str, str]:
         mermaid-ascii  0.5.0    ~/.venv/bin/mermaid
     """
     tools: Dict[str, str] = {}
-    logger = setup_hook_logging("package-version-sync-hook")
+    logger = setup_hook_logging(HOOK_NAME)
 
     try:
         result = subprocess.run(
             ["uv", "tool", "list"],
             capture_output=True,
             text=True,
-            timeout=30,
+            timeout=SHORT_OPERATION_TIMEOUT_SECONDS,
         )
         if result.returncode != 0:
             return tools
@@ -241,7 +249,7 @@ def reinstall_uv_tool(package_name: str, package_full_path: Path) -> bool:
     Returns:
         True if reinstall succeeded, False otherwise.
     """
-    logger = setup_hook_logging("package-version-sync-hook")
+    logger = setup_hook_logging(HOOK_NAME)
 
     try:
         # Step 1: uninstall (ignore errors if not installed)
@@ -249,7 +257,7 @@ def reinstall_uv_tool(package_name: str, package_full_path: Path) -> bool:
             ["uv", "tool", "uninstall", package_name],
             capture_output=True,
             text=True,
-            timeout=30,
+            timeout=SHORT_OPERATION_TIMEOUT_SECONDS,
         )
 
         # Step 2: cache clean (ignore errors)
@@ -257,7 +265,7 @@ def reinstall_uv_tool(package_name: str, package_full_path: Path) -> bool:
             ["uv", "cache", "clean", package_name],
             capture_output=True,
             text=True,
-            timeout=30,
+            timeout=SHORT_OPERATION_TIMEOUT_SECONDS,
         )
 
         # Step 3: install --reinstall
@@ -266,7 +274,7 @@ def reinstall_uv_tool(package_name: str, package_full_path: Path) -> bool:
             cwd=str(package_full_path),
             capture_output=True,
             text=True,
-            timeout=120,
+            timeout=INSTALL_OPERATION_TIMEOUT_SECONDS,
         )
 
         # Verify: "Building" in output confirms wheel was rebuilt
@@ -347,16 +355,16 @@ def _sync_packages(project_root: Path, packages: Dict[str, Dict[str, str]]) -> N
         project_root: Project root directory path
         packages: Dict of package names to their metadata
     """
-    print("=" * 60)
+    print("=" * SEPARATOR_LINE_WIDTH)
     print("Package Version Sync - Session Startup Check")
-    print("=" * 60)
+    print("=" * SEPARATOR_LINE_WIDTH)
 
     installed_tools = get_installed_uv_tools()
 
     for package_name, package_info in packages.items():
         _process_package(package_name, package_info, project_root, installed_tools)
 
-    print("=" * 60)
+    print("=" * SEPARATOR_LINE_WIDTH)
 
 
 def main() -> int:
@@ -372,7 +380,7 @@ def main() -> int:
         0 if successful or no action needed
         1 if errors occurred (but hook continues)
     """
-    logger = setup_hook_logging("package-version-sync-hook")
+    logger = setup_hook_logging(HOOK_NAME)
     project_root = _get_project_root()
 
     packages = scan_skill_packages(project_root, logger)
@@ -385,4 +393,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(run_hook_safely(main, "package-version-sync-hook"))
+    sys.exit(run_hook_safely(main, HOOK_NAME))

@@ -22,7 +22,19 @@ import sys
 import tempfile
 from pathlib import Path
 
+# ============================================================================
+# Constants
+# ============================================================================
+
 REPO_URL = "https://github.com/tarrragon/claude.git"
+
+# Git clone timeout protection (in seconds)
+GIT_CLONE_TIMEOUT_SECONDS = 120
+GIT_HTTP_LOW_SPEED_LIMIT_BYTES = "1000"
+GIT_HTTP_LOW_SPEED_TIME_SECONDS = "30"
+
+# Changed files display limit
+MAX_CHANGED_FILES_DISPLAY = 3
 
 EXCLUDE_FROM_SYNC = {
     ".git",
@@ -98,15 +110,15 @@ def check_uncommitted_changes(project_root: Path) -> None:
 def clone_repo(temp_dir: Path) -> None:
     """Clone the remote repo with timeout protection."""
     env = os.environ.copy()
-    env["GIT_HTTP_LOW_SPEED_LIMIT"] = "1000"
-    env["GIT_HTTP_LOW_SPEED_TIME"] = "30"
+    env["GIT_HTTP_LOW_SPEED_LIMIT"] = GIT_HTTP_LOW_SPEED_LIMIT_BYTES
+    env["GIT_HTTP_LOW_SPEED_TIME"] = GIT_HTTP_LOW_SPEED_TIME_SECONDS
 
     result = subprocess.run(
         ["git", "clone", "--depth", "1", REPO_URL, str(temp_dir)],
         capture_output=True,
         text=True,
         env=env,
-        timeout=120,
+        timeout=GIT_CLONE_TIMEOUT_SECONDS,
     )
     if result.returncode != 0:
         print_color(f"git clone 失敗: {result.stderr}", "red")
@@ -231,10 +243,10 @@ def detect_changed_packages(project_root: Path) -> None:
 
     # For now, we only log the detection
     # The actual reinstallation will happen when the hook runs
-    for file_path in changed_pyproject_files[:3]:  # Show first 3
+    for file_path in changed_pyproject_files[:MAX_CHANGED_FILES_DISPLAY]:
         print_color(f"     - {file_path}")
-    if len(changed_pyproject_files) > 3:
-        print_color(f"     ... 及 {len(changed_pyproject_files) - 3} 個檔案")
+    if len(changed_pyproject_files) > MAX_CHANGED_FILES_DISPLAY:
+        print_color(f"     ... 及 {len(changed_pyproject_files) - MAX_CHANGED_FILES_DISPLAY} 個檔案")
 
     print_color("   套件將在下次 SessionStart 自動重新安裝", "green")
 
@@ -350,7 +362,7 @@ def main() -> None:
         _update_project_templates(temp_dir, project_root)
         _finalize_sync(backup_dir)
     except subprocess.TimeoutExpired:
-        print_color("git clone 超時（120 秒），請檢查網路連線", "red")
+        print_color(f"git clone 超時（{GIT_CLONE_TIMEOUT_SECONDS} 秒），請檢查網路連線", "red")
         sys.exit(1)
     finally:
         shutil.rmtree(temp_dir, ignore_errors=True)
