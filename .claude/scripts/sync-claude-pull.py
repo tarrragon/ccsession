@@ -36,15 +36,11 @@ GIT_HTTP_LOW_SPEED_TIME_SECONDS = "30"
 # Changed files display limit
 MAX_CHANGED_FILES_DISPLAY = 3
 
-EXCLUDE_FROM_SYNC = {
-    ".git",
-    "project-templates",
-    "hook-logs",
-    "handoff",
-}
+# 遠端 repo 專有：存在於遠端但不需複製到本地
+_REMOTE_REPO_ONLY = frozenset({".git", "project-templates"})
 
-# 本地專有目錄/檔案，pull 時不刪除
-LOCAL_ONLY = {
+# 本地專有：只存在於本地，同步時不刪除也不覆蓋
+_LOCAL_ONLY_PATHS = frozenset({
     "hook-logs",
     "handoff",
     "PM_INTERVENTION_REQUIRED",
@@ -53,7 +49,10 @@ LOCAL_ONLY = {
     "__pycache__",
     ".pytest_cache",
     ".venv",
-}
+})
+
+# 同步時跳過的所有路徑（合併使用）
+SKIP_DURING_SYNC = _REMOTE_REPO_ONLY | _LOCAL_ONLY_PATHS
 
 
 def print_color(msg: str, color: str = "yellow") -> None:
@@ -132,7 +131,7 @@ def sync_directory(src: Path, dst: Path) -> int:
     """
     count = 0
     for item in src.iterdir():
-        if item.name in EXCLUDE_FROM_SYNC:
+        if item.name in SKIP_DURING_SYNC:
             continue
         if item.is_symlink():
             continue
@@ -143,7 +142,7 @@ def sync_directory(src: Path, dst: Path) -> int:
                 count += sync_directory(item, dest_item)
             else:
                 shutil.copytree(item, dest_item, symlinks=False,
-                                ignore=shutil.ignore_patterns(*EXCLUDE_FROM_SYNC))
+                                ignore=shutil.ignore_patterns(*SKIP_DURING_SYNC))
                 count += sum(1 for f in dest_item.rglob("*") if f.is_file())
         else:
             dest_item.parent.mkdir(parents=True, exist_ok=True)
@@ -156,7 +155,7 @@ def collect_remote_files(src: Path, prefix: Path = Path()) -> set[Path]:
     """Collect all relative file paths from the remote repo."""
     files: set[Path] = set()
     for item in src.iterdir():
-        if item.name in EXCLUDE_FROM_SYNC:
+        if item.name in SKIP_DURING_SYNC:
             continue
         if item.is_symlink():
             continue
@@ -179,7 +178,7 @@ def cleanup_stale_files(claude_dir: Path, remote_files: set[Path]) -> list[str]:
         if not directory.exists():
             return
         for item in sorted(directory.iterdir()):
-            if item.name in LOCAL_ONLY or item.name in EXCLUDE_FROM_SYNC:
+            if item.name in SKIP_DURING_SYNC:
                 continue
             if item.is_symlink():
                 continue
