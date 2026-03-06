@@ -12,6 +12,7 @@ if __name__ == "__main__":
 
 import argparse
 import json
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional, List
@@ -24,6 +25,7 @@ from ticket_system.lib.constants import (
     STATUS_IN_PROGRESS,
     TASK_CHAIN_DIRECTION_TYPES,
 )
+from ticket_system.commands.exceptions import HandoffSchemaError
 from ticket_system.lib.ticket_loader import resolve_version, load_ticket, get_project_root
 from ticket_system.lib.messages import (
     ErrorMessages,
@@ -42,6 +44,29 @@ from ticket_system.lib.ticket_ops import (
     load_and_validate_ticket,
 )
 from ticket_system.lib.ui_constants import SEPARATOR_PRIMARY
+
+
+# Handoff JSON 必填欄位
+_HANDOFF_REQUIRED_FIELDS = ("ticket_id", "direction", "timestamp")
+
+
+def _validate_handoff_schema(data: dict, file_path: str) -> None:
+    """
+    驗證 handoff JSON 的必填欄位是否完整。
+
+    必填欄位：ticket_id、direction、timestamp
+    缺少任一欄位時拋出 HandoffSchemaError（含可操作指引）。
+
+    Args:
+        data: 已解析的 handoff JSON 資料
+        file_path: handoff 檔案路徑（用於錯誤訊息）
+
+    Raises:
+        HandoffSchemaError: 缺少必填欄位時
+    """
+    missing = [f for f in _HANDOFF_REQUIRED_FIELDS if not data.get(f)]
+    if missing:
+        raise HandoffSchemaError(file_path, missing)
 
 
 def _get_handoff_dir(subdir: str = HANDOFF_PENDING_SUBDIR) -> Path:
@@ -185,6 +210,8 @@ def list_pending_handoffs() -> List[Dict[str, Any]]:
         return []
 
     handoffs = []
+    stale_count = 0
+    schema_error_count = 0
 
     # 同時掃描 .json 和 .md 檔案
     for handoff_file in sorted(pending_dir.glob("*.json")) + sorted(pending_dir.glob("*.md")):
@@ -193,41 +220,51 @@ def list_pending_handoffs() -> List[Dict[str, Any]]:
                 with open(handoff_file, "r", encoding="utf-8") as f:
                     data = json.load(f)
 
-                    # 過濾 stale handoff：
-                    # Handoff 是 stale 當且僅當：
-                    # 1. 來源 Ticket 已 completed（status: completed）
-                    # 2. 且 Handoff 是從非 completed 狀態創建的（from_status != "completed"）
-                    #
-                    # 特殊情況（保留）：
-                    # - 任務鏈 handoff（to-sibling/to-parent/to-child），即使 completed 也保留
-                    # - Handoff 本身是從 completed 狀態創建的，不算 stale
-                    ticket_id = data.get("ticket_id", "")
-                    if ticket_id and _is_ticket_completed(ticket_id):
-                        # Ticket 已 completed，檢查 handoff 狀態
-                        from_status = data.get("from_status", "")
-                        direction = data.get("direction", "")
+                # W4-001: 驗證 JSON 必填欄位，缺少時跳過並輸出警告
+                try:
+                    _validate_handoff_schema(data, str(handoff_file))
+                except HandoffSchemaError as e:
+                    schema_error_count += 1
+                    print(f"[WARNING] 跳過格式錯誤的 handoff：{e}", file=sys.stderr)
+                    continue
 
-                        # 檢查是否為任務鏈類型
-                        if _is_task_chain_direction(direction):
-                            # 任務鏈 handoff：進一步檢查目標 ticket 是否已啟動
-                            # 若 direction 含 target_id（如 to-sibling:0.1.0-W3-009），
-                            # 且目標已 in_progress/completed，則視為 stale
-                            direction_parts = direction.split(":", 1)
-                            if len(direction_parts) > 1:
-                                target_id = direction_parts[1]
-                                if target_id and _is_ticket_in_progress_or_completed(target_id):
-                                    # 目標已啟動，此 handoff 為 stale
-                                    continue
-                            # 目標未啟動或無 target_id，保留
-                            handoffs.append(data)
-                            continue
+                # 過濾 stale handoff：
+                # Handoff 是 stale 當且僅當：
+                # 1. 來源 Ticket 已 completed（status: completed）
+                # 2. 且 Handoff 是從非 completed 狀態創建的（from_status != "completed"）
+                #
+                # 特殊情況（保留）：
+                # - 任務鏈 handoff（to-sibling/to-parent/to-child），即使 completed 也保留
+                # - Handoff 本身是從 completed 狀態創建的，不算 stale
+                ticket_id = data.get("ticket_id", "")
+                if ticket_id and _is_ticket_completed(ticket_id):
+                    # Ticket 已 completed，檢查 handoff 狀態
+                    from_status = data.get("from_status", "")
+                    direction = data.get("direction", "")
 
-                        # 非任務鏈：只有當 from_status 不是 completed 時才過濾為 stale
-                        if from_status != "completed":
-                            # Stale handoff，跳過
-                            continue
+                    # 檢查是否為任務鏈類型
+                    if _is_task_chain_direction(direction):
+                        # 任務鏈 handoff：進一步檢查目標 ticket 是否已啟動
+                        # 若 direction 含 target_id（如 to-sibling:0.1.0-W3-009），
+                        # 且目標已 in_progress/completed，則視為 stale
+                        direction_parts = direction.split(":", 1)
+                        if len(direction_parts) > 1:
+                            target_id = direction_parts[1]
+                            if target_id and _is_ticket_in_progress_or_completed(target_id):
+                                # 目標已啟動，此 handoff 為 stale（W4-002 計數）
+                                stale_count += 1
+                                continue
+                        # 目標未啟動或無 target_id，保留
+                        handoffs.append(data)
+                        continue
 
-                    handoffs.append(data)
+                    # 非任務鏈：只有當 from_status 不是 completed 時才過濾為 stale
+                    if from_status != "completed":
+                        # Stale handoff，跳過（W4-002 計數）
+                        stale_count += 1
+                        continue
+
+                handoffs.append(data)
             elif handoff_file.suffix == ".md":
                 # Markdown 格式的 handoff 檔案也支援
                 # 提取檔名作為 ticket_id
@@ -236,6 +273,7 @@ def list_pending_handoffs() -> List[Dict[str, Any]]:
                 # 過濾已完成 ticket 的 stale handoff
                 # Markdown 格式無 direction 資訊，保持原行為
                 if ticket_id and _is_ticket_completed(ticket_id):
+                    stale_count += 1  # W4-002 計數
                     continue  # 跳過 stale 條目
 
                 handoffs.append({
@@ -247,7 +285,16 @@ def list_pending_handoffs() -> List[Dict[str, Any]]:
             # 略過無法讀取的檔案
             pass
 
+    # W4-002: 儲存過濾計數，供 _execute_list() 顯示可見性提示
+    list_pending_handoffs.last_stale_count = stale_count
+    list_pending_handoffs.last_schema_error_count = schema_error_count
+
     return handoffs
+
+
+# W4-002: 初始化計數器屬性（模組載入時預設為 0）
+list_pending_handoffs.last_stale_count = 0
+list_pending_handoffs.last_schema_error_count = 0
 
 
 def load_handoff_file(ticket_id: str) -> Optional[Dict[str, Any]]:
@@ -446,8 +493,14 @@ def _execute_list() -> int:
     """執行 --list 子命令"""
     handoffs = list_pending_handoffs()
 
+    # W4-002: 顯示 stale 過濾可見性（讓用戶區分「無任務」vs「有 stale 被過濾」）
+    stale_count = list_pending_handoffs.last_stale_count
     if not handoffs:
         print(ResumeMessages.NO_PENDING_RESUMPTIONS)
+        if stale_count > 0:
+            print()
+            print(f"[提示] 已過濾 {stale_count} 個 stale handoff（來源 ticket 已完成）")
+            print(f"  執行 ticket handoff gc --dry-run 可查看詳細清單")
         return 0
 
     print(SEPARATOR_PRIMARY)
@@ -468,6 +521,9 @@ def _execute_list() -> int:
         print()
 
     print(f"總計: {len(handoffs)} 個待恢復任務")
+    # W4-002: 顯示 stale 過濾計數（有結果時也提示是否有被過濾）
+    if stale_count > 0:
+        print(f"[提示] 另有 {stale_count} 個 stale handoff 已自動過濾（執行 ticket handoff gc --dry-run 查看）")
     print()
     print(ResumeMessages.RESUME_INSTRUCTIONS)
     print(ResumeMessages.RESUME_EXAMPLE_CMD)

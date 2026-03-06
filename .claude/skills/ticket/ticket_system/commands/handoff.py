@@ -26,6 +26,10 @@ from ticket_system.lib.constants import (
     HANDOFF_PENDING_SUBDIR,
     HANDOFF_ARCHIVE_SUBDIR,
 )
+from ticket_system.commands.exceptions import (
+    HandoffTargetNotFoundError,
+    HandoffDuplicateError,
+)
 from ticket_system.lib.ticket_loader import (
     get_project_root,
     load_ticket,
@@ -333,6 +337,75 @@ def _print_ticket_not_found_error(ticket_id: str, version: str) -> None:
     print(HandoffMessages.TICKET_NOT_FOUND_EXIT_CODE)
 
 
+def _validate_target_ticket_exists(direction: str, version: str) -> None:
+    """
+    P1: 驗證 to-sibling/to-child handoff 的目標 ticket 存在。
+
+    to-sibling:TARGET_ID 或 to-child:TARGET_ID 格式中，
+    若 TARGET_ID 不存在則拋出 HandoffTargetNotFoundError（含可操作指引）。
+
+    context-refresh 和 to-parent 不需要目標驗證。
+
+    Args:
+        direction: handoff direction（如 "to-sibling:0.1.0-W5-002"）
+        version: 版本號（用於載入目標 ticket）
+
+    Raises:
+        HandoffTargetNotFoundError: 目標 ticket 不存在時
+    """
+    # 只驗證帶有 target_id 的任務鏈 direction
+    direction_parts = direction.split(":", 1)
+    if len(direction_parts) < 2:
+        return  # 無 target_id（如 "to-parent"、"context-refresh"）不需驗證
+
+    direction_type = direction_parts[0]
+    if direction_type not in ("to-sibling", "to-child"):
+        return  # 非任務鏈跳轉類型不需驗證
+
+    target_id = direction_parts[1]
+    if not target_id:
+        return  # 空 target_id 不需驗證
+
+    # 驗證目標 ticket 是否存在
+    target_ticket = load_ticket(version, target_id)
+    if target_ticket is None:
+        raise HandoffTargetNotFoundError(target_id)
+
+
+def _validate_no_duplicate_handoff(ticket_id: str) -> None:
+    """
+    P2: 驗證 pending 目錄中不存在指向相同 ticket_id 的 handoff。
+
+    若已存在相同目標的 pending handoff，拋出 HandoffDuplicateError（含可操作指引）。
+
+    Args:
+        ticket_id: 要建立 handoff 的 ticket ID
+
+    Raises:
+        HandoffDuplicateError: 已存在相同目標的 pending handoff 時
+    """
+    import json as _json
+    root = get_project_root()
+    pending_dir = root / HANDOFF_DIR / HANDOFF_PENDING_SUBDIR
+
+    if not pending_dir.exists():
+        return
+
+    existing_file = pending_dir / f"{ticket_id}.json"
+    if not existing_file.exists():
+        return
+
+    # 讀取既有 handoff 的時間戳
+    try:
+        with open(existing_file, "r", encoding="utf-8") as f:
+            existing_data = _json.load(f)
+        existing_timestamp = existing_data.get("timestamp", "（時間未知）")
+    except (IOError, ValueError):
+        existing_timestamp = "（無法讀取時間）"
+
+    raise HandoffDuplicateError(ticket_id, existing_timestamp)
+
+
 def _create_handoff_file_internal(ticket: Dict[str, Any], direction: str) -> int:
     """
     內部 handoff 檔案建立函式（供 lifecycle.py 內部調用）
@@ -470,6 +543,22 @@ def _execute_handoff(args: argparse.Namespace) -> int:
         direction = _resolve_direction_from_args(args)
         if direction == "auto":
             direction = ChainAnalyzer.determine_direction(ticket, version)
+
+    # 步驟 7a：驗證目標 ticket 存在（P1）
+    try:
+        _validate_target_ticket_exists(direction, version)
+    except HandoffTargetNotFoundError as e:
+        print(f"[ERROR] {e}", file=sys.stderr)
+        print(e.guidance, file=sys.stderr)
+        return 1
+
+    # 步驟 7b：驗證無重複 pending handoff（P2）
+    try:
+        _validate_no_duplicate_handoff(ticket_id)
+    except HandoffDuplicateError as e:
+        print(f"[ERROR] {e}", file=sys.stderr)
+        print(e.guidance, file=sys.stderr)
+        return 1
 
     return _create_handoff_file(ticket, direction)
 
@@ -877,6 +966,12 @@ def _prompt_select_ticket(tickets: list[Dict[str, Any]]) -> Optional[Dict[str, A
 
 def execute(args: argparse.Namespace) -> int:
     """執行 handoff 命令"""
+    # 檢查 gc 子命令（ticket handoff gc --dry-run / --execute）
+    if getattr(args, "ticket_id", None) == "gc":
+        from ticket_system.commands.handoff_gc import execute_gc
+        dry_run = not getattr(args, "execute", False)
+        return execute_gc(dry_run=dry_run)
+
     # 檢查 --status 選項
     if getattr(args, "status", False):
         ticket_id = getattr(args, "ticket_id", None)
@@ -994,5 +1089,15 @@ def register(subparsers: argparse._SubParsersAction) -> None:
     parser.add_argument(
         "--version",
         help=HandoffMessages.ARG_VERSION_HELP
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="（GC 模式）預覽 stale handoff 清單，不實際刪除"
+    )
+    parser.add_argument(
+        "--execute",
+        action="store_true",
+        help="（GC 模式）執行清理，將 stale handoff 移至 archive/"
     )
     parser.set_defaults(func=execute)
