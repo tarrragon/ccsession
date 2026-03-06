@@ -345,11 +345,21 @@ def execute_agent(args: argparse.Namespace, version: str) -> int:
         if agent_name in assignee or agent_name in who:
             agent_tickets.append(ticket)
 
-    # 按狀態分組
-    pending_tickets = [t for t in agent_tickets if t.get("status") == STATUS_PENDING]
-    in_progress_tickets = [t for t in agent_tickets if t.get("status") == STATUS_IN_PROGRESS]
-    completed_tickets = [t for t in agent_tickets if t.get("status") == STATUS_COMPLETED]
-    blocked_tickets = [t for t in agent_tickets if t.get("status") == STATUS_BLOCKED]
+    # 按狀態分組（單次遍歷）
+    status_groups: dict[str, list] = {
+        STATUS_PENDING: [],
+        STATUS_IN_PROGRESS: [],
+        STATUS_COMPLETED: [],
+        STATUS_BLOCKED: [],
+    }
+    for t in agent_tickets:
+        status = t.get("status", "")
+        if status in status_groups:
+            status_groups[status].append(t)
+    pending_tickets = status_groups[STATUS_PENDING]
+    in_progress_tickets = status_groups[STATUS_IN_PROGRESS]
+    completed_tickets = status_groups[STATUS_COMPLETED]
+    blocked_tickets = status_groups[STATUS_BLOCKED]
 
     # 顯示摘要
     print(format_info(AgentProgressMessages.AGENT_PROGRESS, agent_name=args.agent_name))
