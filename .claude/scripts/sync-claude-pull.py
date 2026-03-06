@@ -56,7 +56,17 @@ SKIP_DURING_SYNC = _REMOTE_REPO_ONLY | _LOCAL_ONLY_PATHS
 
 
 def print_color(msg: str, color: str = "yellow") -> None:
-    """Print colored message (ANSI codes, gracefully degrades on Windows)."""
+    """輸出彩色訊息到標準輸出。
+
+    使用 ANSI 顏色代碼，在 Windows 無終端環境下自動降級為無色輸出。
+
+    參數:
+        msg: 要輸出的訊息文字
+        color: 顏色名稱，支援 "green"、"yellow"、"red"，預設為 "yellow"
+
+    異常:
+        無，異常情況會自動降級處理
+    """
     colors = {"green": "\033[0;32m", "yellow": "\033[1;33m", "red": "\033[0;31m"}
     nc = "\033[0m"
     if sys.platform == "win32" and not os.environ.get("TERM"):
@@ -66,7 +76,18 @@ def print_color(msg: str, color: str = "yellow") -> None:
 
 
 def run_git(args: list[str], cwd: str | None = None) -> subprocess.CompletedProcess:
-    """Run a git command and return the result."""
+    """執行 git 命令並回傳結果。
+
+    以子流程方式執行 git 命令，捕獲標準輸出和標準錯誤，
+    結果以文字格式儲存在 CompletedProcess 物件中。
+
+    參數:
+        args: git 命令的引數清單（不包含 "git" 本身）
+        cwd: 執行命令的工作目錄，預設為 None（使用目前工作目錄）
+
+    傳回:
+        subprocess.CompletedProcess: 包含 returncode、stdout、stderr 的結果物件
+    """
     return subprocess.run(
         ["git", *args],
         capture_output=True,
@@ -76,7 +97,17 @@ def run_git(args: list[str], cwd: str | None = None) -> subprocess.CompletedProc
 
 
 def find_project_root() -> Path:
-    """Find the project root by looking for .claude/ directory upward."""
+    """向上尋找專案根目錄。
+
+    從目前工作目錄開始，逐層向上尋找 .claude 目錄。
+    若找不到，輸出錯誤訊息並終止程式。
+
+    傳回:
+        Path: 專案根目錄路徑（包含 .claude 的目錄）
+
+    異常:
+        呼叫 sys.exit(1)，如果找不到 .claude 目錄則終止程式
+    """
     current = Path.cwd()
     while current != current.parent:
         if (current / ".claude").is_dir():
@@ -87,7 +118,17 @@ def find_project_root() -> Path:
 
 
 def check_uncommitted_changes(project_root: Path) -> None:
-    """Check for uncommitted changes in .claude and FLUTTER.md."""
+    """檢查 .claude 和 FLUTTER.md 的未提交變更。
+
+    執行 git diff 檢查工作目錄和暫存區是否有未提交的變更。
+    若發現變更則輸出警告訊息並終止程式，防止同步時發生衝突。
+
+    參數:
+        project_root: 專案根目錄路徑
+
+    異常:
+        呼叫 sys.exit(1)，若有未提交變更或 git 命令失敗則終止程式
+    """
     result = run_git(
         ["diff", "--name-only", ".claude", "FLUTTER.md"],
         cwd=str(project_root),
@@ -107,7 +148,18 @@ def check_uncommitted_changes(project_root: Path) -> None:
 
 
 def clone_repo(temp_dir: Path) -> None:
-    """Clone the remote repo with timeout protection."""
+    """從遠端 repo 克隆最新版本到臨時目錄。
+
+    使用淺層克隆（--depth 1）並設定超時保護和低速限制。
+    若克隆失敗則輸出錯誤訊息並終止程式。
+
+    參數:
+        temp_dir: 臨時目錄路徑，克隆內容將放置於此
+
+    異常:
+        subprocess.TimeoutExpired: 若克隆超過設定的超時時間
+        呼叫 sys.exit(1)，若克隆命令失敗則終止程式
+    """
     env = os.environ.copy()
     env["GIT_HTTP_LOW_SPEED_LIMIT"] = GIT_HTTP_LOW_SPEED_LIMIT_BYTES
     env["GIT_HTTP_LOW_SPEED_TIME"] = GIT_HTTP_LOW_SPEED_TIME_SECONDS
@@ -125,9 +177,22 @@ def clone_repo(temp_dir: Path) -> None:
 
 
 def sync_directory(src: Path, dst: Path) -> int:
-    """Incrementally sync src to dst, skipping excluded directories and symlinks.
+    """增量同步來源目錄到目標目錄。
 
-    Returns the number of files updated.
+    遞迴地同步檔案和目錄，跳過排除清單中的項目和符號連結。
+    對於已存在的目錄進行增量同步，對於新目錄則整體複製。
+
+    參數:
+        src: 來源目錄路徑
+        dst: 目標目錄路徑
+
+    傳回:
+        int: 更新或複製的檔案總數
+
+    說明:
+        - 跳過 SKIP_DURING_SYNC 清單中的目錄和檔案
+        - 跳過所有符號連結
+        - 保留檔案的修改時間戳（使用 shutil.copy2）
     """
     count = 0
     for item in src.iterdir():
