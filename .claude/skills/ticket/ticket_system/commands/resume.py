@@ -21,6 +21,7 @@ from ticket_system.lib.constants import (
     HANDOFF_PENDING_SUBDIR,
     HANDOFF_ARCHIVE_SUBDIR,
     STATUS_COMPLETED,
+    STATUS_IN_PROGRESS,
     TASK_CHAIN_DIRECTION_TYPES,
 )
 from ticket_system.lib.ticket_loader import resolve_version, load_ticket, get_project_root
@@ -113,6 +114,36 @@ def _is_ticket_completed(ticket_id: str) -> bool:
         return False  # 保守策略：無法判斷時顯示
 
 
+def _is_ticket_in_progress_or_completed(ticket_id: str) -> bool:
+    """
+    檢查 Ticket 是否已 in_progress 或 completed。
+
+    用於判斷任務鏈 handoff 的目標 ticket 是否已啟動。
+    若目標已啟動，表示此 handoff 已被接手，應過濾為 stale。
+
+    若無法載入（不存在或格式錯誤），返回 False（保守策略：不確定時顯示）。
+
+    Args:
+        ticket_id: Ticket ID，格式如 "0.31.1-W5-004"
+
+    Returns:
+        bool: True 表示已啟動（in_progress 或 completed），False 表示未啟動或無法判斷
+    """
+    try:
+        parts = ticket_id.split("-")
+        if len(parts) < 3:
+            return False
+        version = parts[0]
+
+        ticket, error = load_and_validate_ticket(version, ticket_id, auto_print_error=False)
+        if error:
+            return False
+
+        return ticket.get("status") in (STATUS_IN_PROGRESS, STATUS_COMPLETED)
+    except Exception:
+        return False  # 保守策略：無法判斷時顯示
+
+
 def _find_handoff_file(ticket_id: str, subdir: str = HANDOFF_PENDING_SUBDIR) -> Optional[tuple[Path, str]]:
     """
     尋找 handoff 檔案，返回 (路徑, 格式)
@@ -178,7 +209,16 @@ def list_pending_handoffs() -> List[Dict[str, Any]]:
 
                         # 檢查是否為任務鏈類型
                         if _is_task_chain_direction(direction):
-                            # 任務鏈 handoff，completed 是預期，保留
+                            # 任務鏈 handoff：進一步檢查目標 ticket 是否已啟動
+                            # 若 direction 含 target_id（如 to-sibling:0.1.0-W3-009），
+                            # 且目標已 in_progress/completed，則視為 stale
+                            direction_parts = direction.split(":", 1)
+                            if len(direction_parts) > 1:
+                                target_id = direction_parts[1]
+                                if target_id and _is_ticket_in_progress_or_completed(target_id):
+                                    # 目標已啟動，此 handoff 為 stale
+                                    continue
+                            # 目標未啟動或無 target_id，保留
                             handoffs.append(data)
                             continue
 

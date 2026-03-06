@@ -28,6 +28,7 @@ from ticket_system.commands.resume import (
     _print_chain_info,
     _print_markdown_content,
     _print_ticket_info,
+    _is_ticket_in_progress_or_completed,
 )
 
 
@@ -98,6 +99,41 @@ def _create_handoff_md(
     handoff_file.write_text(content, encoding="utf-8")
 
 
+class TestIsTicketInProgressOrCompleted:
+    """測試 _is_ticket_in_progress_or_completed 函式"""
+
+    def test_returns_false_when_ticket_not_found(self, temp_handoff_env):
+        """找不到 ticket 時返回 False（保守策略）"""
+        result = _is_ticket_in_progress_or_completed("0.99.0-W1-999")
+        assert result is False
+
+    def test_returns_false_for_invalid_ticket_id_format(self, temp_handoff_env):
+        """格式錯誤的 ticket ID 返回 False"""
+        result = _is_ticket_in_progress_or_completed("invalid-id")
+        assert result is False
+
+    @patch("ticket_system.commands.resume.load_and_validate_ticket")
+    def test_returns_true_for_in_progress_ticket(self, mock_load, temp_handoff_env):
+        """目標 ticket 為 in_progress 時返回 True"""
+        mock_load.return_value = ({"status": "in_progress"}, None)
+        result = _is_ticket_in_progress_or_completed("0.31.0-W4-001")
+        assert result is True
+
+    @patch("ticket_system.commands.resume.load_and_validate_ticket")
+    def test_returns_true_for_completed_ticket(self, mock_load, temp_handoff_env):
+        """目標 ticket 為 completed 時返回 True"""
+        mock_load.return_value = ({"status": "completed"}, None)
+        result = _is_ticket_in_progress_or_completed("0.31.0-W4-001")
+        assert result is True
+
+    @patch("ticket_system.commands.resume.load_and_validate_ticket")
+    def test_returns_false_for_pending_ticket(self, mock_load, temp_handoff_env):
+        """目標 ticket 為 pending 時返回 False"""
+        mock_load.return_value = ({"status": "pending"}, None)
+        result = _is_ticket_in_progress_or_completed("0.31.0-W4-001")
+        assert result is False
+
+
 class TestListPendingHandoffs:
     """測試 list_pending_handoffs 函式"""
 
@@ -133,6 +169,85 @@ class TestListPendingHandoffs:
         result = list_pending_handoffs()
 
         assert len(result) == 2
+
+    @patch("ticket_system.commands.resume._is_ticket_completed")
+    @patch("ticket_system.commands.resume._is_ticket_in_progress_or_completed")
+    def test_task_chain_handoff_filtered_when_target_in_progress(
+        self, mock_target_check, mock_source_check, temp_handoff_env
+    ):
+        """to-sibling:target_id 且目標 in_progress 時，應過濾為 stale"""
+        project_root, handoff_dir = temp_handoff_env
+
+        # 來源 ticket 已 completed，目標 ticket 已 in_progress
+        mock_source_check.return_value = True
+        mock_target_check.return_value = True
+
+        _create_handoff_json(
+            handoff_dir, "0.31.0-W4-001",
+            direction="to-sibling:0.31.0-W4-002"
+        )
+
+        result = list_pending_handoffs()
+
+        assert len(result) == 0, "目標已啟動的任務鏈 handoff 應被過濾"
+
+    @patch("ticket_system.commands.resume._is_ticket_completed")
+    @patch("ticket_system.commands.resume._is_ticket_in_progress_or_completed")
+    def test_task_chain_handoff_filtered_when_target_completed(
+        self, mock_target_check, mock_source_check, temp_handoff_env
+    ):
+        """to-sibling:target_id 且目標 completed 時，應過濾為 stale"""
+        project_root, handoff_dir = temp_handoff_env
+
+        mock_source_check.return_value = True
+        mock_target_check.return_value = True
+
+        _create_handoff_json(
+            handoff_dir, "0.31.0-W4-001",
+            direction="to-sibling:0.31.0-W4-002"
+        )
+
+        result = list_pending_handoffs()
+
+        assert len(result) == 0, "目標已完成的任務鏈 handoff 應被過濾"
+
+    @patch("ticket_system.commands.resume._is_ticket_completed")
+    @patch("ticket_system.commands.resume._is_ticket_in_progress_or_completed")
+    def test_task_chain_handoff_kept_when_target_pending(
+        self, mock_target_check, mock_source_check, temp_handoff_env
+    ):
+        """to-sibling:target_id 且目標 pending 時，應保留（待恢復）"""
+        project_root, handoff_dir = temp_handoff_env
+
+        mock_source_check.return_value = True
+        mock_target_check.return_value = False  # 目標仍 pending
+
+        _create_handoff_json(
+            handoff_dir, "0.31.0-W4-001",
+            direction="to-sibling:0.31.0-W4-002"
+        )
+
+        result = list_pending_handoffs()
+
+        assert len(result) == 1, "目標未啟動的任務鏈 handoff 應保留"
+
+    @patch("ticket_system.commands.resume._is_ticket_completed")
+    def test_task_chain_without_target_id_kept(
+        self, mock_source_check, temp_handoff_env
+    ):
+        """to-sibling（無 target_id）的任務鏈 handoff，應保留原行為"""
+        project_root, handoff_dir = temp_handoff_env
+
+        mock_source_check.return_value = True
+
+        _create_handoff_json(
+            handoff_dir, "0.31.0-W4-001",
+            direction="to-sibling"  # 無 target_id
+        )
+
+        result = list_pending_handoffs()
+
+        assert len(result) == 1, "無 target_id 的任務鏈 handoff 應保留"
 
 
 class TestLoadHandoffFile:
