@@ -239,72 +239,116 @@ def detect_changed_packages(project_root: Path) -> None:
     print_color("   套件將在下次 SessionStart 自動重新安裝", "green")
 
 
-def main() -> None:
-    print_color("開始從獨立 repo 拉取 .claude 更新...")
+def _sync_with_backup(project_root: Path, temp_dir: Path) -> Path:
+    """執行備份和同步操作。
 
-    # 1. Find project root
-    project_root = find_project_root()
+    備份當前配置，然後同步遠端更新至本地。
+    返回備份目錄路徑。
+
+    參數:
+        project_root: 專案根目錄
+        temp_dir: 臨時目錄（含遠端 repo 內容）
+
+    傳回:
+        backup_dir: 備份目錄路徑
+    """
     claude_dir = project_root / ".claude"
 
-    # 2. Check uncommitted changes
+    # 備份當前配置
+    print_color("備份當前配置...")
+    backup_dir = Path(tempfile.mkdtemp(prefix="claude-backup-"))
+    shutil.copytree(claude_dir, backup_dir / ".claude")
+    flutter_md = project_root / "FLUTTER.md"
+    if flutter_md.exists():
+        shutil.copy2(flutter_md, backup_dir / "FLUTTER.md")
+
+    # 同步 .claude 目錄
+    print_color("更新 .claude 資料夾...")
+    remote_files = collect_remote_files(temp_dir)
+    file_count = sync_directory(temp_dir, claude_dir)
+    print_color(f"   已更新 {file_count} 個檔案", "green")
+
+    # 清理過時檔案
+    removed = cleanup_stale_files(claude_dir, remote_files)
+    if removed:
+        print_color(f"   已清理 {len(removed)} 個過時檔案:", "green")
+        for r in removed:
+            print_color(f"     - {r}")
+    else:
+        print_color("   無過時檔案需清理", "green")
+
+    # 偵測套件版本變更
+    print_color("檢查套件版本變更...")
+    detect_changed_packages(project_root)
+
+    return backup_dir
+
+
+def _update_project_templates(temp_dir: Path, project_root: Path) -> None:
+    """更新專案模板檔案。
+
+    從遠端 repo 的 project-templates 目錄更新 FLUTTER.md。
+    不覆蓋根目錄的 CLAUDE.md（保留專案特定配置）。
+
+    參數:
+        temp_dir: 臨時目錄（含遠端 repo 內容）
+        project_root: 專案根目錄
+    """
+    templates_dir = temp_dir / "project-templates"
+    if templates_dir.is_dir():
+        print_color("更新專案模板檔案...")
+        src_flutter = templates_dir / "FLUTTER.md"
+        if src_flutter.exists():
+            shutil.copy2(src_flutter, project_root / "FLUTTER.md")
+            print_color("   已更新 FLUTTER.md", "green")
+        print_color("   注意: CLAUDE.md 未被覆蓋（保留專案特定配置）")
+
+
+def _finalize_sync(backup_dir: Path) -> None:
+    """完成同步並輸出提示訊息。
+
+    顯示成功訊息、備份位置和初始化提示。
+
+    參數:
+        backup_dir: 備份目錄路徑
+    """
+    print_color("成功拉取 .claude 更新！", "green")
+    print_color(f"備份位置: {backup_dir}", "green")
+    print_color("請檢查變更並測試 Hook 系統是否正常運作", "green")
+    print_color(f"如需還原，執行: cp -r {backup_dir}/.claude .")
+    print()
+    print_color("=== 新專案初始化提示 ===")
+    print_color("如果是新專案，請手動建立 CLAUDE.md:")
+    print_color("  1. cp .claude/templates/CLAUDE-template.md CLAUDE.md")
+    print_color("  2. 填入專案特定資訊")
+    print_color("  3. 驗證所有連結有效")
+
+
+def main() -> None:
+    """同步 .claude 配置從獨立 repo。
+
+    主要流程：
+    1. 找出專案根目錄
+    2. 檢查本地未提交的變更
+    3. 從遠端 repo 克隆最新版本
+    4. 執行備份和同步
+    5. 更新專案模板
+    6. 輸出完成訊息
+    """
+    print_color("開始從獨立 repo 拉取 .claude 更新...")
+
+    project_root = find_project_root()
+
     print_color("檢查本地狀態...")
     check_uncommitted_changes(project_root)
 
-    # 3. Clone to temp directory
     print_color("從獨立 repo 拉取更新...")
     temp_dir = Path(tempfile.mkdtemp())
     try:
         clone_repo(temp_dir)
-
-        # 4. Backup
-        print_color("備份當前配置...")
-        backup_dir = Path(tempfile.mkdtemp(prefix="claude-backup-"))
-        shutil.copytree(claude_dir, backup_dir / ".claude")
-        flutter_md = project_root / "FLUTTER.md"
-        if flutter_md.exists():
-            shutil.copy2(flutter_md, backup_dir / "FLUTTER.md")
-
-        # 5. Sync .claude directory
-        print_color("更新 .claude 資料夾...")
-        remote_files = collect_remote_files(temp_dir)
-        file_count = sync_directory(temp_dir, claude_dir)
-        print_color(f"   已更新 {file_count} 個檔案", "green")
-
-        # 5.5. Remove stale files (local-only but not in remote)
-        removed = cleanup_stale_files(claude_dir, remote_files)
-        if removed:
-            print_color(f"   已清理 {len(removed)} 個過時檔案:", "green")
-            for r in removed:
-                print_color(f"     - {r}")
-        else:
-            print_color("   無過時檔案需清理", "green")
-
-        # 5.6. Detect and reinstall packages
-        print_color("檢查套件版本變更...")
-        detect_changed_packages(project_root)
-
-        # 6. Update FLUTTER.md (not CLAUDE.md)
-        templates_dir = temp_dir / "project-templates"
-        if templates_dir.is_dir():
-            print_color("更新專案模板檔案...")
-            src_flutter = templates_dir / "FLUTTER.md"
-            if src_flutter.exists():
-                shutil.copy2(src_flutter, project_root / "FLUTTER.md")
-                print_color("   已更新 FLUTTER.md", "green")
-            print_color("   注意: CLAUDE.md 未被覆蓋（保留專案特定配置）")
-
-        # 7. Done
-        print_color("成功拉取 .claude 更新！", "green")
-        print_color(f"備份位置: {backup_dir}", "green")
-        print_color("請檢查變更並測試 Hook 系統是否正常運作", "green")
-        print_color(f"如需還原，執行: cp -r {backup_dir}/.claude .")
-        print()
-        print_color("=== 新專案初始化提示 ===")
-        print_color("如果是新專案，請手動建立 CLAUDE.md:")
-        print_color("  1. cp .claude/templates/CLAUDE-template.md CLAUDE.md")
-        print_color("  2. 填入專案特定資訊")
-        print_color("  3. 驗證所有連結有效")
-
+        backup_dir = _sync_with_backup(project_root, temp_dir)
+        _update_project_templates(temp_dir, project_root)
+        _finalize_sync(backup_dir)
     except subprocess.TimeoutExpired:
         print_color("git clone 超時（120 秒），請檢查網路連線", "red")
         sys.exit(1)
