@@ -30,6 +30,7 @@ class ErrorMessages:
     """錯誤訊息常數。"""
 
     TICKET_NOT_FOUND = "[Error] 找不到 Ticket {ticket_id}"
+    NO_HANDOFF_FILE = "[Error] Ticket {ticket_id} 無待恢復的交接檔案"
     VERSION_NOT_DETECTED = "[Error] 無法偵測版本，請使用 --version 指定"
     INVALID_TICKET_ID = "[Error] Ticket ID 格式無效"
     INVALID_TICKET_ID_FORMAT = "[Error] 無效的 Ticket ID 格式: {ticket_id}"

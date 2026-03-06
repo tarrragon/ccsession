@@ -467,7 +467,24 @@ def _execute_resume(ticket_id: str, version: Optional[str]) -> int:
     """
     handoff = load_handoff_file(ticket_id)
     if not handoff:
-        print(format_error(ErrorMessages.TICKET_NOT_FOUND, ticket_id=ticket_id))
+        # 檢查 Ticket 是否存在，以提供更準確的錯誤訊息
+        ticket_exists = False
+        try:
+            # 從 ticket_id 提取版本並嘗試載入 Ticket
+            parts = ticket_id.split("-")
+            if len(parts) >= 3:
+                version_from_id = parts[0]
+                ticket = load_ticket(version_from_id, ticket_id)
+                ticket_exists = ticket is not None
+        except Exception:
+            pass
+
+        # 根據 Ticket 是否存在顯示對應的錯誤訊息
+        if ticket_exists:
+            print(format_error(ErrorMessages.NO_HANDOFF_FILE, ticket_id=ticket_id))
+        else:
+            print(format_error(ErrorMessages.TICKET_NOT_FOUND, ticket_id=ticket_id))
+
         print()
         print(ResumeMessages.AVAILABLE_RESUMPTIONS)
         print(ResumeMessages.RESUME_LIST_CMD)
