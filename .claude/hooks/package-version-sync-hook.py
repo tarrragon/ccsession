@@ -383,7 +383,7 @@ def get_installed_uv_tools() -> Dict[str, str]:
         # Parse output lines: skip headers and empty lines
         for line in result.stdout.splitlines():
             # Skip separator lines and empty lines
-            if not line.strip() or "─" in line or "─" in line:
+            if not line.strip() or "─" in line:
                 continue
             # Skip header line
             if "Tool Name" in line or "Version" in line:
