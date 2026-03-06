@@ -498,21 +498,34 @@ def _resolve_direction_from_args(args: argparse.Namespace) -> str:
 
 
 
-def _print_status(ticket: dict) -> int:
+def _extract_version_from_ticket_id(ticket_id: str) -> Optional[str]:
     """
-    列印 handoff 狀態資訊。
+    從 Ticket ID 提取版本號。
+
+    格式: 0.31.0-W4-010 → 0.31.0
+
+    Args:
+        ticket_id: Ticket ID
+
+    Returns:
+        Optional[str]: 版本號，無法解析時回傳 None
+    """
+    return ticket_id.split("-W")[0] if "-W" in ticket_id else None
+
+
+def _print_header(ticket: dict) -> None:
+    """
+    列印 handoff 狀態的基本資訊。
+
+    包含 ticket_id、title、status、depth 和 chain 資訊。
 
     Args:
         ticket: Ticket 資料
-
-    Returns:
-        int: exit code 0
     """
     ticket_id = ticket.get("id")
     status = ticket.get("status")
     title = ticket.get("title")
     chain = ticket.get("chain", {})
-    children = ticket.get("children", [])
 
     print(format_msg(HandoffMessages.STATUS_HEADER_TICKET_ID, ticket_id=ticket_id))
     print(format_msg(HandoffMessages.STATUS_HEADER_TITLE, title=title))
@@ -524,63 +537,146 @@ def _print_status(ticket: dict) -> int:
     print(format_msg(HandoffMessages.STATUS_CHAIN_PARENT, parent=chain.get('parent', 'N/A')))
     print()
 
-    if children:
-        print(format_msg(HandoffMessages.STATUS_CHILDREN_COUNT, count=len(children)))
-        # 從 ticket_id 提取 version (格式: 0.31.0-W4-010)
-        version = ticket_id.split("-W")[0] if "-W" in ticket_id else None
-        for child_id in children:
-            # children 是 ID 字串列表，需要載入實際 ticket
-            if isinstance(child_id, str):
-                child_ticket = load_ticket(version, child_id) if version else None
-                if child_ticket:
-                    child_status = child_ticket.get("status", "unknown")
-                    print(format_msg(HandoffMessages.STATUS_CHILD_ITEM, child_id=child_id, status=child_status))
-                else:
-                    print(format_msg(HandoffMessages.STATUS_CHILD_NOT_FOUND, child_id=child_id))
-            elif isinstance(child_id, dict):
-                # 相容舊格式（如果 children 是 dict 列表）
-                print(format_msg(HandoffMessages.STATUS_CHILD_ITEM, child_id=child_id.get('id', 'unknown'), status=child_id.get('status', 'unknown')))
 
-    print()
-    print(HandoffMessages.STATUS_OPTIONS)
-    # 從 ticket_id 提取 version
-    version = ticket_id.split("-W")[0] if "-W" in ticket_id else None
-    direction = ChainAnalyzer.determine_direction(ticket, version)
+def _print_children_info(children: list, version: Optional[str]) -> None:
+    """
+    列印子任務資訊。
+
+    args:
+        children: 子任務 ID 清單（可能是字串或 dict）
+        version: 版本號（用於載入子任務詳細資訊）
+    """
+    if not children:
+        return
+
+    print(format_msg(HandoffMessages.STATUS_CHILDREN_COUNT, count=len(children)))
+    for child_id in children:
+        # children 是 ID 字串列表，需要載入實際 ticket
+        if isinstance(child_id, str):
+            child_ticket = load_ticket(version, child_id) if version else None
+            if child_ticket:
+                child_status = child_ticket.get("status", "unknown")
+                print(format_msg(HandoffMessages.STATUS_CHILD_ITEM, child_id=child_id, status=child_status))
+            else:
+                print(format_msg(HandoffMessages.STATUS_CHILD_NOT_FOUND, child_id=child_id))
+        elif isinstance(child_id, dict):
+            # 相容舊格式（如果 children 是 dict 列表）
+            print(format_msg(HandoffMessages.STATUS_CHILD_ITEM, child_id=child_id.get('id', 'unknown'), status=child_id.get('status', 'unknown')))
+
+
+def _print_direction_options(
+    ticket: dict,
+    direction: str,
+    version: Optional[str],
+    children: list,
+) -> None:
+    """
+    列印根據交接方向可用的 handoff 選項。
+
+    處理 5 種方向：to-parent、to-child、to-sibling、wait、completed。
+
+    Args:
+        ticket: Ticket 資料
+        direction: 由 ChainAnalyzer 決定的交接方向
+        version: 版本號
+        children: 子任務清單
+    """
+    ticket_id = ticket.get("id")
+    chain = ticket.get("chain", {})
 
     if direction == "to-parent" and chain.get("parent"):
         print(format_msg(HandoffMessages.STATUS_USE_TO_PARENT, ticket_id=ticket_id))
     elif direction == "to-child":
-        for child_id in children:
-            # children 可能是 ID 字串或 dict
-            if isinstance(child_id, str):
-                print(format_msg(HandoffMessages.STATUS_USE_TO_CHILD, ticket_id=ticket_id, child_id=child_id))
-            elif isinstance(child_id, dict):
-                print(format_msg(HandoffMessages.STATUS_USE_TO_CHILD, ticket_id=ticket_id, child_id=child_id.get('id')))
+        _print_to_child_options(ticket_id, children)
     elif direction == "to-sibling":
-        # 從父任務載入兄弟列表
-        parent_id = chain.get("parent")
-        if parent_id and version:
-            parent_ticket = load_ticket(version, parent_id)
-            if parent_ticket:
-                siblings = parent_ticket.get("children", [])
-                for sibling_id in siblings:
-                    if isinstance(sibling_id, str):
-                        if sibling_id == ticket_id:
-                            continue
-                        sibling_ticket = load_ticket(version, sibling_id)
-                        if sibling_ticket and sibling_ticket.get("status") != STATUS_COMPLETED:
-                            print(format_msg(HandoffMessages.STATUS_USE_TO_SIBLING, ticket_id=ticket_id, sibling_id=sibling_id))
-                    elif isinstance(sibling_id, dict):
-                        if sibling_id.get("id") == ticket_id:
-                            continue
-                        if sibling_id.get("status") != STATUS_COMPLETED:
-                            print(format_msg(HandoffMessages.STATUS_USE_TO_SIBLING, ticket_id=ticket_id, sibling_id=sibling_id.get('id')))
+        _print_to_sibling_options(ticket_id, chain, version)
     elif direction == "wait":
         print(HandoffMessages.STATUS_WAIT_DEPENDENCIES)
     elif direction == "completed":
         print(HandoffMessages.STATUS_NO_PENDING_TASKS)
 
-    # 建議下一步
+
+def _print_to_child_options(ticket_id: str, children: list) -> None:
+    """
+    列印 to-child 方向的子任務選項。
+
+    Args:
+        ticket_id: 當前 Ticket ID
+        children: 子任務清單（可能是字串或 dict）
+    """
+    for child_id in children:
+        # children 可能是 ID 字串或 dict
+        if isinstance(child_id, str):
+            print(format_msg(HandoffMessages.STATUS_USE_TO_CHILD, ticket_id=ticket_id, child_id=child_id))
+        elif isinstance(child_id, dict):
+            print(format_msg(HandoffMessages.STATUS_USE_TO_CHILD, ticket_id=ticket_id, child_id=child_id.get('id')))
+
+
+def _print_to_sibling_options(ticket_id: str, chain: dict, version: Optional[str]) -> None:
+    """
+    列印 to-sibling 方向的兄弟任務選項。
+
+    從父任務載入兄弟列表，過濾掉自己和已完成的兄弟。
+
+    Args:
+        ticket_id: 當前 Ticket ID
+        chain: Ticket 的 chain 資訊（含 parent）
+        version: 版本號
+    """
+    parent_id = chain.get("parent")
+    if not (parent_id and version):
+        return
+
+    parent_ticket = load_ticket(version, parent_id)
+    if not parent_ticket:
+        return
+
+    siblings = parent_ticket.get("children", [])
+    for sibling_id in siblings:
+        if isinstance(sibling_id, str):
+            if sibling_id == ticket_id:
+                continue
+            sibling_ticket = load_ticket(version, sibling_id)
+            if sibling_ticket and sibling_ticket.get("status") != STATUS_COMPLETED:
+                print(format_msg(HandoffMessages.STATUS_USE_TO_SIBLING, ticket_id=ticket_id, sibling_id=sibling_id))
+        elif isinstance(sibling_id, dict):
+            if sibling_id.get("id") == ticket_id:
+                continue
+            if sibling_id.get("status") != STATUS_COMPLETED:
+                print(format_msg(HandoffMessages.STATUS_USE_TO_SIBLING, ticket_id=ticket_id, sibling_id=sibling_id.get('id')))
+
+
+def _print_status(ticket: dict) -> int:
+    """
+    列印 handoff 狀態資訊。
+
+    整合子函式的完整流程，包括基本資訊、子任務、方向選項和建議。
+
+    Args:
+        ticket: Ticket 資料
+
+    Returns:
+        int: exit code 0
+    """
+    ticket_id = ticket.get("id")
+    children = ticket.get("children", [])
+
+    # 版本號提取一次，傳入各子函式
+    version = _extract_version_from_ticket_id(ticket_id)
+
+    # 列印基本資訊
+    _print_header(ticket)
+
+    # 列印子任務資訊
+    _print_children_info(children, version)
+    print()
+
+    # 列印交接方向選項
+    print(HandoffMessages.STATUS_OPTIONS)
+    direction = ChainAnalyzer.determine_direction(ticket, version)
+    _print_direction_options(ticket, direction, version, children)
+
+    # 列印建議下一步
     print()
     print("=" * 50)
     print(SectionHeaders.SUGGESTED_NEXT_STEP)
