@@ -51,6 +51,7 @@ from ticket_system.lib.chain_analyzer import ChainAnalyzer, Recommendation
 from ticket_system.lib.ticket_ops import (
     load_and_validate_ticket,
     resolve_ticket_path,
+    resolve_id_from_ref,
 )
 
 
@@ -545,18 +546,23 @@ def _print_children_info(children: list, version: Optional[str]) -> None:
         return
 
     print(format_msg(HandoffMessages.STATUS_CHILDREN_COUNT, count=len(children)))
-    for child_id in children:
-        # children 是 ID 字串列表，需要載入實際 ticket
-        if isinstance(child_id, str):
+    for child_item in children:
+        # 提取子任務 ID
+        child_id = resolve_id_from_ref(child_item)
+
+        # 情況 1：字典型 child（已嵌入狀態）
+        if isinstance(child_item, dict):
+            # 相容舊格式（如果 children 是 dict 列表）
+            print(format_msg(HandoffMessages.STATUS_CHILD_ITEM, child_id=child_item.get('id', 'unknown'), status=child_item.get('status', 'unknown')))
+
+        # 情況 2：字串型 ID（需要載入檔案）
+        elif child_id:
             child_ticket = load_ticket(version, child_id) if version else None
             if child_ticket:
                 child_status = child_ticket.get("status", "unknown")
                 print(format_msg(HandoffMessages.STATUS_CHILD_ITEM, child_id=child_id, status=child_status))
             else:
                 print(format_msg(HandoffMessages.STATUS_CHILD_NOT_FOUND, child_id=child_id))
-        elif isinstance(child_id, dict):
-            # 相容舊格式（如果 children 是 dict 列表）
-            print(format_msg(HandoffMessages.STATUS_CHILD_ITEM, child_id=child_id.get('id', 'unknown'), status=child_id.get('status', 'unknown')))
 
 
 def _print_direction_options(
@@ -599,12 +605,11 @@ def _print_to_child_options(ticket_id: str, children: list) -> None:
         ticket_id: 當前 Ticket ID
         children: 子任務清單（可能是字串或 dict）
     """
-    for child_id in children:
-        # children 可能是 ID 字串或 dict
-        if isinstance(child_id, str):
+    for child_item in children:
+        # 提取子任務 ID
+        child_id = resolve_id_from_ref(child_item)
+        if child_id:
             print(format_msg(HandoffMessages.STATUS_USE_TO_CHILD, ticket_id=ticket_id, child_id=child_id))
-        elif isinstance(child_id, dict):
-            print(format_msg(HandoffMessages.STATUS_USE_TO_CHILD, ticket_id=ticket_id, child_id=child_id.get('id')))
 
 
 def _print_to_sibling_options(ticket_id: str, chain: dict, version: Optional[str]) -> None:
@@ -627,18 +632,24 @@ def _print_to_sibling_options(ticket_id: str, chain: dict, version: Optional[str
         return
 
     siblings = parent_ticket.get("children", [])
-    for sibling_id in siblings:
-        if isinstance(sibling_id, str):
+    for sibling_item in siblings:
+        # 提取兄弟任務 ID
+        sibling_id = resolve_id_from_ref(sibling_item)
+
+        # 情況 1：字典型兄弟（已嵌入狀態）
+        if isinstance(sibling_item, dict):
+            if sibling_item.get("id") == ticket_id:
+                continue
+            if sibling_item.get("status") != STATUS_COMPLETED:
+                print(format_msg(HandoffMessages.STATUS_USE_TO_SIBLING, ticket_id=ticket_id, sibling_id=sibling_item.get('id')))
+
+        # 情況 2：字串型兄弟 ID（需要載入檔案）
+        elif sibling_id:
             if sibling_id == ticket_id:
                 continue
             sibling_ticket = load_ticket(version, sibling_id)
             if sibling_ticket and sibling_ticket.get("status") != STATUS_COMPLETED:
                 print(format_msg(HandoffMessages.STATUS_USE_TO_SIBLING, ticket_id=ticket_id, sibling_id=sibling_id))
-        elif isinstance(sibling_id, dict):
-            if sibling_id.get("id") == ticket_id:
-                continue
-            if sibling_id.get("status") != STATUS_COMPLETED:
-                print(format_msg(HandoffMessages.STATUS_USE_TO_SIBLING, ticket_id=ticket_id, sibling_id=sibling_id.get('id')))
 
 
 def _print_status(ticket: dict) -> int:

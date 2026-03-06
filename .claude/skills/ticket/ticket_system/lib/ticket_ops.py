@@ -20,6 +20,37 @@ from ticket_system.lib.messages import (
 )
 
 
+def resolve_id_from_ref(ref: Any) -> str:
+    """
+    從任務引用（字串 ID 或字典）提取 Ticket ID。
+
+    支援兩種格式：
+    - 字串：直接返回
+    - 字典：返回 'id' 欄位值
+
+    Args:
+        ref: 任務引用（str 或 dict）
+
+    Returns:
+        str: Ticket ID（若無法提取返回空字串）
+
+    Examples:
+        >>> resolve_id_from_ref("0.1.0-W2-001")
+        '0.1.0-W2-001'
+        >>> resolve_id_from_ref({"id": "0.1.0-W2-001", "status": "pending"})
+        '0.1.0-W2-001'
+        >>> resolve_id_from_ref({})
+        ''
+        >>> resolve_id_from_ref(None)
+        ''
+    """
+    if isinstance(ref, str):
+        return ref
+    elif isinstance(ref, dict):
+        return ref.get("id", "")
+    return ""
+
+
 def load_and_validate_ticket(
     version: str,
     ticket_id: str,
