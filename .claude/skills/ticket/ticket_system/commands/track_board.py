@@ -6,6 +6,9 @@ Ticket 看板命令模組
 # 防止直接執行此模組
 if __name__ == "__main__":
     import sys
+    # 導入常數（注意：此時尚未通過正規 import，這裡臨時使用硬編碼）
+    # 原因：模組直接執行時不會載入 ui_constants 的 SEPARATOR_PRIMARY
+    # 保留硬編碼以確保錯誤訊息能正常顯示
     print("=" * 60)
     print("[ERROR] 此檔案不支援直接執行")
     print("=" * 60)
@@ -39,6 +42,12 @@ from ticket_system.lib.messages import format_error, format_info
 from ticket_system.lib.command_tracking_messages import (
     TrackBoardMessages,
     format_msg,
+)
+from ticket_system.lib.ui_constants import (
+    SEPARATOR_PRIMARY,
+    SEPARATOR_SECONDARY,
+    SEPARATOR_WIDE,
+    SEPARATOR_WIDE_DASH,
 )
 
 
@@ -159,7 +168,7 @@ def render_board_tree(
         lines.append(format_msg(TrackBoardMessages.TREE_TITLE_ALL, version=version))
     else:
         lines.append(format_msg(TrackBoardMessages.TREE_TITLE_INCOMPLETE, version=version))
-    lines.append("=" * 50)
+    lines.append(SEPARATOR_SECONDARY)
     lines.append("")
 
     # 過濾任務
@@ -581,7 +590,7 @@ def render_board_ascii(
     lines = []
 
     # 渲染表格標題
-    title_line = "=" * 70
+    title_line = SEPARATOR_WIDE
     lines.append(title_line)
 
     board_title = TrackBoardMessages.ASCII_BOARD_TITLE
@@ -594,7 +603,7 @@ def render_board_ascii(
 
     # 渲染欄標題
     lines.append(TrackBoardMessages.ASCII_HEADER_ROW)
-    lines.append("-" * 70)
+    lines.append(SEPARATOR_WIDE_DASH)
 
     # 遍歷每個狀態建立行
     for status in [STATUS_PENDING, STATUS_IN_PROGRESS, STATUS_COMPLETED, STATUS_BLOCKED]:
@@ -610,7 +619,7 @@ def render_board_ascii(
         lines.append(row)
 
     # 渲染表格邊界
-    lines.append("=" * 70)
+    lines.append(SEPARATOR_WIDE)
 
     return "\n".join(lines)
 
