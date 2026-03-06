@@ -51,6 +51,20 @@ from ticket_system.lib.chain_analyzer import ChainAnalyzer, Recommendation
 
 
 # ============================================================================
+# 模組級常數
+# ============================================================================
+
+# 方向到訊息模板和參數名稱的映射表（消除三分支結構重複）
+# 結構：direction -> (message_template, param_name)
+# 適用於 to-child、to-sibling、to-parent 三個方向，統一參數名稱為目標 ID
+_DIRECTION_MESSAGE_MAP = {
+    "to-child": (HandoffMessages.RECOMMENDATION_ENTER_CHILD, "child_id"),
+    "to-sibling": (HandoffMessages.RECOMMENDATION_SWITCH_SIBLING, "sibling_id"),
+    "to-parent": (HandoffMessages.RECOMMENDATION_RETURN_PARENT, "parent_id"),
+}
+
+
+# ============================================================================
 # 輔助函式
 # ============================================================================
 
@@ -686,16 +700,48 @@ def _print_status(ticket: dict) -> int:
     return 0
 
 
+def _print_direction_recommendation(
+    rec: Recommendation,
+    msg_template: str,
+    param_name: str,
+) -> None:
+    """列印方向建議（to-child/to-sibling/to-parent）。使用映射表消除重複。"""
+    kwargs = {param_name: rec.next_target_id}
+    print(format_msg(msg_template, **kwargs))
+    if rec.next_target_title:
+        print(format_msg(HandoffMessages.RECOMMENDATION_TITLE, title=rec.next_target_title))
+    print(format_msg(HandoffMessages.RECOMMENDATION_REASON, reason=rec.reason))
+
+
+def _print_execute_command(rec: Recommendation) -> None:
+    """列印建議執行的命令，根據方向添加對應註解。"""
+    if not rec.command:
+        return
+
+    # 選擇註解文字
+    if rec.direction == "wait" and rec.blocked_by:
+        comment = HandoffMessages.RECOMMENDATION_EXECUTE_COMMENT_CHECK
+    elif rec.direction == "completed":
+        comment = HandoffMessages.RECOMMENDATION_EXECUTE_COMMENT_COMPLETE
+    else:
+        comment = None
+
+    # 列印命令
+    if comment:
+        print(format_msg(
+            HandoffMessages.RECOMMENDATION_EXECUTE_WITH_COMMENT,
+            command=rec.command,
+            comment=comment,
+        ))
+    else:
+        print(format_msg(HandoffMessages.RECOMMENDATION_EXECUTE, command=rec.command))
+
+
 def _print_recommendation(ticket: dict, direction: str, version: str = None) -> None:
     """
     列印建議下一步行動。
 
-    根據 ticket-lifecycle.md 的設計，分析優先級為：
-    1. 有子 Ticket 可開始
-    2. 有被解除阻塞的 Ticket
-    3. 有同層兄弟 Ticket
-    4. 同 Wave 有其他 pending
-    5. 任務鏈全部完成
+    使用模組級映射表消除 to-child/to-sibling/to-parent 三分支的結構性重複。
 
     Args:
         ticket: Ticket 資料
@@ -705,41 +751,29 @@ def _print_recommendation(ticket: dict, direction: str, version: str = None) -> 
     recommendation = ChainAnalyzer.get_recommendation(direction, ticket, version)
 
     # 根據方向類型輸出對應資訊
-    if recommendation.direction == "to-child":
-        print(format_msg(HandoffMessages.RECOMMENDATION_ENTER_CHILD, child_id=recommendation.next_target_id))
-        if recommendation.next_target_title:
-            print(format_msg(HandoffMessages.RECOMMENDATION_TITLE, title=recommendation.next_target_title))
-        print(format_msg(HandoffMessages.RECOMMENDATION_REASON, reason=recommendation.reason))
-    elif recommendation.direction == "to-sibling":
-        print(format_msg(HandoffMessages.RECOMMENDATION_SWITCH_SIBLING, sibling_id=recommendation.next_target_id))
-        if recommendation.next_target_title:
-            print(format_msg(HandoffMessages.RECOMMENDATION_TITLE, title=recommendation.next_target_title))
-        print(format_msg(HandoffMessages.RECOMMENDATION_REASON, reason=recommendation.reason))
-    elif recommendation.direction == "to-parent":
-        print(format_msg(HandoffMessages.RECOMMENDATION_RETURN_PARENT, parent_id=recommendation.next_target_id))
-        if recommendation.next_target_title:
-            print(format_msg(HandoffMessages.RECOMMENDATION_TITLE, title=recommendation.next_target_title))
-        print(format_msg(HandoffMessages.RECOMMENDATION_REASON, reason=recommendation.reason))
+    if recommendation.direction in _DIRECTION_MESSAGE_MAP:
+        msg_template, param_name = _DIRECTION_MESSAGE_MAP[recommendation.direction]
+        _print_direction_recommendation(recommendation, msg_template, param_name)
     elif recommendation.direction == "wait":
         print(HandoffMessages.RECOMMENDATION_WAIT)
         if recommendation.blocked_by:
-            print(format_msg(HandoffMessages.RECOMMENDATION_BLOCKED_BY, blocked_by=', '.join(recommendation.blocked_by)))
+            print(format_msg(
+                HandoffMessages.RECOMMENDATION_BLOCKED_BY,
+                blocked_by=', '.join(recommendation.blocked_by),
+            ))
         print(format_msg(HandoffMessages.RECOMMENDATION_REASON, reason=recommendation.reason))
     elif recommendation.direction == "completed":
-        print(format_msg(HandoffMessages.RECOMMENDATION_COMPLETED, root_id=recommendation.next_target_id))
+        print(format_msg(
+            HandoffMessages.RECOMMENDATION_COMPLETED,
+            root_id=recommendation.next_target_id,
+        ))
         print(format_msg(HandoffMessages.RECOMMENDATION_REASON, reason=recommendation.reason))
     else:
         print(format_msg(HandoffMessages.RECOMMENDATION_REASON, reason=recommendation.reason))
 
     # 輸出執行命令
     print()
-    if recommendation.command:
-        if recommendation.direction == "wait" and recommendation.blocked_by:
-            print(format_msg(HandoffMessages.RECOMMENDATION_EXECUTE, command=recommendation.command) + "  " + HandoffMessages.RECOMMENDATION_EXECUTE_COMMENT_CHECK)
-        elif recommendation.direction == "completed":
-            print(format_msg(HandoffMessages.RECOMMENDATION_EXECUTE, command=recommendation.command) + "  " + HandoffMessages.RECOMMENDATION_EXECUTE_COMMENT_COMPLETE)
-        else:
-            print(format_msg(HandoffMessages.RECOMMENDATION_EXECUTE, command=recommendation.command))
+    _print_execute_command(recommendation)
 
 
 def _find_completed_tickets(version: str) -> list[Dict[str, Any]]:

@@ -85,6 +85,7 @@ class HandoffMessages:
     RECOMMENDATION_EXECUTE = "執行: {command}"
     RECOMMENDATION_EXECUTE_COMMENT_CHECK = "  # 查看阻塞任務狀態"
     RECOMMENDATION_EXECUTE_COMMENT_COMPLETE = "  # 標記完成"
+    RECOMMENDATION_EXECUTE_WITH_COMMENT = "執行: {command}  {comment}"
 
     # Handoff 用法說明
     USAGE_HEADER = "用法:"
