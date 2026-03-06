@@ -48,6 +48,10 @@ from ticket_system.lib.command_lifecycle_messages import (
     format_msg,
 )
 from ticket_system.lib.chain_analyzer import ChainAnalyzer, Recommendation
+from ticket_system.lib.ticket_ops import (
+    load_and_validate_ticket,
+    resolve_ticket_path,
+)
 
 
 # ============================================================================
@@ -67,25 +71,6 @@ _DIRECTION_MESSAGE_MAP = {
 # ============================================================================
 # 輔助函式
 # ============================================================================
-
-def _check_yaml_error(ticket: Optional[Dict[str, Any]], ticket_id: str) -> bool:
-    """
-    檢查 Ticket 是否有 YAML 解析錯誤。
-
-    Args:
-        ticket: load_ticket() 回傳的 Ticket 字典
-        ticket_id: Ticket ID（用於錯誤訊息）
-
-    Returns:
-        bool: True 表示有錯誤，False 表示無錯誤
-    """
-    if ticket and "_yaml_error" in ticket:
-        print(format_error(
-            f"Ticket {ticket_id} 的 YAML 格式錯誤：{ticket['_yaml_error']}"
-        ))
-        return True
-    return False
-
 
 def _verify_handoff_status(
     ticket: Dict[str, Any],
@@ -442,14 +427,10 @@ def _execute_handoff(args: argparse.Namespace) -> int:
         _print_version_error()
         return 1
 
-    # 步驟 3：驗證 Ticket 存在
-    ticket = load_ticket(version, ticket_id)
-    if not ticket:
+    # 步驟 3：驗證 Ticket 存在和格式
+    ticket, error = load_and_validate_ticket(version, ticket_id, auto_print_error=False)
+    if error:
         _print_ticket_not_found_error(ticket_id, version)
-        return 2
-
-    # 步驟 3.5：檢查 YAML 錯誤
-    if _check_yaml_error(ticket, ticket_id):
         return 2
 
     # 步驟 4：驗證互斥旗標
@@ -920,12 +901,9 @@ def execute(args: argparse.Namespace) -> int:
                 _print_version_error()
                 return 1
 
-            ticket = load_ticket(version, ticket_id)
-            if not ticket:
+            ticket, error = load_and_validate_ticket(version, ticket_id, auto_print_error=False)
+            if error:
                 _print_ticket_not_found_error(ticket_id, version)
-                return 2
-
-            if _check_yaml_error(ticket, ticket_id):
                 return 2
 
         return _print_status(ticket)

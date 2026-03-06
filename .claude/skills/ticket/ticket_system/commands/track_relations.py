@@ -49,6 +49,10 @@ from ticket_system.lib.command_tracking_messages import (
     TrackRelationsMessages,
     format_msg,
 )
+from ticket_system.lib.ticket_ops import (
+    load_and_validate_ticket,
+    resolve_ticket_path,
+)
 
 
 def _normalize_ticket_id_list(value: str | list) -> list[str]:
@@ -164,7 +168,7 @@ def _execute_set_relation_field(
     # Step 5：更新 Ticket 並保存
     target_ticket[field_name] = new_value
 
-    ticket_path = Path(target_ticket.get("_path", get_ticket_path(version, target_id)))
+    ticket_path = resolve_ticket_path(target_ticket, version, target_id)
     save_ticket(target_ticket, ticket_path)
 
     # Step 6：輸出成功訊息
@@ -271,11 +275,11 @@ def execute_add_child(args: argparse.Namespace, version: str) -> int:
     child_ticket["chain"] = chain_info
 
     # Step 7：保存父 Ticket
-    parent_path = Path(parent_ticket.get("_path", get_ticket_path(version, parent_id)))
+    parent_path = resolve_ticket_path(parent_ticket, version, parent_id)
     save_ticket(parent_ticket, parent_path)
 
     # Step 8：保存子 Ticket
-    child_path = Path(child_ticket.get("_path", get_ticket_path(version, child_id)))
+    child_path = resolve_ticket_path(child_ticket, version, child_id)
     save_ticket(child_ticket, child_path)
 
     # Step 9：輸出成功訊息
@@ -309,7 +313,7 @@ def execute_phase(args: argparse.Namespace, version: str) -> int:
     ticket["current_phase"] = phase
     ticket["assignee"] = args.agent
 
-    ticket_path = Path(ticket.get("_path", get_ticket_path(version, args.ticket_id)))
+    ticket_path = resolve_ticket_path(ticket, version, args.ticket_id)
     save_ticket(ticket, ticket_path)
 
     print(format_info(InfoMessages.PHASE_UPDATED, ticket_id=args.ticket_id))

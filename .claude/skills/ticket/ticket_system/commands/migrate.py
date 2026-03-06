@@ -42,6 +42,9 @@ from ticket_system.lib.messages import (
 from ticket_system.lib.command_tracking_messages import (
     MigrateMessages,
 )
+from ticket_system.lib.ticket_ops import (
+    load_and_validate_ticket,
+)
 
 
 def _extract_id_components(ticket_id: str) -> Optional[Dict[str, Any]]:
@@ -330,9 +333,8 @@ def _migrate_single_ticket(
     source_version = source_components["version"] if source_components else version
 
     # 載入來源 Ticket
-    ticket = load_ticket(source_version, source_id)
-    if not ticket:
-        print(format_error(ErrorMessages.TICKET_NOT_FOUND, ticket_id=source_id))
+    ticket, error = load_and_validate_ticket(source_version, source_id)
+    if error:
         return 2
 
     # 預覽模式

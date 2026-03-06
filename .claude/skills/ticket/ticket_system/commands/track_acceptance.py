@@ -45,6 +45,10 @@ from ticket_system.lib.command_tracking_messages import (
     TrackAcceptanceMessages,
     format_msg,
 )
+from ticket_system.lib.ticket_ops import (
+    load_and_validate_ticket,
+    resolve_ticket_path,
+)
 
 
 def _validate_acceptance_context(
@@ -278,9 +282,8 @@ def execute_check_acceptance(args: argparse.Namespace, version: str) -> int:
     - 文字搜尋："任務實作完成"（模糊比對驗收條件文字）
     """
     # 載入 Ticket
-    ticket = load_ticket(version, args.ticket_id)
-    if not ticket:
-        print(format_error(ErrorMessages.TICKET_NOT_FOUND, ticket_id=args.ticket_id))
+    ticket, error = load_and_validate_ticket(version, args.ticket_id)
+    if error:
         return 1
 
     # 取得 acceptance 列表（來自 frontmatter）
@@ -327,7 +330,7 @@ def execute_check_acceptance(args: argparse.Namespace, version: str) -> int:
     ticket["acceptance"] = acceptance_list
 
     # 保存
-    ticket_path = Path(ticket.get("_path", get_ticket_path(version, args.ticket_id)))
+    ticket_path = resolve_ticket_path(ticket, version, args.ticket_id)
     save_ticket(ticket, ticket_path)
 
     # 輸出結果
@@ -370,7 +373,7 @@ def execute_accept_creation(args: argparse.Namespace, version: str) -> int:
     ticket["creation_accepted"] = True
 
     # 保存
-    ticket_path = Path(ticket.get("_path", get_ticket_path(version, args.ticket_id)))
+    ticket_path = resolve_ticket_path(ticket, version, args.ticket_id)
     save_ticket(ticket, ticket_path)
 
     # 輸出結果
@@ -448,7 +451,7 @@ def execute_append_log(args: argparse.Namespace, version: str) -> int:
     ticket["_body"] = new_body
 
     # 保存
-    ticket_path = Path(ticket.get("_path", get_ticket_path(version, args.ticket_id)))
+    ticket_path = resolve_ticket_path(ticket, version, args.ticket_id)
     save_ticket(ticket, ticket_path)
 
     # 輸出結果

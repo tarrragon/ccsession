@@ -76,6 +76,9 @@ from ticket_system.lib.ui_constants import (
     VERSION_PREFIX,
     VERSION_PREFIX_LENGTH,
 )
+from ticket_system.lib.ticket_ops import (
+    load_and_validate_ticket,
+)
 
 # 狀態值映射
 STATUS_MAP = {
@@ -168,9 +171,8 @@ def _print_cross_version_warning(current_version: str) -> None:
 
 def execute_query(args: argparse.Namespace, version: str) -> int:
     """查詢單一 Ticket"""
-    ticket = load_ticket(version, args.ticket_id)
-    if not ticket:
-        print(format_error(ErrorMessages.TICKET_NOT_FOUND, ticket_id=args.ticket_id))
+    ticket, error = load_and_validate_ticket(version, args.ticket_id)
+    if error:
         return 1
 
     if _check_yaml_error(ticket, args.ticket_id):
@@ -223,9 +225,8 @@ def execute_summary(args: argparse.Namespace, version: str) -> int:
 
 def execute_tree(args: argparse.Namespace, version: str) -> int:
     """顯示任務鏈樹狀結構"""
-    ticket = load_ticket(version, args.ticket_id)
-    if not ticket:
-        print(format_error(ErrorMessages.TICKET_NOT_FOUND, ticket_id=args.ticket_id))
+    ticket, error = load_and_validate_ticket(version, args.ticket_id)
+    if error:
         return 1
 
     if _check_yaml_error(ticket, args.ticket_id):
@@ -243,9 +244,8 @@ def execute_tree(args: argparse.Namespace, version: str) -> int:
 
 def execute_chain(args: argparse.Namespace, version: str) -> int:
     """顯示完整任務鏈（從 root 到所有 leaf）"""
-    ticket = load_ticket(version, args.ticket_id)
-    if not ticket:
-        print(format_error(ErrorMessages.TICKET_NOT_FOUND, ticket_id=args.ticket_id))
+    ticket, error = load_and_validate_ticket(version, args.ticket_id)
+    if error:
         return 1
 
     if _check_yaml_error(ticket, args.ticket_id):
@@ -272,9 +272,8 @@ def execute_chain(args: argparse.Namespace, version: str) -> int:
 
 def execute_full(args: argparse.Namespace, version: str) -> int:
     """顯示 Ticket 完整內容"""
-    ticket = load_ticket(version, args.ticket_id)
-    if not ticket:
-        print(format_error(ErrorMessages.TICKET_NOT_FOUND, ticket_id=args.ticket_id))
+    ticket, error = load_and_validate_ticket(version, args.ticket_id)
+    if error:
         return 1
 
     if _check_yaml_error(ticket, args.ticket_id):
@@ -309,9 +308,8 @@ def execute_full(args: argparse.Namespace, version: str) -> int:
 
 def execute_log(args: argparse.Namespace, version: str) -> int:
     """顯示執行日誌區塊"""
-    ticket = load_ticket(version, args.ticket_id)
-    if not ticket:
-        print(format_error(ErrorMessages.TICKET_NOT_FOUND, ticket_id=args.ticket_id))
+    ticket, error = load_and_validate_ticket(version, args.ticket_id)
+    if error:
         return 1
 
     if _check_yaml_error(ticket, args.ticket_id):

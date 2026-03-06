@@ -37,6 +37,9 @@ from ticket_system.lib.command_lifecycle_messages import (
     ResumeMessages,
     format_msg,
 )
+from ticket_system.lib.ticket_ops import (
+    load_and_validate_ticket,
+)
 
 
 def _get_handoff_dir(subdir: str = HANDOFF_PENDING_SUBDIR) -> Path:
@@ -100,8 +103,8 @@ def _is_ticket_completed(ticket_id: str) -> bool:
             return False
         version = parts[0]  # "0.31.1"
 
-        ticket = load_ticket(version, ticket_id)
-        if not ticket:
+        ticket, error = load_and_validate_ticket(version, ticket_id, auto_print_error=False)
+        if error:
             return False
 
         return ticket.get("status") == STATUS_COMPLETED
