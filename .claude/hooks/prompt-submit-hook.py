@@ -37,7 +37,7 @@ from pathlib import Path
 from typing import Optional
 
 sys.path.insert(0, str(Path(__file__).parent))
-from hook_utils import setup_hook_logging, run_hook_safely
+from hook_utils import setup_hook_logging, run_hook_safely, run_git
 from lib.hook_messages import WorkflowMessages, CoreMessages, AskUserQuestionMessages, format_message
 
 
@@ -447,20 +447,15 @@ def main():
 
     # 檢查最近是否有提交
     try:
-        result = subprocess.run(
-            ['git', 'log', '-1', '--format=%ct'],
-            capture_output=True,
-            text=True,
-            timeout=5
-        )
-        if result.returncode == 0:
-            last_commit_time = int(result.stdout.strip())
+        output = run_git(['git', 'log', '-1', '--format=%ct'], timeout=5, logger=logger)
+        if output:
+            last_commit_time = int(output)
             current_time = int(datetime.now().timestamp())
             time_diff = current_time - last_commit_time
 
             if time_diff > 3600:  # 超過1小時
                 logger.info("Suggest: recommend checking if current progress needs to be committed")
-    except (subprocess.TimeoutExpired, ValueError, IOError):
+    except (ValueError, IOError):
         pass
 
     # 檢查todolist.yaml更新時間
