@@ -494,6 +494,7 @@ def main():
     # 調用 TDD Phase 檢查 Hook
     tdd_check_script = script_dir / 'tdd-phase-check-hook.py'
     if tdd_check_script.exists() and os.access(tdd_check_script, os.X_OK):
+        logger.info("TDD Phase check starting (async fire-and-forget, exit status not monitored)")
         subprocess.Popen([sys.executable, str(tdd_check_script)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         logger.info("OK: TDD Phase check started")
     else:
