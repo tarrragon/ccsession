@@ -488,19 +488,7 @@ def main():
         logger.info("Current 5W1H Token: no active token, recommend running generate")
         logger.info("Reminder: Must include complete 5W1H analysis (Who/What/When/Where/Why/How)")
 
-    # 5. 檢查 TDD Phase 完整性 (第四大鐵律)
-    logger.info("Check: TDD Phase completeness")
-
-    # 調用 TDD Phase 檢查 Hook
-    tdd_check_script = script_dir / 'tdd-phase-check-hook.py'
-    if tdd_check_script.exists() and os.access(tdd_check_script, os.X_OK):
-        logger.info("TDD Phase check starting (async fire-and-forget, exit status not monitored)")
-        subprocess.Popen([sys.executable, str(tdd_check_script)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        logger.info("OK: TDD Phase check started")
-    else:
-        logger.warning("WARNING: TDD Phase check hook not found or not executable")
-
-    # 6. 生成工作流程建議
+    # 5. 生成工作流程建議
     logger.info("Suggest: generating workflow suggestions")
 
     # 檢查最近是否有提交
