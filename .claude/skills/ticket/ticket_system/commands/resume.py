@@ -489,6 +489,13 @@ def _execute_resume(ticket_id: str, version: Optional[str]) -> int:
         print(WarningMessages.HANDOFF_UPDATE_FAILED)
         return 1
 
+    # 將 handoff 檔案從 pending/ 移動到 archive/
+    # 注意：mark_handoff_as_resumed() 已自動歸檔 Markdown 格式，所以這裡只會歸檔 JSON
+    if not archive_handoff_file(ticket_id):
+        # 歸檔失敗不應該視為 resume 失敗（核心功能已完成），只發出警告
+        print(format_warning(WarningMessages.INVALID_OPERATION))
+        print(WarningMessages.HANDOFF_ARCHIVE_FAILED)
+
     print("=" * 60)
     print(SectionHeaders.COMPLETION)
     print(InfoMessages.HANDOFF_RESUMED)
