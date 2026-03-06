@@ -199,3 +199,69 @@ CLI 失敗時的正確調查流程：
 | 行動 | 繞過標準流程 | 修正命令語法後重試 |
 
 > **核心教訓**：工具失敗時，先調查工具的使用方式是否正確，再懷疑工具的邏輯。
+
+---
+
+## PC-004: 任務鏈 handoff 過濾只判斷來源 ticket 狀態，未判斷目標 ticket 是否已啟動
+
+**發現日期**: 2026-03-07
+**相關 Ticket**: 0.1.0-W3-011
+
+### 症狀
+
+- `ticket resume --list` 持續顯示已過時的 handoff（stale handoff）
+- 來源 ticket（如 W3-008）已 completed，交接到目標 ticket（如 W3-009）
+- 目標 ticket W3-009 也已 completed，但 W3-008 的 handoff JSON 仍出現在待恢復清單
+- 用戶每次 session 啟動都需要手動忽略這些誤導性條目
+
+### 根因
+
+`list_pending_handoffs()` 的任務鏈過濾邏輯只做了**單側狀態檢查**：
+
+```python
+# 舊邏輯（不完整）
+if _is_task_chain_direction(direction):
+    handoffs.append(data)  # 無條件保留 → Bug
+    continue
+```
+
+當 direction 為 `to-sibling:0.1.0-W3-009` 時，只確認「這是任務鏈 handoff」（來源側），但沒有確認**目標 ticket 是否已被接手**（目標側）。
+
+**根本原因**：過濾設計只有「來源視角」，缺乏「目標視角」。任務鏈 handoff 在兩種情況下應保留：
+- 目標 ticket 尚未啟動（pending）→ 仍需恢復
+- 目標 ticket 已啟動（in_progress/completed）→ 已過時，應過濾
+
+### 解決方案
+
+新增 `_is_ticket_in_progress_or_completed()` 輔助函式，在任務鏈判斷後提取 `target_id` 並檢查目標狀態：
+
+```python
+if _is_task_chain_direction(direction):
+    direction_parts = direction.split(":", 1)
+    if len(direction_parts) > 1:
+        target_id = direction_parts[1]
+        if target_id and _is_ticket_in_progress_or_completed(target_id):
+            continue  # 目標已啟動，此 handoff 為 stale
+    handoffs.append(data)
+    continue
+```
+
+**保守策略**：若 target_id 不存在或無法載入 → 保留（不過濾），避免誤刪有效 handoff。
+
+### 預防措施
+
+1. **雙側狀態設計原則**：設計任何「關係型過濾邏輯」（A → B 的關係）時，必須同時考慮 A 的狀態和 B 的狀態
+2. **欄位格式溯源**：讀取 `direction` 欄位前先確認生產者的完整格式（可能含後綴 `:target_id`）
+3. **測試覆蓋目標側**：任務鏈相關測試必須包含目標 ticket 已啟動 / 未啟動兩種情境
+
+### 行為模式分析
+
+此錯誤屬於「單側假設」模式：
+
+| 維度 | 舊邏輯 | 正確邏輯 |
+|------|--------|---------|
+| 來源側 | 已 completed → 任務鏈，保留 | 已 completed → 進入任務鏈判斷 |
+| 目標側 | 未考慮 | 目標已啟動 → stale；目標未啟動 → 保留 |
+| 預設行為 | 保留（可能誤報） | 保守保留（無法判斷時顯示） |
+
+> **核心教訓**：過濾「A 指向 B 的關係」時，A 的狀態和 B 的狀態都需要納入判斷；只檢查一側會產生假陽性。
