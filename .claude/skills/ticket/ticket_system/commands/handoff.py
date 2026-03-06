@@ -53,6 +53,7 @@ from ticket_system.lib.ticket_ops import (
     resolve_ticket_path,
     resolve_id_from_ref,
 )
+from ticket_system.lib.ui_constants import SEPARATOR_PRIMARY, SEPARATOR_SECONDARY
 
 
 # ============================================================================
@@ -254,14 +255,14 @@ def _warn_and_prompt_complete_before_handoff(
     # 所有驗收條件已勾選，但 status 仍 in_progress → 顯示警告
     print()
     print("[WARNING] 驗收條件前置檢查")
-    print("=" * 60)
+    print(SEPARATOR_PRIMARY)
     print(f"  Ticket {ticket_id} 的所有驗收條件已勾選 [x]，")
     print(f"  但狀態仍為 in_progress。")
     print()
     print("  建議在 handoff 前先執行 complete，以確保任務鏈完整性。")
     print()
     print(f"  執行命令: ticket track complete {ticket_id}")
-    print("=" * 60)
+    print(SEPARATOR_PRIMARY)
     print()
 
     # 詢問是否自動 complete
@@ -396,9 +397,9 @@ def _create_handoff_file(ticket: Dict[str, Any], direction: str) -> int:
     handoff_file = root / HANDOFF_DIR / HANDOFF_PENDING_SUBDIR / f"{ticket_id}.json"
     print(format_info(InfoMessages.HANDOFF_FILE_CREATED, path=str(handoff_file.relative_to(root))))
     print()
-    print("=" * 60)
+    print(SEPARATOR_PRIMARY)
     print(InfoMessages.HANDOFF_NEXT_STEP)
-    print("=" * 60)
+    print(SEPARATOR_PRIMARY)
     return 0
 
 
@@ -684,9 +685,9 @@ def _print_status(ticket: dict) -> int:
 
     # 列印建議下一步
     print()
-    print("=" * 50)
+    print(SEPARATOR_SECONDARY)
     print(SectionHeaders.SUGGESTED_NEXT_STEP)
-    print("=" * 50)
+    print(SEPARATOR_SECONDARY)
     _print_recommendation(ticket, direction, version)
 
     return 0

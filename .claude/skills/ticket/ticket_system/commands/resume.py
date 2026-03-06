@@ -40,6 +40,7 @@ from ticket_system.lib.command_lifecycle_messages import (
 from ticket_system.lib.ticket_ops import (
     load_and_validate_ticket,
 )
+from ticket_system.lib.ui_constants import SEPARATOR_PRIMARY
 
 
 def _get_handoff_dir(subdir: str = HANDOFF_PENDING_SUBDIR) -> Path:
@@ -387,9 +388,9 @@ def _print_handoff_info(handoff: Dict[str, Any], ticket: Optional[Dict[str, Any]
     """
     ticket_id = handoff.get("ticket_id")
 
-    print("=" * 60)
+    print(SEPARATOR_PRIMARY)
     print(f"[Resume] {ticket_id}")
-    print("=" * 60)
+    print(SEPARATOR_PRIMARY)
     print()
 
     _print_basic_info(handoff)
@@ -409,9 +410,9 @@ def _execute_list() -> int:
         print(ResumeMessages.NO_PENDING_RESUMPTIONS)
         return 0
 
-    print("=" * 60)
+    print(SEPARATOR_PRIMARY)
     print(SectionHeaders.PENDING_RESUME_LIST)
-    print("=" * 60)
+    print(SEPARATOR_PRIMARY)
     print()
 
     for idx, handoff in enumerate(handoffs, 1):
@@ -516,10 +517,10 @@ def _execute_resume(ticket_id: str, version: Optional[str]) -> int:
         print(format_warning(WarningMessages.INVALID_OPERATION))
         print(WarningMessages.HANDOFF_ARCHIVE_FAILED)
 
-    print("=" * 60)
+    print(SEPARATOR_PRIMARY)
     print(SectionHeaders.COMPLETION)
     print(InfoMessages.HANDOFF_RESUMED)
-    print("=" * 60)
+    print(SEPARATOR_PRIMARY)
     return 0
 
 

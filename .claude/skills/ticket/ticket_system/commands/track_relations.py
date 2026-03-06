@@ -6,9 +6,9 @@ Ticket 關係和狀態管理模組
 # 防止直接執行此模組
 if __name__ == "__main__":
     import sys
-    print("=" * 60)
+    print(SEPARATOR_PRIMARY)
     print("[ERROR] 此檔案不支援直接執行")
-    print("=" * 60)
+    print(SEPARATOR_PRIMARY)
     print()
     print("正確使用方式：")
     print("  ticket track summary")
@@ -18,7 +18,7 @@ if __name__ == "__main__":
     print("  cd .claude/skills/ticket && uv tool install .")
     print()
     print("詳見 SKILL.md")
-    print("=" * 60)
+    print(SEPARATOR_PRIMARY)
     sys.exit(1)
 
 
@@ -26,6 +26,7 @@ if __name__ == "__main__":
 import argparse
 from pathlib import Path
 
+from ticket_system.lib.ui_constants import SEPARATOR_PRIMARY
 from ticket_system.lib.constants import (
     STATUS_PENDING,
     STATUS_IN_PROGRESS,

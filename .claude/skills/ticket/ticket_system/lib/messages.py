@@ -5,12 +5,13 @@
 
 消除訊息硬編碼，提供一致的訊息格式和內容。
 """
+from ticket_system.lib.ui_constants import SEPARATOR_PRIMARY
 # 防止直接執行此模組
 if __name__ == "__main__":
     import sys
-    print("=" * 60)
+    print(SEPARATOR_PRIMARY)
     print("[ERROR] 此檔案不支援直接執行")
-    print("=" * 60)
+    print(SEPARATOR_PRIMARY)
     print()
     print("正確使用方式：")
     print("  ticket track summary")
@@ -20,7 +21,7 @@ if __name__ == "__main__":
     print("  cd .claude/skills/ticket && uv tool install .")
     print()
     print("詳見 SKILL.md")
-    print("=" * 60)
+    print(SEPARATOR_PRIMARY)
     sys.exit(1)
 
 
@@ -275,9 +276,9 @@ def format_info(template: str, **kwargs) -> str:
 def print_not_executable_and_exit():
     """統一的 __main__ guard 訊息輸出。"""
     import sys
-    print("=" * 60)
+    print(SEPARATOR_PRIMARY)
     print(ModuleMessages.NOT_DIRECTLY_EXECUTABLE)
-    print("=" * 60)
+    print(SEPARATOR_PRIMARY)
     print()
     print(ModuleMessages.CORRECT_USAGE)
     print("  ticket track summary")
@@ -287,5 +288,5 @@ def print_not_executable_and_exit():
     print(ModuleMessages.INSTALL_COMMAND)
     print()
     print(ModuleMessages.SEE_DOCS)
-    print("=" * 60)
+    print(SEPARATOR_PRIMARY)
     sys.exit(1)

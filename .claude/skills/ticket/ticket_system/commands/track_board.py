@@ -6,12 +6,11 @@ Ticket 看板命令模組
 # 防止直接執行此模組
 if __name__ == "__main__":
     import sys
-    # 導入常數（注意：此時尚未通過正規 import，這裡臨時使用硬編碼）
-    # 原因：模組直接執行時不會載入 ui_constants 的 SEPARATOR_PRIMARY
-    # 保留硬編碼以確保錯誤訊息能正常顯示
-    print("=" * 60)
+    # 模組直接執行時套件 import 不可用，用局部常數替代 SEPARATOR_PRIMARY
+    _SEP = "=" * 60
+    print(_SEP)
     print("[ERROR] 此檔案不支援直接執行")
-    print("=" * 60)
+    print(_SEP)
     print()
     print("正確使用方式：")
     print("  ticket track board")
@@ -19,7 +18,7 @@ if __name__ == "__main__":
     print("  ticket track board --ascii")
     print()
     print("詳見 SKILL.md")
-    print("=" * 60)
+    print(_SEP)
     sys.exit(1)
 
 

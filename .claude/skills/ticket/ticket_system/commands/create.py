@@ -47,6 +47,7 @@ from ticket_system.lib.ticket_builder import (
     create_ticket_body,
     update_parent_children,
 )
+from ticket_system.lib.ui_constants import SEPARATOR_PRIMARY
 
 
 def execute(args: argparse.Namespace) -> int:
@@ -210,9 +211,9 @@ def _print_create_checklist(
         new_ticket: 新建立的 Ticket 資訊（用於並行分析）
     """
     print()
-    print("=" * 60)
+    print(SEPARATOR_PRIMARY)
     print(SectionHeaders.CREATION_CHECKLIST)
-    print("=" * 60)
+    print(SEPARATOR_PRIMARY)
     print()
 
     print(CreateMessages.POST_CREATE_CHECKLIST)
@@ -257,9 +258,9 @@ def _print_tdd_sequence_suggestion(ticket_type: str) -> None:
     if not result.phases:
         return
 
-    print("=" * 60)
+    print(SEPARATOR_PRIMARY)
     print(SectionHeaders.TDD_SEQUENCE_SUGGESTION)
-    print("=" * 60)
+    print(SEPARATOR_PRIMARY)
     print()
 
     print(format_msg(CreateMessages.TASK_TYPE_LABEL, task_type=result.task_type))
@@ -328,9 +329,9 @@ def _print_parallel_analysis_result(
     analysis_result = ParallelAnalyzer.analyze_tasks(tasks)
 
     # 輸出並行分析結果
-    print("=" * 60)
+    print(SEPARATOR_PRIMARY)
     print(SectionHeaders.PARALLEL_ANALYSIS)
-    print("=" * 60)
+    print(SEPARATOR_PRIMARY)
     print()
 
     print(f"分析結果: {'可並行' if analysis_result.can_parallel else '無法並行'}")

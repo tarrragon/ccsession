@@ -48,6 +48,7 @@ from ticket_system.lib.ticket_ops import (
     load_and_validate_ticket,
     resolve_ticket_path,
 )
+from ticket_system.lib.ui_constants import SEPARATOR_PRIMARY
 
 
 # ============================================================================
@@ -521,9 +522,9 @@ class TicketLifecycle:
 def _print_stage_separator(title: str) -> None:
     """印出階段分隔線"""
     print()
-    print("=" * 60)
+    print(SEPARATOR_PRIMARY)
     print(f"[{title}]")
-    print("=" * 60)
+    print(SEPARATOR_PRIMARY)
 
 
 def _check_pending_children(

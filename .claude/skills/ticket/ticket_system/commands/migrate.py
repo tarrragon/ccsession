@@ -19,6 +19,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 
+from ticket_system.lib.ui_constants import SEPARATOR_PRIMARY
 from ticket_system.lib.constants import TICKET_ID_PATTERN, WORK_LOGS_DIR, TICKETS_DIR
 from ticket_system.lib.ticket_loader import (
     get_project_root,
@@ -506,12 +507,12 @@ def _batch_migrate(
 
     # 輸出摘要
     print()
-    print("=" * 60)
+    print(SEPARATOR_PRIMARY)
     print(format_info(MigrateMessages.MIGRATION_SUMMARY))
     print(format_info(MigrationMessages.SUCCESS_COUNT, count=success_count))
     print(format_info(MigrationMessages.FAIL_COUNT, count=fail_count))
     print(format_info(MigrationMessages.SKIP_COUNT, count=skip_count))
-    print("=" * 60)
+    print(SEPARATOR_PRIMARY)
 
     if fail_count > 0:
         return 1 if success_count > 0 else 2

@@ -11,6 +11,8 @@ if __name__ == "__main__":
     from ticket_system.lib.messages import print_not_executable_and_exit
     print_not_executable_and_exit()
 
+from ticket_system.lib.ui_constants import SEPARATOR_PRIMARY
+
 
 class HandoffMessages:
     """handoff.py 相關訊息"""
@@ -114,7 +116,7 @@ class LifecycleMessages:
     """lifecycle.py 相關訊息"""
 
     # 自動 Handoff 完成提示
-    AUTO_HANDOFF_SEPARATOR = "=" * 60
+    AUTO_HANDOFF_SEPARATOR = SEPARATOR_PRIMARY
     AUTO_HANDOFF_HEADER = "[自動 Handoff 已完成]"
     AUTO_HANDOFF_NEXT_TASK = "下一步任務: {next_ticket_id}"
     AUTO_HANDOFF_NEXT_TASK_TITLE = "           [{next_title}]"
@@ -122,7 +124,7 @@ class LifecycleMessages:
     AUTO_HANDOFF_AUTO_LOAD = "新對話將自動載入任務 context"
 
     # Phase 前置條件警告
-    PHASE_PREREQUISITE_WARNING_SEPARATOR = "=" * 60
+    PHASE_PREREQUISITE_WARNING_SEPARATOR = SEPARATOR_PRIMARY
     PHASE_PREREQUISITE_WARNING_HEADER = "[WARNING] Phase 前置條件未滿足"
     PHASE_PREREQUISITE_CURRENT = "Ticket {ticket_id} 屬於 {current_phase_label}"
     PHASE_PREREQUISITE_MISSING_HEADER = "缺失的前置 Phase："
