@@ -133,7 +133,7 @@ def main() -> int:
         logger.debug("Project Init 環境檢查 Hook 啟動")
 
         # 取得專案根目錄
-        project_root = get_project_root(logger)
+        project_root = get_project_root()
         logger.debug(f"專案根目錄: {project_root}")
 
         # 執行 project-init check

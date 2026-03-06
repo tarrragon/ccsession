@@ -499,7 +499,7 @@ def main() -> int:
 
         input_data = read_json_from_stdin(logger)
 
-        project_root = get_project_root(logger)
+        project_root = get_project_root()
         logger.info(f"專案根目錄: {project_root}")
 
         pending_tasks = scan_handoff_pending_directory(project_root, logger)

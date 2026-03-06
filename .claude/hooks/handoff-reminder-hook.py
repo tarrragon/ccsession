@@ -313,7 +313,7 @@ def main() -> int:
         input_data = read_json_from_stdin(logger)
 
         # 步驟 3: 取得專案根目錄
-        project_root = get_project_root(logger)
+        project_root = get_project_root()
         logger.info(f"專案根目錄: {project_root}")
 
         # 步驟 4: 掃描待恢復任務
