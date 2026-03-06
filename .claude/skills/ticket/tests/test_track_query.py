@@ -35,7 +35,7 @@ class TestQuery:
         args.ticket_id = "0.31.0-W4-001"
         args.version = "0.31.0"
 
-        with patch('ticket_system.commands.track_query.load_ticket') as mock_load:
+        with patch('ticket_system.lib.ticket_ops.load_ticket') as mock_load:
             mock_ticket = {
                 "id": "0.31.0-W4-001",
                 "title": "Test Ticket",
@@ -75,7 +75,7 @@ class TestQuery:
         args.ticket_id = "0.31.0-W4-001"
         args.version = None
 
-        with patch('ticket_system.commands.track_query.load_ticket') as mock_load:
+        with patch('ticket_system.lib.ticket_ops.load_ticket') as mock_load:
             mock_ticket = {
                 "id": "0.31.0-W4-001",
                 "title": "Test Ticket",

@@ -84,7 +84,7 @@ class TestContextRefreshHandoff:
         # Mock 必要的依賴
         with patch("ticket_system.commands.handoff.validate_ticket_id") as mock_validate:
             with patch("ticket_system.commands.handoff.resolve_version") as mock_resolve:
-                with patch("ticket_system.commands.handoff.load_ticket") as mock_load:
+                with patch("ticket_system.lib.ticket_ops.load_ticket") as mock_load:
                     with patch("ticket_system.commands.handoff._create_handoff_file") as mock_create:
                         # 設定 mock
                         mock_validate.return_value = True
@@ -119,7 +119,7 @@ class TestContextRefreshHandoff:
 
         with patch("ticket_system.commands.handoff.validate_ticket_id") as mock_validate:
             with patch("ticket_system.commands.handoff.resolve_version") as mock_resolve:
-                with patch("ticket_system.commands.handoff.load_ticket") as mock_load:
+                with patch("ticket_system.lib.ticket_ops.load_ticket") as mock_load:
                     with patch("ticket_system.commands.handoff._create_handoff_file") as mock_create:
                         mock_validate.return_value = True
                         mock_resolve.return_value = "0.1.0"
@@ -148,7 +148,7 @@ class TestContextRefreshHandoff:
 
         with patch("ticket_system.commands.handoff.validate_ticket_id") as mock_validate:
             with patch("ticket_system.commands.handoff.resolve_version") as mock_resolve:
-                with patch("ticket_system.commands.handoff.load_ticket") as mock_load:
+                with patch("ticket_system.lib.ticket_ops.load_ticket") as mock_load:
                     with patch("ticket_system.commands.handoff._verify_handoff_dependencies") as mock_deps:
                         with patch("ticket_system.commands.handoff._create_handoff_file") as mock_create:
                             with patch("ticket_system.commands.handoff.ChainAnalyzer") as mock_analyzer:
@@ -182,7 +182,7 @@ class TestContextRefreshHandoff:
 
         with patch("ticket_system.commands.handoff.validate_ticket_id") as mock_validate:
             with patch("ticket_system.commands.handoff.resolve_version") as mock_resolve:
-                with patch("ticket_system.commands.handoff.load_ticket") as mock_load:
+                with patch("ticket_system.lib.ticket_ops.load_ticket") as mock_load:
                     with patch("ticket_system.commands.handoff._verify_handoff_dependencies") as mock_deps:
                         with patch("ticket_system.commands.handoff._create_handoff_file") as mock_create:
                             mock_validate.return_value = True
@@ -220,7 +220,7 @@ class TestContextRefreshHandoff:
 
             with patch("ticket_system.commands.handoff.validate_ticket_id") as mock_validate:
                 with patch("ticket_system.commands.handoff.resolve_version") as mock_resolve:
-                    with patch("ticket_system.commands.handoff.load_ticket") as mock_load:
+                    with patch("ticket_system.lib.ticket_ops.load_ticket") as mock_load:
                         with patch("ticket_system.commands.handoff._create_handoff_file") as mock_create:
                             mock_validate.return_value = True
                             mock_resolve.return_value = "0.1.0"
@@ -249,7 +249,7 @@ class TestContextRefreshHandoff:
 
         with patch("ticket_system.commands.handoff.validate_ticket_id") as mock_validate:
             with patch("ticket_system.commands.handoff.resolve_version") as mock_resolve:
-                with patch("ticket_system.commands.handoff.load_ticket") as mock_load:
+                with patch("ticket_system.lib.ticket_ops.load_ticket") as mock_load:
                     with patch("ticket_system.commands.handoff._create_handoff_file") as mock_create:
                         mock_validate.return_value = True
                         mock_resolve.return_value = "0.1.0"
