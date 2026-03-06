@@ -282,9 +282,87 @@ def reinstall_uv_tool(package_name: str, package_full_path: Path) -> bool:
         return False
 
 
+def _get_project_root() -> Path:
+    """Determine the project root directory.
+
+    Prefers CLAUDE_PROJECT_DIR environment variable if set.
+    Falls back to inferring from hook location (.claude/hooks/xxx.py).
+
+    Returns:
+        Path object pointing to the project root directory.
+    """
+    if "CLAUDE_PROJECT_DIR" in os.environ:
+        return Path(os.environ["CLAUDE_PROJECT_DIR"])
+
+    # Fallback: infer from hook location (.claude/hooks/xxx.py)
+    hook_dir = Path(__file__).parent
+    return hook_dir.parent.parent
+
+
+def _process_package(
+    package_name: str,
+    package_info: Dict[str, str],
+    project_root: Path,
+    installed_tools: Dict[str, str],
+) -> None:
+    """Process a single package: validate, compare versions, and reinstall if needed.
+
+    Args:
+        package_name: Name of the package (e.g. 'ticket-system')
+        package_info: Package metadata dict with 'path' and 'version' keys
+        project_root: Project root directory path
+        installed_tools: Dict of installed tool names and versions
+    """
+    package_path = package_info.get("path", "")
+    desired_version = package_info.get("version", "")
+
+    if not package_path or not desired_version:
+        print(f"{package_name}: Invalid package metadata")
+        return
+
+    package_full_path = project_root / package_path
+    if not package_full_path.exists():
+        print(f"{package_name}: Package directory not found")
+        return
+
+    installed_version = installed_tools.get(package_name)
+    version_display = installed_version or "not installed"
+    print(f"{package_name}: desired={desired_version}, installed={version_display}")
+
+    if not should_reinstall(desired_version, installed_version):
+        print(f"  Status: up to date")
+        return
+
+    print(f"  Status: installing...")
+    if reinstall_uv_tool(package_name, package_full_path):
+        print(f"  Result: reinstalled")
+    else:
+        print(f"  Result: failed", file=sys.stderr)
+
+
+def _sync_packages(project_root: Path, packages: Dict[str, Dict[str, str]]) -> None:
+    """Sync all discovered packages: query installed tools and process each package.
+
+    Args:
+        project_root: Project root directory path
+        packages: Dict of package names to their metadata
+    """
+    print("=" * 60)
+    print("Package Version Sync - Session Startup Check")
+    print("=" * 60)
+
+    installed_tools = get_installed_uv_tools()
+
+    for package_name, package_info in packages.items():
+        _process_package(package_name, package_info, project_root, installed_tools)
+
+    print("=" * 60)
+
+
 def main() -> int:
     """Main hook entry point.
 
+    Orchestrates the package version sync process:
     Phase 1: Auto-scan .claude/skills/*/pyproject.toml
     Phase 2: Query 'uv tool list' for installed versions
     Phase 3: Compare desired vs installed versions
@@ -295,67 +373,14 @@ def main() -> int:
         1 if errors occurred (but hook continues)
     """
     logger = setup_hook_logging("package-version-sync-hook")
+    project_root = _get_project_root()
 
-    # Infer project_root: prefer CLAUDE_PROJECT_DIR env var, otherwise use hook location
-    if "CLAUDE_PROJECT_DIR" in os.environ:
-        project_root = Path(os.environ["CLAUDE_PROJECT_DIR"])
-    else:
-        # Fallback: infer from hook location (.claude/hooks/xxx.py)
-        hook_dir = Path(__file__).parent
-        project_root = hook_dir.parent.parent
-
-    # Phase 1: Auto-scan skill packages
     packages = scan_skill_packages(project_root, logger)
-
     if not packages:
         print("Package Version Sync - No packages found in .claude/skills/")
         return 0
 
-    # Print header
-    print("=" * 60)
-    print("Package Version Sync - Session Startup Check")
-    print("=" * 60)
-
-    # Phase 2: Query installed tools
-    installed_tools = get_installed_uv_tools()
-
-    # Phase 3 & 4: Compare and reinstall
-    for package_name, package_info in packages.items():
-        package_path = package_info.get("path", "")
-        desired_version = package_info.get("version", "")
-
-        if not package_path or not desired_version:
-            print(f"{package_name}: Invalid package metadata")
-            continue
-
-        package_full_path = project_root / package_path
-
-        if not package_full_path.exists():
-            print(f"{package_name}: Package directory not found")
-            continue
-
-        installed_version = installed_tools.get(package_name)
-
-        # Display version status
-        version_display = installed_version or "not installed"
-        print(
-            f"{package_name}: desired={desired_version}, "
-            f"installed={version_display}"
-        )
-
-        # Check if reinstall is needed
-        if not should_reinstall(desired_version, installed_version):
-            print(f"  Status: up to date")
-            continue
-
-        # Reinstall
-        print(f"  Status: installing...")
-        if reinstall_uv_tool(package_name, package_full_path):
-            print(f"  Result: reinstalled")
-        else:
-            print(f"  Result: failed", file=sys.stderr)
-
-    print("=" * 60)
+    _sync_packages(project_root, packages)
     return 0
 
 
