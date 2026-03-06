@@ -470,4 +470,4 @@ Level 5: TDD 階段代理人 + thyme-python-developer
 ---
 
 **Last Updated**: 2026-03-05
-**Version**: 7.8.0 - 第六層新增工具失敗 vs 邏輯失敗分流（PC-003）
+**Version**: 7.8.1 - 修正 PC-003→PC-005 引用（PC-005 為 CLI 假設歸因）
