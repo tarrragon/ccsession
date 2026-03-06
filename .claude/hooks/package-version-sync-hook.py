@@ -60,17 +60,9 @@ SKILLS_DIR_NAME = ".claude/skills"
 PYPROJECT_FILENAME = "pyproject.toml"
 
 
-def get_project_root() -> Path:
-    """Get project root from CLAUDE_PROJECT_DIR or infer from hook location."""
-    if "CLAUDE_PROJECT_DIR" in os.environ:
-        return Path(os.environ["CLAUDE_PROJECT_DIR"])
-
-    # Fallback: infer from hook location (.claude/hooks/xxx.py)
-    hook_dir = Path(__file__).parent
-    return hook_dir.parent.parent
 
 
-def scan_skill_packages(project_root: Path) -> Dict[str, Dict[str, str]]:
+def scan_skill_packages(project_root: Path, logger: Optional[object] = None) -> Dict[str, Dict[str, str]]:
     """Scan .claude/skills/*/pyproject.toml and extract package info.
 
     Traverses the skills directory and parses each pyproject.toml to extract
@@ -79,6 +71,7 @@ def scan_skill_packages(project_root: Path) -> Dict[str, Dict[str, str]]:
 
     Args:
         project_root: Root directory of the project.
+        logger: Optional Logger instance. If not provided, will be created.
 
     Returns:
         Dict mapping package name → {"path": relative_path, "version": version_str}.
@@ -98,6 +91,10 @@ def scan_skill_packages(project_root: Path) -> Dict[str, Dict[str, str]]:
     """
     packages: Dict[str, Dict[str, str]] = {}
     skills_dir = project_root / SKILLS_DIR_NAME
+
+    # 如果未提供 logger，建立一次
+    if logger is None:
+        logger = setup_hook_logging("package-version-sync-hook")
 
     if not skills_dir.exists():
         return packages
@@ -127,8 +124,7 @@ def scan_skill_packages(project_root: Path) -> Dict[str, Dict[str, str]]:
                     }
             except Exception as e:
                 # Log warning but continue scanning other skills
-                logger = setup_hook_logging("package-version-sync-hook")
-                logger.warning(f"Failed to parse {pyproject_path}: {e}")
+                logger.warning("Failed to parse {}: {}".format(pyproject_path, e))
                 continue
     except Exception:
         # If iterating skills_dir fails, return what we have
@@ -176,6 +172,7 @@ def get_installed_uv_tools() -> Dict[str, str]:
         mermaid-ascii  0.5.0    ~/.venv/bin/mermaid
     """
     tools: Dict[str, str] = {}
+    logger = setup_hook_logging("package-version-sync-hook")
 
     try:
         result = subprocess.run(
@@ -205,7 +202,10 @@ def get_installed_uv_tools() -> Dict[str, str]:
                 tools[tool_name] = version_str
 
         return tools
-    except Exception:
+    except Exception as e:
+        # stderr 輸出 + 日誌記錄（符合 quality-baseline.md 規則 4 雙通道要求）
+        sys.stderr.write("[Hook Error] Failed to query uv tool list: {}\n".format(e))
+        logger.error("Failed to query uv tool list: {}".format(e))
         return tools
 
 
@@ -241,6 +241,8 @@ def reinstall_uv_tool(package_name: str, package_full_path: Path) -> bool:
     Returns:
         True if reinstall succeeded, False otherwise.
     """
+    logger = setup_hook_logging("package-version-sync-hook")
+
     try:
         # Step 1: uninstall (ignore errors if not installed)
         subprocess.run(
@@ -273,7 +275,10 @@ def reinstall_uv_tool(package_name: str, package_full_path: Path) -> bool:
             return True
         # returncode 0 but no "Building" means cache was used
         return result.returncode == 0
-    except Exception:
+    except Exception as e:
+        # stderr 輸出 + 日誌記錄（符合 quality-baseline.md 規則 4 雙通道要求）
+        sys.stderr.write("[Hook Error] Failed to reinstall uv tool {}: {}\n".format(package_name, e))
+        logger.error("Failed to reinstall uv tool {}: {}".format(package_name, e))
         return False
 
 
@@ -290,10 +295,17 @@ def main() -> int:
         1 if errors occurred (but hook continues)
     """
     logger = setup_hook_logging("package-version-sync-hook")
-    project_root = get_project_root()
+
+    # Infer project_root: prefer CLAUDE_PROJECT_DIR env var, otherwise use hook location
+    if "CLAUDE_PROJECT_DIR" in os.environ:
+        project_root = Path(os.environ["CLAUDE_PROJECT_DIR"])
+    else:
+        # Fallback: infer from hook location (.claude/hooks/xxx.py)
+        hook_dir = Path(__file__).parent
+        project_root = hook_dir.parent.parent
 
     # Phase 1: Auto-scan skill packages
-    packages = scan_skill_packages(project_root)
+    packages = scan_skill_packages(project_root, logger)
 
     if not packages:
         print("Package Version Sync - No packages found in .claude/skills/")

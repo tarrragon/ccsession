@@ -186,35 +186,35 @@ def cleanup_stale_files(claude_dir: Path, remote_files: set[Path]) -> list[str]:
     return removed
 
 
-def detect_and_reinstall_packages(project_root: Path) -> None:
-    """偵測 .claude/skills/*/pyproject.toml 的變更並重新安裝受影響的套件。
+def detect_changed_packages(project_root: Path) -> None:
+    """偵測 .claude/skills/*/pyproject.toml 的變更檔案。
 
-    使用 git diff 三層 fallback 策略：
+    使用 git diff --name-only 避免 glob pathspec 問題，改由 Python 端過濾檔案。
+
+    使用三層 fallback 策略：
     1. origin/HEAD...HEAD（標準情況）
     2. HEAD~1...HEAD（無 origin/HEAD 時）
-    3. 跳過（都失敗時）
+    3. HEAD（最後手段）
 
     不會中止主流程，僅記錄警告。
     """
     changed_pyproject_files = []
 
-    # Try git diff with fallback strategy
+    # Try git diff --name-only with fallback strategy
+    # 使用 --name-only 取得變更檔案列表，避免 glob 被 shell 展開
     git_commands = [
-        ["diff", "origin/HEAD...HEAD", "--", ".claude/skills/*/pyproject.toml"],
-        ["diff", "HEAD~1...HEAD", "--", ".claude/skills/*/pyproject.toml"],
-        ["diff", "HEAD", "--", ".claude/skills/*/pyproject.toml"],
+        ["diff", "--name-only", "origin/HEAD...HEAD"],
+        ["diff", "--name-only", "HEAD~1...HEAD"],
+        ["diff", "--name-only", "HEAD"],
     ]
 
     for git_args in git_commands:
         result = run_git(git_args, cwd=str(project_root))
         if result.returncode == 0:
-            # Parse the output to find changed files
+            # 解析檔案列表並過濾 .claude/skills/*/pyproject.toml
             for line in result.stdout.splitlines():
-                if line.startswith("+++") or line.startswith("---"):
-                    # Skip diff headers
-                    continue
-                # Git diff output for renames/deletes/etc. may vary
-                # For now, we just detect files mentioned in the output
+                line = line.strip()
+                # 篩選符合模式的檔案
                 if ".claude/skills/" in line and "pyproject.toml" in line:
                     changed_pyproject_files.append(line)
             break  # Found a working git command
@@ -231,8 +231,8 @@ def detect_and_reinstall_packages(project_root: Path) -> None:
 
     # For now, we only log the detection
     # The actual reinstallation will happen when the hook runs
-    for file_info in changed_pyproject_files[:3]:  # Show first 3
-        print_color(f"     - {file_info[:80]}...")
+    for file_path in changed_pyproject_files[:3]:  # Show first 3
+        print_color(f"     - {file_path}")
     if len(changed_pyproject_files) > 3:
         print_color(f"     ... 及 {len(changed_pyproject_files) - 3} 個檔案")
 
@@ -281,7 +281,7 @@ def main() -> None:
 
         # 5.6. Detect and reinstall packages
         print_color("檢查套件版本變更...")
-        detect_and_reinstall_packages(project_root)
+        detect_changed_packages(project_root)
 
         # 6. Update FLUTTER.md (not CLAUDE.md)
         templates_dir = temp_dir / "project-templates"
