@@ -14,6 +14,17 @@ import argparse
 import re
 from typing import Optional
 
+
+def _parse_wave_arg(value: str) -> int:
+    """Parse --wave argument, accepting both integer and W{n} format.
+
+    Examples: "2" -> 2, "W2" -> 2, "w28" -> 28
+    """
+    stripped = value.strip().upper()
+    if stripped.startswith('W'):
+        return int(stripped[1:])
+    return int(value)
+
 from ticket_system.lib.ticket_loader import (
     resolve_version,
     require_version,
@@ -267,7 +278,7 @@ def _register_query_commands(
     p_list.add_argument("--in-progress", action="store_true", help=TrackMessages.ARG_IN_PROGRESS)
     p_list.add_argument("--completed", action="store_true", help=TrackMessages.ARG_COMPLETED)
     p_list.add_argument("--blocked", action="store_true", help=TrackMessages.ARG_BLOCKED)
-    p_list.add_argument("--wave", type=int, help=TrackMessages.ARG_WAVE)
+    p_list.add_argument("--wave", type=_parse_wave_arg, help=TrackMessages.ARG_WAVE)
     p_list.add_argument("--status", nargs="+", choices=["pending", "in_progress", "completed", "blocked"], help=TrackMessages.ARG_STATUS)
     p_list.add_argument("--format", choices=["table", "ids", "yaml"], default="table", help=TrackMessages.ARG_FORMAT)
     p_list.add_argument("--version", help=TrackMessages.ARG_VERSION)
@@ -381,7 +392,7 @@ def _register_batch_commands(
     # batch-complete 操作
     p_batch_complete = subparsers.add_parser("batch-complete", help=TrackMessages.HELP_BATCH_COMPLETE)
     p_batch_complete.add_argument("ticket_ids", nargs="?", default="", help=TrackMessages.ARG_TICKET_IDS)
-    p_batch_complete.add_argument("--wave", type=int, help="完成指定 Wave 的所有 in_progress Ticket")
+    p_batch_complete.add_argument("--wave", type=_parse_wave_arg, help="完成指定 Wave 的所有 in_progress Ticket")
     p_batch_complete.add_argument("--parent", help="完成指定父任務的所有子任務")
     p_batch_complete.add_argument("--status", default="in_progress", help="與 --wave 搭配使用，篩選特定狀態")
     p_batch_complete.add_argument("--dry-run", action="store_true", help="模擬執行，只顯示清單不實際執行")

@@ -14,12 +14,39 @@ from ticket_system.commands.track_query import (
     _output_yaml,
     _output_table,
 )
+from ticket_system.commands.track import _parse_wave_arg
 from ticket_system.lib.constants import (
     STATUS_PENDING,
     STATUS_IN_PROGRESS,
     STATUS_COMPLETED,
     STATUS_BLOCKED,
 )
+
+
+class TestParseWaveArg:
+    """_parse_wave_arg 函式測試"""
+
+    def test_integer_format(self):
+        """接受純整數格式"""
+        assert _parse_wave_arg("2") == 2
+        assert _parse_wave_arg("28") == 28
+
+    def test_uppercase_w_format(self):
+        """接受 W{n} 大寫格式"""
+        assert _parse_wave_arg("W2") == 2
+        assert _parse_wave_arg("W28") == 28
+
+    def test_lowercase_w_format(self):
+        """接受 w{n} 小寫格式"""
+        assert _parse_wave_arg("w2") == 2
+        assert _parse_wave_arg("w28") == 28
+
+    def test_invalid_value_raises(self):
+        """無效值應拋出 ValueError"""
+        with pytest.raises(ValueError):
+            _parse_wave_arg("abc")
+        with pytest.raises(ValueError):
+            _parse_wave_arg("W")
 
 
 class TestWaveFilter:
