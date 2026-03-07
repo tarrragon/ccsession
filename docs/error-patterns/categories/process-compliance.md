@@ -532,3 +532,68 @@ grep -rn "pattern" path/ --include="*.py"
 | 觸發格式 | 5W1H 摘要、分析結論段落 |
 | 語言 | 韓文為主（因 5W1H 聯想），其次是日文 |
 | 影響 | 僅語言錯誤，語意和邏輯正確 |
+
+---
+
+## PC-010: todolist.yaml active 版本提前推進，舊版本仍有未完成任務
+
+**發現日期**: 2026-03-07
+**相關 Ticket**: 0.1.1-W3-004、0.1.0-W11-003
+
+### 症狀
+
+- 分析任務以「active = v0.1.1」為前提得出結論，但 v0.1.0 仍有 pending 任務
+- todolist.yaml `current_version` 顯示新版本（如 0.1.1），但舊版本（如 0.1.0）的 tickets 狀態為 pending
+- 分析結論（如 ticket 歸屬判斷）基於錯誤的「當前版本」前提，需要事後修正
+
+### 根因
+
+版本目標改變時（如 v0.1.0 從「App 功能開發」改為「.claude 模板修復」），執行者只更新了 todolist.yaml 的 `current_version`，未確認以下前置條件：
+
+1. 前一版本的所有 Ticket 是否已清空（completed 或 migrated）
+2. 版本目標設定是否已同步更新（目標改變 = 版本語義改變）
+
+**錯誤決策鏈**：
+
+```
+版本開發目標改變（App 開發 → .claude 修復）
+    → 原 App 開發 ticket 遷移至 v0.1.1
+    → todolist.yaml current_version 改為 0.1.1
+    → 但 v0.1.0 的 .claude 修復 ticket 尚未完成
+    → active 版本 = v0.1.1（錯誤）
+    → 後續分析以 v0.1.1 為當前版本 → 歸屬判斷錯誤
+```
+
+### 解決方案
+
+1. 修正 todolist.yaml `current_version` 回到正確的版本（v0.1.0）
+2. 確認前置版本的所有 pending ticket 清單
+3. 重新驗證基於錯誤前提得出的分析結論
+
+```yaml
+# 錯誤：v0.1.0 仍有 pending 任務，不應提前設為 0.1.1
+status: active
+current_version: 0.1.1
+
+# 正確：確認 v0.1.0 任務清空後才推進
+status: active
+current_version: 0.1.0
+```
+
+### 預防措施
+
+1. **版本目標改變時必須同步**：同時更新版本目標設定 + 遷移受影響 ticket + 確認前置版本任務狀態
+2. **版本推進前置檢查**：更新 `current_version` 前，執行 `ticket track list --status pending` 確認前置版本無殘留
+3. **版本一致性保護 Hook**（W11-003）：SessionStart / UserPromptSubmit 時偵測 active 版本前是否有舊版本存在未完成任務，主動阻擋並提示
+
+### 行為模式分析
+
+此錯誤屬於「前置條件未驗證」模式：
+
+| 操作 | 錯誤行為 | 正確行為 |
+|------|---------|---------|
+| 版本目標改變 | 只更新 todolist.yaml | 同步更新目標設定 + 確認舊版任務狀態 |
+| 推進版本號 | 直接修改 current_version | 先確認前置版本 pending = 0 |
+| 後續分析 | 以新 current_version 為前提 | 以 todolist.yaml 實際 active 版本為前提並先驗證其正確性 |
+
+> **核心教訓**：`current_version` 是版本狀態的 Source of Truth，提前推進會讓所有基於「當前版本」的分析和歸屬判斷失去依據。版本推進是「完成的宣告」，不是「意圖的宣告」。

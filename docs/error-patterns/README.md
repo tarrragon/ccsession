@@ -4,9 +4,9 @@
 
 | 類別 | 數量 |
 |------|------|
-| 流程合規 (PC) | 9 |
+| 流程合規 (PC) | 10 |
 | 程式碼品質 (CQ) | 3 |
-| **總計** | **12** |
+| **總計** | **13** |
 
 ## 索引
 
@@ -27,7 +27,8 @@
 - [PC-007](./categories/process-compliance.md#pc-007-ticket-描述視為事實而非假設接手者未獨立驗證範圍) Ticket 描述視為事實而非假設（接手者未獨立驗證範圍）
 - [PC-008](./categories/process-compliance.md#pc-008-model-在高-context-下語言一致性偶發失效韓文日文輸出) Model 在高 context 下語言一致性偶發失效（韓文/日文輸出）
 - [PC-009](./categories/process-compliance.md#pc-009-長-session-累積-context-導致認知負擔上升思考品質下降) 長 Session 累積 context 導致認知負擔上升，思考品質下降
+- [PC-010](./categories/process-compliance.md#pc-010-todolists-active-版本提前推進舊版本仍有未完成任務) todolist.yaml active 版本提前推進，舊版本仍有未完成任務
 
 ---
 
-*最後更新: 2026-03-07（PC-009 新增：長 session context 累積問題）*
+*最後更新: 2026-03-07（PC-010 新增：active 版本提前推進導致歸屬判斷錯誤）*
