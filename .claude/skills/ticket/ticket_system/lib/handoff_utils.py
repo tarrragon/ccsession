@@ -12,7 +12,7 @@ from ticket_system.lib.constants import (
     STATUS_IN_PROGRESS,
     TASK_CHAIN_DIRECTION_TYPES,
 )
-from ticket_system.lib.ticket_ops import load_and_validate_ticket
+from ticket_system.lib.ticket_ops import extract_version_from_ticket_id, load_and_validate_ticket
 
 # 所有已知的 direction 值
 _KNOWN_DIRECTION_VALUES = {"context-refresh", "auto"} | set(TASK_CHAIN_DIRECTION_TYPES)
@@ -32,11 +32,9 @@ def is_ticket_completed(ticket_id: str) -> bool:
         bool: True 表示已完成，False 表示未完成或無法判斷
     """
     try:
-        # 從 ticket_id 提取版本（前三個數字段）
-        parts = ticket_id.split("-")
-        if len(parts) < 3:
+        version = extract_version_from_ticket_id(ticket_id)
+        if version is None:
             return False
-        version = parts[0]  # "0.31.1"
 
         ticket, error = load_and_validate_ticket(version, ticket_id, auto_print_error=False)
         if error:
@@ -89,10 +87,9 @@ def is_ticket_in_progress_or_completed(ticket_id: str) -> bool:
         bool: True 表示已啟動（in_progress 或 completed），False 表示未啟動或無法判斷
     """
     try:
-        parts = ticket_id.split("-")
-        if len(parts) < 3:
+        version = extract_version_from_ticket_id(ticket_id)
+        if version is None:
             return False
-        version = parts[0]
 
         ticket, error = load_and_validate_ticket(version, ticket_id, auto_print_error=False)
         if error:

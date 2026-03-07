@@ -10,7 +10,7 @@ from typing import Any, Dict, Optional, List
 
 from ticket_system.lib.constants import STATUS_IN_PROGRESS, STATUS_COMPLETED, STATUS_PENDING, STATUS_BLOCKED
 from ticket_system.lib.ticket_loader import load_ticket
-from ticket_system.lib.ticket_ops import resolve_id_from_ref
+from ticket_system.lib.ticket_ops import extract_version_from_ticket_id, resolve_id_from_ref
 
 
 @dataclass
@@ -110,7 +110,7 @@ class ChainAnalyzer:
         # 版本號解析：優先使用傳入參數，否則從 Ticket ID 提取
         # Ticket ID 格式：version-Wn-seq（如 0.31.0-W4-001）
         if not version:
-            version = ticket_id.split("-W")[0] if "-W" in ticket_id else None
+            version = extract_version_from_ticket_id(ticket_id)
 
         # Guard Clause 1：情境 2 - 被阻塞，等待前置任務完成
         if status == STATUS_BLOCKED:

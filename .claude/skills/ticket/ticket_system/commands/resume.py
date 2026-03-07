@@ -46,6 +46,7 @@ from ticket_system.lib.handoff_utils import (
     is_ticket_in_progress_or_completed,
     is_valid_direction,
 )
+from ticket_system.lib.ticket_ops import extract_version_from_ticket_id
 from ticket_system.lib.ui_constants import SEPARATOR_PRIMARY
 
 
@@ -524,9 +525,8 @@ def _execute_resume(ticket_id: str, version: Optional[str]) -> int:
         ticket_exists = False
         try:
             # 從 ticket_id 提取版本並嘗試載入 Ticket
-            parts = ticket_id.split("-")
-            if len(parts) >= 3:
-                version_from_id = parts[0]
+            version_from_id = extract_version_from_ticket_id(ticket_id)
+            if version_from_id:
                 ticket = load_ticket(version_from_id, ticket_id)
                 ticket_exists = ticket is not None
         except Exception:

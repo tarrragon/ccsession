@@ -20,6 +20,29 @@ from ticket_system.lib.messages import (
 )
 
 
+def extract_version_from_ticket_id(ticket_id: str) -> Optional[str]:
+    """
+    從 Ticket ID 提取版本號。
+
+    格式：0.1.0-W9-002 → "0.1.0"（以 "-W" 為分割點，語意清晰）
+
+    Args:
+        ticket_id: Ticket ID，格式如 "0.1.0-W9-002"
+
+    Returns:
+        Optional[str]: 版本號；ID 不含 "-W" 時返回 None
+
+    Examples:
+        >>> extract_version_from_ticket_id("0.1.0-W9-002")
+        '0.1.0'
+        >>> extract_version_from_ticket_id("invalid")
+        None
+    """
+    if "-W" not in ticket_id:
+        return None
+    return ticket_id.split("-W")[0]
+
+
 def resolve_id_from_ref(ref: Any) -> str:
     """
     從任務引用（字串 ID 或字典）提取 Ticket ID。

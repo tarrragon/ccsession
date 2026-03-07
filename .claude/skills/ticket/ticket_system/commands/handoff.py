@@ -53,6 +53,7 @@ from ticket_system.lib.command_lifecycle_messages import (
 )
 from ticket_system.lib.chain_analyzer import ChainAnalyzer, Recommendation
 from ticket_system.lib.ticket_ops import (
+    extract_version_from_ticket_id,
     load_and_validate_ticket,
     resolve_ticket_path,
     resolve_id_from_ref,
@@ -580,24 +581,6 @@ def _resolve_direction_from_args(args: argparse.Namespace) -> str:
         return f"to-sibling:{args.to_sibling}"
     return "auto"
 
-
-
-
-def _extract_version_from_ticket_id(ticket_id: str) -> Optional[str]:
-    """
-    從 Ticket ID 提取版本號。
-
-    格式: 0.31.0-W4-010 → 0.31.0
-
-    Args:
-        ticket_id: Ticket ID
-
-    Returns:
-        Optional[str]: 版本號，無法解析時回傳 None
-    """
-    return ticket_id.split("-W")[0] if "-W" in ticket_id else None
-
-
 def _print_header(ticket: dict) -> None:
     """
     列印 handoff 狀態的基本資訊。
@@ -757,7 +740,7 @@ def _print_status(ticket: dict) -> int:
     children = ticket.get("children", [])
 
     # 版本號提取一次，傳入各子函式
-    version = _extract_version_from_ticket_id(ticket_id)
+    version = extract_version_from_ticket_id(ticket_id)
 
     # 列印基本資訊
     _print_header(ticket)
