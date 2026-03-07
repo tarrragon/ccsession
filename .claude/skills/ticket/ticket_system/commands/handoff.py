@@ -957,8 +957,8 @@ def _execute_gc(args: argparse.Namespace) -> int:
 
 def execute(args: argparse.Namespace) -> int:
     """執行 handoff 命令"""
-    # 檢查是否為 gc 子命令
-    if getattr(args, "handoff_command", None) == "gc":
+    # 檢查是否為 gc 命令（改用 --gc 旗標，不用子命令）
+    if getattr(args, "gc", False):
         return _execute_gc(args)
 
     # 檢查 --status 選項
@@ -1042,20 +1042,10 @@ def execute(args: argparse.Namespace) -> int:
 
 
 def register(subparsers: argparse._SubParsersAction) -> None:
-    """註冊 handoff 主命令及子命令"""
+    """註冊 handoff 主命令"""
     parser = subparsers.add_parser("handoff", help=HandoffMessages.HELP_TEXT)
 
-    # 建立 handoff 子命令解析器
-    handoff_subparsers = parser.add_subparsers(
-        dest="handoff_command",
-        required=False,
-        help="handoff 子命令"
-    )
-
-    # 註冊 gc 子命令
-    _register_handoff_gc(handoff_subparsers)
-
-    # 註冊主 handoff 命令的參數（用於傳統 handoff）
+    # 註冊主 handoff 命令的參數
     parser.add_argument(
         "ticket_id",
         nargs="?",
@@ -1088,26 +1078,22 @@ def register(subparsers: argparse._SubParsersAction) -> None:
         help=HandoffMessages.ARG_STATUS_HELP
     )
     parser.add_argument(
+        "--gc",
+        action="store_true",
+        help="清理 stale handoff 檔案"
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="（搭配 --gc）預覽 stale handoff 清單，不實際刪除"
+    )
+    parser.add_argument(
+        "--execute",
+        action="store_true",
+        help="（搭配 --gc）執行清理，將 stale handoff 移至 archive/"
+    )
+    parser.add_argument(
         "--version",
         help=HandoffMessages.ARG_VERSION_HELP
     )
     parser.set_defaults(func=execute)
-
-
-def _register_handoff_gc(subparsers: argparse._SubParsersAction) -> None:
-    """註冊 gc 子命令"""
-    gc_parser = subparsers.add_parser("gc", help="清理 stale handoff 檔案")
-
-    # 使用 mutually_exclusive_group 確保只能選一個
-    gc_group = gc_parser.add_mutually_exclusive_group()
-    gc_group.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="預覽 stale handoff 清單，不實際刪除"
-    )
-    gc_group.add_argument(
-        "--execute",
-        action="store_true",
-        help="執行清理，將 stale handoff 移至 archive/"
-    )
-    gc_parser.set_defaults(func=execute)
