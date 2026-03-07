@@ -184,7 +184,9 @@ Phase 1: 功能設計 (lavender-interface-designer)
 Phase 2: 測試設計 (sage-test-architect)
 Phase 3a: 策略規劃 (pepper-test-implementer)
 Phase 3b: 實作 (parsley-flutter-developer / Go developer)
-Phase 4: 重構評估 (cinnamon-refactor-owl) → /tech-debt-capture
+Phase 4a: 多視角分析 (/parallel-evaluation B)
+Phase 4b: 重構執行 (cinnamon-refactor-owl)
+Phase 4c: 多視角再審核 (/parallel-evaluation A) → /tech-debt-capture
 ```
 
 **語言自適應**：Phase 3b 依語言派發不同代理人。

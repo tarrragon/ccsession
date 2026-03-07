@@ -28,7 +28,13 @@
 [Phase 3b] 實作執行 → [parsley-flutter-developer](../agents/parsley-flutter-developer.md)
     |
     v
-[Phase 4] 重構優化 → [cinnamon-refactor-owl](../agents/cinnamon-refactor-owl.md)
+[Phase 4a] 多視角分析 → /parallel-evaluation B（Redundancy/Coupling/Complexity）
+    |
+    v（豁免時直接跳至 Phase 4b）
+[Phase 4b] 重構執行 → [cinnamon-refactor-owl](../agents/cinnamon-refactor-owl.md)
+    |
+    v（豁免時直接到完成）
+[Phase 4c] 多視角再審核 → /parallel-evaluation A（Reuse/Quality/Efficiency）
     |
     v
 完成 → 提交
