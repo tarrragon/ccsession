@@ -407,6 +407,31 @@ Skill 是預建的專用工具，優先於代理人派發。
 
 ---
 
+## Resume 後標準化接手流程（Checkpoint R）
+
+`ticket resume <id>` 完成後，CLI 自動輸出「建議下一步」（Checkpoint R）。PM 依此引導執行：
+
+```
+ticket resume <id>
+    |
+    v
+[CLI 輸出 Checkpoint R]
+  1. [ ] 獨立驗證 Ticket 描述數量/範圍（PC-007）
+  2. ticket track claim <id>
+  3. ticket track chain <id>（可選）
+    |
+    v
+[PM] AskUserQuestion 確認接手方式（若有疑義）
+    |
+    +-- 已驗證，直接 claim → ticket track claim <id>
+    +-- 需查看任務鏈 → ticket track chain <id>
+    +-- 範圍有疑義 → 先更新 Ticket 再 claim
+```
+
+**核心原則**：resume 後不直接開始實作，先走 Checkpoint R 確認範圍再 claim。
+
+---
+
 ## 代理人觸發優先級
 
 ```

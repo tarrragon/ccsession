@@ -472,6 +472,22 @@ def _print_args_error(error_msg: str) -> None:
     print(ResumeMessages.RESUME_LIST_CMD)
 
 
+def _print_resume_checkpoint(ticket_id: str) -> None:
+    """Resume 後標準化 Checkpoint 引導（接手流程路由）。"""
+    print()
+    print(SEPARATOR_PRIMARY)
+    print(SectionHeaders.SUGGESTED_NEXT_STEP)
+    print(SEPARATOR_PRIMARY)
+    print()
+    print(ResumeMessages.CHECKPOINT_HEADER)
+    print(ResumeMessages.CHECKPOINT_SCOPE_VERIFY)
+    print(ResumeMessages.CHECKPOINT_CLAIM_LABEL)
+    print(format_msg(ResumeMessages.CHECKPOINT_CLAIM_CMD, ticket_id=ticket_id))
+    print(ResumeMessages.CHECKPOINT_CHAIN_LABEL)
+    print(format_msg(ResumeMessages.CHECKPOINT_CHAIN_CMD, ticket_id=ticket_id))
+    print()
+
+
 def _execute_resume(ticket_id: str, version: Optional[str]) -> int:
     """
     執行恢復單一 Ticket 的邏輯
@@ -534,6 +550,8 @@ def _execute_resume(ticket_id: str, version: Optional[str]) -> int:
     print(SectionHeaders.COMPLETION)
     print(InfoMessages.HANDOFF_RESUMED)
     print(SEPARATOR_PRIMARY)
+
+    _print_resume_checkpoint(ticket_id)
     return 0
 
 

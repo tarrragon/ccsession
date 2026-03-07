@@ -193,6 +193,14 @@ class ResumeMessages:
     ARG_LIST_HELP = "列出所有待恢復的任務"
     ARG_VERSION_HELP = "指定版本 (如不指定則自動偵測)"
 
+    # Resume 後 Checkpoint（標準化接手流程引導）
+    CHECKPOINT_HEADER = "接手後的標準化步驟："
+    CHECKPOINT_SCOPE_VERIFY = "   1. [ ] 獨立驗證 Ticket 描述的數量/範圍是否正確（PC-007）"
+    CHECKPOINT_CLAIM_LABEL = "   2. 認領 Ticket："
+    CHECKPOINT_CLAIM_CMD = "         ticket track claim {ticket_id}"
+    CHECKPOINT_CHAIN_LABEL = "   3. （可選）查看任務鏈進度："
+    CHECKPOINT_CHAIN_CMD = "         ticket track chain {ticket_id}"
+
 
 class CreateMessages:
     """create.py 相關訊息"""
