@@ -110,7 +110,7 @@ Bash 工具輸出：
 
 | 工具 | 大輸出防護 |
 |------|----------|
-| Bash（測試） | `./.claude/hooks/test-summary.sh`（輸出 < 50KB） |
+| Bash（測試） | `flutter test 2>&1 \| tail -20`（只看最後結果） |
 | Bash（一般） | `命令 \| head -100` 或 `命令 \| wc -l` 確認大小 |
 | Grep | 使用 `head_limit` 限制回傳行數 |
 | Read | 使用 `offset` + `limit` 分頁讀取 |
@@ -133,7 +133,7 @@ Bash 工具輸出：
 - .claude/rules/core/python-execution.md - Python 執行規則（類似規範）
 - .claude/error-patterns/implementation/IMP-008-bash-working-directory-pollution.md
 - .claude/error-patterns/implementation/IMP-009-taskoutput-confusion.md
-- FLUTTER.md - 全量測試執行規範（測試大輸出防護）
+- CLAUDE.md - 專案開發規範（含 Flutter 測試執行規範）
 
 ---
 

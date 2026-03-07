@@ -224,7 +224,7 @@ if is_ticket_completed(project_root, ticket_id, logger):
 | 預設行為為刪除 | 破壞性操作應保守，不確定時必須保留 |
 
 > 完整錯誤模式：.claude/error-patterns/implementation/IMP-010-gc-state-semantic-conflict.md
-> 完整錯誤模式：.claude/error-patterns/architecture/ARCH-002-incomplete-cleanup.md
+> 完整錯誤模式：.claude/error-patterns/architecture/ARCH-002-plugin-cache-only-cleanup.md
 
 ---
 

@@ -10,7 +10,7 @@
 新功能需求
     |
     v
-[Phase 0] SA 前置審查 → [system-analyst](../agents/system-analyst.md)
+[Phase 0] SA 前置審查 → [saffron-system-analyst](../agents/saffron-system-analyst.md)
     |
     +-- 審查通過 --> 進入 TDD 流程
     +-- 審查不通過 --> 補充前置作業 --> 重新審查
@@ -67,7 +67,7 @@
 | 需補充 | 完成補充後重新審查 |
 | 不建議 | 升級到 PM 決定 |
 
-> 詳細規格：@.claude/agents/system-analyst.md
+> 詳細規格：@.claude/agents/saffron-system-analyst.md
 
 ---
 
