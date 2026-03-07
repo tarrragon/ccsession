@@ -165,30 +165,43 @@ Skill 是預建的專用工具，優先於代理人派發。
 | 開發命令（實作/建立/新增/重構） | Hook 驗證 Ticket → 行為分類（IMP/TST/ADJ/ANA） |
 | 安全相關（auth/token/permission） | → 強制派發 security-reviewer |
 | 除錯命令（test failed/crash/bug） | → 強制派發 incident-responder |
-| **計畫執行中發現超範圍需求** | → **[強制] 立即 `/ticket create`，不中斷主線** |
+| **執行中發現技術債/問題/回歸/超範圍需求** | → **[強制] 立即 `/ticket create`，不詢問，不中斷主線** |
 
 ---
 
-## 第三層半：Plan Mode 執行中額外發現規則
+## 第三層半：執行中額外發現規則（技術債/問題/超範圍需求）
 
-> 當 PM 或 Agent 在計畫執行中發現超出原計畫範圍的需求時，適用本規則。
+> 當 PM 或 Agent 在 Ticket 執行過程中發現任何需要追蹤的問題時，適用本規則。
 
-**識別條件**：超出當前 Ticket scope 的延伸工作、未在原計畫中涵蓋的設計缺口
+**識別條件（任一符合）**：
 
-**強制動作**：
+| 類型 | 範例 |
+|------|------|
+| 技術債務 | 重複程式碼、設計違規、命名不一致 |
+| Bug / 回歸 | 執行中發現某功能被破壞 |
+| 遺漏點 | W9-003 等遺漏的同類問題 |
+| 超範圍需求 | 超出當前 Ticket scope 的延伸工作 |
+
+**核心規則：發現即建立，不詢問確認**
 
 ```
-發現超範圍需求（執行中）
+發現技術債/問題/超範圍需求（執行中）
     |
     v
 [強制] 立即 /ticket create → 建立 pending Ticket
+（不需要詢問用戶是否要建立，這是確定性動作）
     |
     v
 繼續執行當前計畫主線（不中斷、不延後）
 ```
 
+**判斷決策點（只有一個）**：
+- 發現了需要追蹤的問題嗎？→ 是 → **直接 /ticket create**
+- 要不要處理、優先級高不高 → 這是後續 acceptance-auditor 審核的職責，不是此刻的決策點
+
 | 禁止行為 | 說明 |
 |---------|------|
+| 詢問用戶「要不要建 Ticket？」 | 發現是確定性事件，建立是強制動作 |
 | 忽視不建 Ticket | 額外發現必須立即追蹤 |
 | 中斷主線去處理額外發現 | 先建 Ticket，完成當前任務後再執行 |
 | 口頭回報取代 Ticket | 必須有可追蹤的 Ticket 記錄 |
@@ -467,7 +480,7 @@ Level 5: TDD 階段代理人 + thyme-python-developer
 | 用戶決策確認 | AskUserQuestion（17 個場景，詳見 askuserquestion-rules.md） |
 | Commit 後 | AskUserQuestion #16（錯誤學習）→ #11（Handoff 確認） |
 | 流程省略偵測 | AskUserQuestion #12（省略確認） |
-| **計畫執行中發現超範圍需求** | **`/ticket create` 建立 pending Ticket（立即，不延後）** |
+| **執行中發現技術債/問題/回歸/超範圍需求** | **`/ticket create` 建立 pending Ticket（立即，不詢問，不延後）** |
 
 ---
 
@@ -494,5 +507,5 @@ Level 5: TDD 階段代理人 + thyme-python-developer
 
 ---
 
-**Last Updated**: 2026-03-05
-**Version**: 7.8.1 - 修正 PC-003→PC-005 引用（PC-005 為 CLI 假設歸因）
+**Last Updated**: 2026-03-07
+**Version**: 7.9.0 - 第三層半擴大至技術債/bug/回歸，明確「發現即建立，不詢問確認」（0.1.0-W9-013）
