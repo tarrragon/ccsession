@@ -40,6 +40,7 @@ from ticket_system.lib.command_lifecycle_messages import (
     format_msg,
 )
 from ticket_system.lib.handoff_utils import (
+    extract_direction_target_id,
     is_ticket_completed,
     is_task_chain_direction,
     is_ticket_in_progress_or_completed,
@@ -126,9 +127,7 @@ def _find_handoff_file(ticket_id: str, subdir: str = HANDOFF_PENDING_SUBDIR) -> 
                     data = json.load(f)
                 direction = data.get("direction", "")
                 if direction:
-                    # 提取 direction 的目標部分（format: "type:target_id"）
-                    parts = direction.split(":", 1)
-                    if len(parts) > 1 and parts[1] == ticket_id:
+                    if extract_direction_target_id(direction) == ticket_id:
                         return (json_candidate, "json")
             except (json.JSONDecodeError, IOError):
                 # 略過無法解析的檔案
@@ -197,13 +196,11 @@ def list_pending_handoffs() -> HandoffListResult:
                         # 任務鏈 handoff：進一步檢查目標 ticket 是否已啟動
                         # 若 direction 含 target_id（如 to-sibling:0.1.0-W3-009），
                         # 且目標已 in_progress/completed，則視為 stale
-                        direction_parts = direction.split(":", 1)
-                        if len(direction_parts) > 1:
-                            target_id = direction_parts[1]
-                            if target_id and is_ticket_in_progress_or_completed(target_id):
-                                # 目標已啟動，此 handoff 為 stale（W4-002 計數）
-                                stale_count += 1
-                                continue
+                        target_id = extract_direction_target_id(direction)
+                        if target_id and is_ticket_in_progress_or_completed(target_id):
+                            # 目標已啟動，此 handoff 為 stale（W4-002 計數）
+                            stale_count += 1
+                            continue
                         # 目標未啟動或無 target_id，保留
                         handoffs.append(data)
                         continue

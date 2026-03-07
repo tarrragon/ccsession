@@ -103,6 +103,27 @@ def is_ticket_in_progress_or_completed(ticket_id: str) -> bool:
         return False  # 保守策略：無法判斷時顯示
 
 
+def extract_direction_target_id(direction: str) -> Optional[str]:
+    """
+    從 direction 字串提取 target_id。
+
+    格式：direction 可為 "type:target_id"（含目標）或 "type"（無目標）。
+    - "to-sibling:0.1.0-W9-002" → "0.1.0-W9-002"
+    - "to-parent" → None
+    - "context-refresh" → None
+
+    Args:
+        direction: Handoff direction 字符串
+
+    Returns:
+        Optional[str]: target_id 若存在且非空，否則 None
+    """
+    parts = direction.split(":", 1)
+    if len(parts) > 1 and parts[1]:
+        return parts[1]
+    return None
+
+
 def is_valid_direction(direction: str) -> bool:
     """
     驗證 handoff 的 direction 是否為已知類型。

@@ -25,6 +25,7 @@ from ticket_system.lib.paths import get_project_root
 
 # 共用的 stale 判斷函式
 from ticket_system.lib.handoff_utils import (
+    extract_direction_target_id,
     is_ticket_completed,
     is_task_chain_direction,
     is_ticket_in_progress_or_completed,
@@ -75,12 +76,10 @@ def _collect_stale_handoffs() -> List[Tuple[Path, str, str]]:
 
             if is_task_chain_direction(direction):
                 # 任務鏈：只有目標已啟動才算 stale
-                direction_parts = direction.split(":", 1)
-                if len(direction_parts) > 1:
-                    target_id = direction_parts[1]
-                    if target_id and is_ticket_in_progress_or_completed(target_id):
-                        reason = f"任務鏈目標 {target_id} 已啟動"
-                        stale.append((handoff_file, ticket_id, reason))
+                target_id = extract_direction_target_id(direction)
+                if target_id and is_ticket_in_progress_or_completed(target_id):
+                    reason = f"任務鏈目標 {target_id} 已啟動"
+                    stale.append((handoff_file, ticket_id, reason))
                 # 無 target_id 或目標未啟動：不算 stale
             else:
                 # 非任務鏈（context-refresh 等）：from_status != "completed" 才 stale
