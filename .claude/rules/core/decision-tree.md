@@ -423,6 +423,16 @@ Skill 是預建的專用工具，優先於代理人派發。
 
 **Handoff 強制動作**：選擇任何 Handoff 選項後，PM **必須**執行 `/ticket handoff` 建立標準 `pending/*.json` 檔案，**禁止**手動建立 `.claude/handoff/*.md` 交接文件。`/ticket handoff` 會自動判斷下一步方向（父/子/兄弟），確保 `resume --list` 在下一個 session 能正確偵測待恢復任務。
 
+**Handoff 前置檢查（強制）**：執行 `/ticket handoff` 前，必須先確認無殘留的 pending handoff，否則 CLI 會報錯「已存在 pending handoff」：
+
+```bash
+# 檢查是否有殘留的 pending handoff
+ticket handoff --status
+
+# 若有殘留（stale），清理後再執行 handoff
+ticket handoff --gc --execute
+```
+
 > **注意**：`.claude/handoff/pending/` 已列入 `.gitignore`，`pending/*.json` 由 `/ticket handoff` 在**本地**建立，**不需要 git commit**。執行 handoff 後可直接結束 session，無需提交這些檔案。
 
 **流程省略防護（AskUserQuestion #12）**：主線程輸出含省略意圖關鍵字時，process-skip-guard-hook 自動偵測並提醒確認。

@@ -36,6 +36,7 @@
 
 commit-handoff-hook 偵測到 `git commit` 成功後，PM 會用 AskUserQuestion 確認下一步。用戶選擇「Handoff」後：
 
+0. **前置檢查（強制）**：先執行 `ticket handoff --status` 確認無殘留 pending handoff；若有殘留，執行 `ticket handoff --gc --execute` 清理後再繼續
 1. **必須**執行 `/ticket handoff` 或 `/ticket handoff <ticket-id>`
 2. **禁止**手動建立 `.claude/handoff/*.md` 交接文件
 3. 命令建立 `pending/*.json` → 下一個 session 的 `resume --list` 自動偵測
