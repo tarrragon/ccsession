@@ -53,11 +53,11 @@ from ticket_system.lib.command_lifecycle_messages import (
 )
 from ticket_system.lib.chain_analyzer import ChainAnalyzer, Recommendation
 from ticket_system.lib.ticket_ops import (
-    extract_version_from_ticket_id,
     load_and_validate_ticket,
     resolve_ticket_path,
     resolve_id_from_ref,
 )
+from ticket_system.lib.ticket_validator import extract_version_from_ticket_id
 from ticket_system.lib.ui_constants import SEPARATOR_PRIMARY, SEPARATOR_SECONDARY
 
 

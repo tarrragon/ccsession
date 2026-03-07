@@ -25,7 +25,7 @@ from ticket_system.lib.ticket_loader import (
     load_ticket,
     get_ticket_path,
 )
-from ticket_system.lib.ticket_ops import extract_version_from_ticket_id
+from ticket_system.lib.ticket_validator import extract_version_from_ticket_id
 
 
 class TicketConfig(TypedDict, total=False):

@@ -11,6 +11,29 @@ from .constants import TICKET_ID_PATTERN
 from .cycle_detector import CycleDetector
 
 
+def extract_version_from_ticket_id(ticket_id: str) -> Optional[str]:
+    """
+    從 Ticket ID 提取版本號。
+
+    格式：0.1.0-W9-002 → "0.1.0"（以 "-W" 為分割點，語意清晰）
+
+    Args:
+        ticket_id: Ticket ID，格式如 "0.1.0-W9-002"
+
+    Returns:
+        Optional[str]: 版本號；ID 不含 "-W" 時返回 None
+
+    Examples:
+        >>> extract_version_from_ticket_id("0.1.0-W9-002")
+        '0.1.0'
+        >>> extract_version_from_ticket_id("invalid")
+        None
+    """
+    if not ticket_id or "-W" not in ticket_id:
+        return None
+    return ticket_id.split("-W")[0]
+
+
 def validate_ticket_id(ticket_id: str) -> bool:
     """
     驗證 Ticket ID 格式。

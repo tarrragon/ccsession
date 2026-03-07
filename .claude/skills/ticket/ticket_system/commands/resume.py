@@ -47,7 +47,7 @@ from ticket_system.lib.handoff_utils import (
     is_valid_direction,
     scan_pending_handoffs,
 )
-from ticket_system.lib.ticket_ops import extract_version_from_ticket_id
+from ticket_system.lib.ticket_validator import extract_version_from_ticket_id
 from ticket_system.lib.ui_constants import SEPARATOR_PRIMARY
 
 

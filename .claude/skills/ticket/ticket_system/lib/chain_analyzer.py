@@ -10,7 +10,8 @@ from typing import Any, Dict, Optional, List
 
 from ticket_system.lib.constants import STATUS_IN_PROGRESS, STATUS_COMPLETED, STATUS_PENDING, STATUS_BLOCKED
 from ticket_system.lib.ticket_loader import load_ticket
-from ticket_system.lib.ticket_ops import extract_version_from_ticket_id, resolve_id_from_ref
+from ticket_system.lib.ticket_ops import resolve_id_from_ref
+from ticket_system.lib.ticket_validator import extract_version_from_ticket_id
 
 
 @dataclass

@@ -18,7 +18,8 @@ from ticket_system.lib.constants import (
     HANDOFF_PENDING_SUBDIR,
 )
 from ticket_system.lib.paths import get_project_root
-from ticket_system.lib.ticket_ops import extract_version_from_ticket_id, load_and_validate_ticket
+from ticket_system.lib.ticket_ops import load_and_validate_ticket
+from ticket_system.lib.ticket_validator import extract_version_from_ticket_id
 
 # 所有已知的 direction 值
 _KNOWN_DIRECTION_VALUES = {"context-refresh", "auto"} | set(TASK_CHAIN_DIRECTION_TYPES)

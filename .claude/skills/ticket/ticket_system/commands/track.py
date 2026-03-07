@@ -27,7 +27,7 @@ from ticket_system.lib.ticket_loader import (
     resolve_version,
     require_version,
 )
-from ticket_system.lib.ticket_ops import extract_version_from_ticket_id
+from ticket_system.lib.ticket_validator import extract_version_from_ticket_id
 from ticket_system.lib.messages import (
     ErrorMessages,
     format_error,
