@@ -34,26 +34,7 @@ from ticket_system.lib.messages import (
 from ticket_system.lib.command_tracking_messages import (
     VersionShiftMessages,
 )
-
-
-def _normalize_version(version: str) -> str:
-    """
-    標準化版本號（去除 v 前綴）。
-
-    Args:
-        version: 版本號字串
-
-    Returns:
-        標準化後的版本號
-    """
-    if not version:
-        return ""
-
-    version = version.strip()
-    if version.lower().startswith("v"):
-        version = version[1:]
-
-    return version
+from ticket_system.lib.version import normalize_version
 
 
 def _validate_versions(
@@ -73,8 +54,8 @@ def _validate_versions(
         (是否有效, 訊息或特殊狀態碼)
     """
     # 標準化版本號
-    from_version = _normalize_version(from_version)
-    to_version = _normalize_version(to_version)
+    from_version = normalize_version(from_version)
+    to_version = normalize_version(to_version)
 
     # 驗證格式（N.N.N）
     version_pattern = r"^\d+\.\d+\.\d+$"
@@ -766,8 +747,8 @@ def execute(args: argparse.Namespace) -> int:
         return 1
 
     # 提取參數
-    from_version = _normalize_version(args.from_version)
-    to_version = _normalize_version(args.to_version)
+    from_version = normalize_version(args.from_version)
+    to_version = normalize_version(args.to_version)
     dry_run = args.dry_run
     no_backup = args.no_backup
     skip_todolist = args.skip_todolist

@@ -689,3 +689,51 @@ decision_tree_path:
 
 - `ticket track claim` 後，先確認 frontmatter 含 `decision_tree_path` 再派發
 - 可加入認領 checklist：`[ ] decision_tree_path 已填寫`
+
+---
+
+## PC-014: Ticket where.files YAML 格式錯誤 + 驗收條件使用通用佔位符
+
+**發現日期**: 2026-03-08
+**相關 Ticket**: 0.1.0-W12-001
+
+### 症狀
+
+- Ticket 建立後審核（acceptance-auditor）回報不通過
+- `where.files` 所有路徑擠在同一行 YAML 字串中，無法正確解析
+- 驗收條件為 `[ ] 任務實作完成`、`[ ] 相關測試通過` 等通用模板文字
+- 審核者無法從 Ticket 判斷哪些具體新檔案需建立
+
+### 根因
+
+`ticket create --where-files` 接收多個路徑時，CLI 可能將多個值合併為單一字串
+（例如 `"lib/a.py lib/b.py"`），寫入 frontmatter 後變成一行無法分行解析的 YAML。
+建立者未在建立後檢查 frontmatter 格式是否正確，也未替換 CLI 產生的通用驗收條件。
+
+### 解決方案
+
+**修正 where.files 格式**：手動編輯 frontmatter，改為正確的 YAML 列表：
+```yaml
+where:
+  files:
+    - .claude/skills/ticket/ticket_system/lib/id_parser.py
+    - .claude/skills/ticket/ticket_system/commands/migrate.py
+    - .claude/skills/ticket/ticket_system/lib/__init__.py
+```
+
+**替換通用驗收條件**：根據任務目標撰寫具體可驗證的條件：
+```yaml
+acceptance:
+- '[ ] lib/id_parser.py 已建立，包含 extract_id_components() 等函式'
+- '[ ] migrate.py 改用 from ticket_system.lib.id_parser import ... 引用'
+- '[ ] 現有測試通過：(cd .claude/skills/ticket && uv run pytest)'
+```
+
+### 預防措施
+
+- Ticket 建立後立即讀取 frontmatter，確認 `where.files` 是 YAML 列表格式（非單行字串）
+- 若需新建檔案，`where.files` 必須列出具體新檔名（不只寫目錄）
+- 驗收條件不接受 `任務實作完成`、`相關測試通過` 等通用文字，必須包含具體的：
+  - 新建/修改的函式名稱
+  - 具體的測試指令
+  - 可外部觀察的行為變化

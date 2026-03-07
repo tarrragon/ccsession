@@ -12,7 +12,6 @@ import yaml
 import argparse
 
 from ticket_system.commands.version_shift import (
-    _normalize_version,
     _validate_versions,
     _backup_version_dir,
     _shift_version_in_references,
@@ -27,6 +26,7 @@ from ticket_system.commands.version_shift import (
     _generate_summary,
     execute,
 )
+from ticket_system.lib.version import normalize_version
 
 
 @pytest.fixture
@@ -97,13 +97,13 @@ def create_auxiliary_file(ticket_dir: Path, filename: str) -> Path:
 
 def test_normalize_version_with_v_prefix():
     """測試版本號標準化（含 v 前綴）"""
-    assert _normalize_version("v0.1.0") == "0.1.0"
-    assert _normalize_version("V0.1.0") == "0.1.0"
+    assert normalize_version("v0.1.0") == "0.1.0"
+    assert normalize_version("V0.1.0") == "0.1.0"
 
 
 def test_normalize_version_without_prefix():
     """測試版本號標準化（無 v 前綴）"""
-    assert _normalize_version("0.1.0") == "0.1.0"
+    assert normalize_version("0.1.0") == "0.1.0"
 
 
 def test_basic_version_shift(temp_project_dir):
@@ -447,8 +447,8 @@ def test_full_workflow_integration(temp_project_dir):
     )
 
     # 手動執行各步驟（模擬 execute）
-    from_version_norm = _normalize_version(args.from_version)
-    to_version_norm = _normalize_version(args.to_version)
+    from_version_norm = normalize_version(args.from_version)
+    to_version_norm = normalize_version(args.to_version)
 
     valid, msg = _validate_versions(from_version_norm, to_version_norm, temp_project_dir)
     assert valid
