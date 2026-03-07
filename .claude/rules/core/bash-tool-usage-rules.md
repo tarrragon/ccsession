@@ -30,7 +30,7 @@ session 開始
 |------|---------|---------|
 | 在特定目錄執行命令 | `cd .claude/skills/ticket && uv run ...` | `(cd .claude/skills/ticket && uv run ...)` |
 | uv 指定目錄 | `cd .claude/skills/ticket && uv run ...` | `uv -d .claude/skills/ticket run ...` |
-| 需要回到根目錄 | 無操作（工作目錄已污染） | `cd /Users/mac-eric/project/book_overview_app && ...` |
+| 需要回到根目錄 | 無操作（工作目錄已污染） | `cd /your/project/root && ...` |
 
 ### 三種安全做法
 
@@ -52,7 +52,7 @@ uv -d .claude/skills/ticket run ticket track list
 
 ```bash
 # 若已污染，每次命令前加絕對路徑 cd
-cd /Users/mac-eric/project/book_overview_app && ./scripts/sync-push.sh
+cd /your/project/root && ./scripts/sync-push.sh
 ```
 
 ### 檢查清單
@@ -137,6 +137,6 @@ Bash 工具輸出：
 
 ---
 
-**Last Updated**: 2026-03-03
-**Version**: 1.0.0
+**Last Updated**: 2026-03-08
+**Version**: 1.1.0 - 移除硬編碼個人路徑，改為通用佔位符（/your/project/root）
 **Source**: IMP-008（cd 污染）、IMP-009（TaskOutput 混淆）防護需求
