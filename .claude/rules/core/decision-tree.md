@@ -343,13 +343,13 @@ Skill 是預建的專用工具，優先於代理人派發。
     |   |
     |   +-- [D2] [詢問] Phase 3b 完成 → AskUserQuestion #13（Phase 3b 路由確認）
     |   |       +-- 進入 Phase 4a（/parallel-evaluation B 多視角重構分析，Recommended）
-    |   |       +-- 直接進入 Phase 4b（豁免條件：<=2 檔案/DOC 類型/認知 < 5）
+    |   |       +-- 直接進入 Phase 4b（豁免條件：<=2 檔案/DOC 類型/任務範圍單純）
     |   |       +-- 先 commit 再決定
     |   |
     |   +-- [D3a] [全自動] Phase 4a 完成 → 直接派發 cinnamon-refactor-owl（Phase 4b 重構執行）
     |   |
     |   +-- [D3b] [全自動] Phase 4b 完成 → 直接派發 /parallel-evaluation A（Phase 4c 多視角再審核）
-    |   |         豁免（直接進入 /tech-debt-capture）：<=2 檔案/DOC 類型/認知 < 5
+    |   |         豁免（直接進入 /tech-debt-capture）：<=2 檔案/DOC 類型/任務範圍單純
     |   |
     |   +-- [D3c] [強制] Phase 4c 完成 → /tech-debt-capture
     |           → 不可跳過，必須優先於 Wave 收尾判斷
