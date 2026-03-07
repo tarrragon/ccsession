@@ -4,9 +4,9 @@
 
 | 類別 | 數量 |
 |------|------|
-| 流程合規 (PC) | 8 |
+| 流程合規 (PC) | 9 |
 | 程式碼品質 (CQ) | 3 |
-| **總計** | **11** |
+| **總計** | **12** |
 
 ## 索引
 
@@ -26,7 +26,8 @@
 - [PC-006](./categories/process-compliance.md#pc-006-uv-tool-install---force-無法更新已安裝-cli-的本地程式碼) uv tool install --force 無法更新已安裝 CLI 的本地程式碼
 - [PC-007](./categories/process-compliance.md#pc-007-ticket-描述視為事實而非假設接手者未獨立驗證範圍) Ticket 描述視為事實而非假設（接手者未獨立驗證範圍）
 - [PC-008](./categories/process-compliance.md#pc-008-model-在高-context-下語言一致性偶發失效韓文日文輸出) Model 在高 context 下語言一致性偶發失效（韓文/日文輸出）
+- [PC-009](./categories/process-compliance.md#pc-009-長-session-累積-context-導致認知負擔上升思考品質下降) 長 Session 累積 context 導致認知負擔上升，思考品質下降
 
 ---
 
-*最後更新: 2026-03-07（PC-006、PC-007、PC-008 新增）*
+*最後更新: 2026-03-07（PC-009 新增：長 session context 累積問題）*

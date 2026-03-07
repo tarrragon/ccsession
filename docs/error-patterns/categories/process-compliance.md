@@ -451,6 +451,47 @@ grep -rn "pattern" path/ --include="*.py"
 
 ---
 
+## PC-009: 長 Session 累積 context 導致認知負擔上升，思考品質下降
+
+**發現日期**: 2026-03-07
+**相關 Ticket**: 0.1.0-W9-016（待建立）
+
+### 症狀
+
+- Session 越長，輸出品質下降（如韓文輸出、邏輯跳躍、遺漏步驟）
+- 完成一個 Ticket 後，PM 傾向「繼續在此 session 工作」而非 handoff
+- 多個 Ticket 在同一 session 中執行，累積上下文
+- 偶爾出現非必要操作（如嘗試 git commit handoff pending 檔案）
+
+### 根因
+
+1. **認知負擔累積**：context 越多，模型需要「記住」的內容越多，工作記憶資源被佔用，留給當前任務的容量減少
+2. **預設路由偏差**：AskUserQuestion 選項將「繼續在此 session」列為選項，而非預設建議 handoff
+3. **缺乏 context 用量感知**：PM 和用戶都不知道當前 context 消耗了多少，無法主動判斷何時應該 handoff
+
+### 解決方案
+
+**短期**：
+- 每個 Ticket 完成後，**預設建議 handoff**（而非繼續）
+- AskUserQuestion #11 將 Handoff 列為 Recommended，繼續在同 session 為次選
+
+**中期（研究方向）**：
+- 調查 Claude Code 是否暴露 context token 使用量 API/環境變數
+- 若可取得，建立 Hook 在 context 達到閾值（如 50%、80%）時主動建議 handoff
+- 參考 `/strategic-compact` skill 的觸發機制
+
+### 預防措施
+
+1. **Ticket 完成後的路由規則調整**：修改 AskUserQuestion #11 模板，handoff 永遠是第一選項且標記 Recommended
+2. **每個 Wave 結束必須 handoff**：不允許跨 Wave 在同一 session 繼續
+3. **超過 3 個 Ticket 完成時強制建議 handoff**（不論 Wave）
+
+### 核心教訓
+
+> Context 是有限資源。每次 Ticket 完成後的 handoff 不是「中斷工作」，而是「保護下一個任務的思考品質」。Handoff first，繼續 session 是例外，不是預設。
+
+---
+
 ## PC-008: Model 在高 context 下語言一致性偶發失效（韓文/日文輸出）
 
 **發現日期**: 2026-03-07
