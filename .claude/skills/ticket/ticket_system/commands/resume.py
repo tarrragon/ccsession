@@ -45,36 +45,17 @@ from ticket_system.lib.handoff_utils import (
     is_task_chain_direction,
     is_ticket_in_progress_or_completed,
     is_valid_direction,
+    scan_pending_handoffs,
 )
 from ticket_system.lib.ticket_ops import extract_version_from_ticket_id
 from ticket_system.lib.ui_constants import SEPARATOR_PRIMARY
 
-
-# Handoff JSON 必填欄位
-_HANDOFF_REQUIRED_FIELDS = ("ticket_id", "direction", "timestamp")
 
 # W7-004：定義 handoff 列表結果型別（從函式屬性改為明確的返回值）
 # 包含有效 handoff 清單、過濾計數和格式錯誤計數
 HandoffListResult = namedtuple("HandoffListResult", ["handoffs", "stale_count", "schema_error_count"])
 
 
-def _validate_handoff_schema(data: dict, file_path: str) -> None:
-    """
-    驗證 handoff JSON 的必填欄位是否完整。
-
-    必填欄位：ticket_id、direction、timestamp
-    缺少任一欄位時拋出 HandoffSchemaError（含可操作指引）。
-
-    Args:
-        data: 已解析的 handoff JSON 資料
-        file_path: handoff 檔案路徑（用於錯誤訊息）
-
-    Raises:
-        HandoffSchemaError: 缺少必填欄位時
-    """
-    missing = [f for f in _HANDOFF_REQUIRED_FIELDS if not data.get(f)]
-    if missing:
-        raise HandoffSchemaError(file_path, missing)
 
 
 def _get_handoff_dir(subdir: str = HANDOFF_PENDING_SUBDIR) -> Path:
@@ -143,95 +124,78 @@ def list_pending_handoffs() -> HandoffListResult:
 
     過濾規則：已 completed 的 Ticket 對應的 handoff 條目不顯示（stale handoff）
 
+    使用 scan_pending_handoffs() 進行共用掃描邏輯，並應用呼叫端特定的錯誤處理
+    （計數並輸出 stderr 警告）。
+
     Returns:
         HandoffListResult: 包含有效 handoff 清單、stale 計數、格式錯誤計數
     """
-    pending_dir = _get_handoff_dir(HANDOFF_PENDING_SUBDIR)
+    records = scan_pending_handoffs()
 
-    if not pending_dir.exists():
+    if not records:
         return HandoffListResult(handoffs=[], stale_count=0, schema_error_count=0)
 
     handoffs = []
     stale_count = 0
     schema_error_count = 0
 
-    # 同時掃描 .json 和 .md 檔案
-    for handoff_file in sorted(pending_dir.glob("*.json")) + sorted(pending_dir.glob("*.md")):
-        try:
-            if handoff_file.suffix == ".json":
-                with open(handoff_file, "r", encoding="utf-8") as f:
-                    data = json.load(f)
+    for record in records:
+        # 處理解析錯誤（JSON 讀取失敗）
+        if record.parse_error:
+            # 略過無法讀取的檔案（不計數，保持原行為）
+            continue
 
-                # W4-001: 驗證 JSON 必填欄位，缺少時跳過並輸出警告
-                try:
-                    _validate_handoff_schema(data, str(handoff_file))
-                except HandoffSchemaError as e:
-                    schema_error_count += 1
-                    print(f"[WARNING] 跳過格式錯誤的 handoff：{e}", file=sys.stderr)
-                    continue
+        # 處理格式錯誤（必填欄位缺失）
+        if record.schema_error:
+            schema_error_count += 1
+            print(f"[WARNING] 跳過格式錯誤的 handoff：{record.file_path.name}（{record.schema_error}）", file=sys.stderr)
+            continue
 
-                # W7-003: 驗證 direction 值是否為已知類型
-                direction = data.get("direction", "")
-                if not is_valid_direction(direction):
-                    # W9-001：改為逐檔案處理，不中斷整個迴圈
-                    # 遇到不合法 direction 時只跳過該檔案，而非中斷 list_pending_handoffs()
-                    schema_error_count += 1
-                    print(f"[WARNING] 跳過未知 direction 的 handoff：{handoff_file.name}（direction={direction!r}）", file=sys.stderr)
-                    continue
+        # 驗證 direction（僅 JSON 格式有此欄位）
+        if record.format == "json":
+            direction = record.direction
+            if not is_valid_direction(direction):
+                # W9-001：改為逐檔案處理，不中斷整個迴圈
+                schema_error_count += 1
+                print(f"[WARNING] 跳過未知 direction 的 handoff：{record.file_path.name}（direction={direction!r}）", file=sys.stderr)
+                continue
 
-                # 過濾 stale handoff：
-                # Handoff 是 stale 當且僅當：
-                # 1. 來源 Ticket 已 completed（status: completed）
-                # 2. 且 Handoff 是從非 completed 狀態創建的（from_status != "completed"）
-                #
-                # 特殊情況（保留）：
-                # - 任務鏈 handoff（to-sibling/to-parent/to-child），即使 completed 也保留
-                # - Handoff 本身是從 completed 狀態創建的，不算 stale
-                ticket_id = data.get("ticket_id", "")
-                if ticket_id and is_ticket_completed(ticket_id):
-                    # Ticket 已 completed，檢查 handoff 狀態
-                    from_status = data.get("from_status", "")
-
-                    # 檢查是否為任務鏈類型
-                    if is_task_chain_direction(direction):
-                        # 任務鏈 handoff：進一步檢查目標 ticket 是否已啟動
-                        # 若 direction 含 target_id（如 to-sibling:0.1.0-W3-009），
-                        # 且目標已 in_progress/completed，則視為 stale
-                        target_id = extract_direction_target_id(direction)
-                        if target_id and is_ticket_in_progress_or_completed(target_id):
-                            # 目標已啟動，此 handoff 為 stale（W4-002 計數）
-                            stale_count += 1
-                            continue
-                        # 目標未啟動或無 target_id，保留
-                        handoffs.append(data)
-                        continue
-
-                    # 非任務鏈：只有當 from_status 不是 completed 時才過濾為 stale
-                    if from_status != "completed":
-                        # Stale handoff，跳過（W4-002 計數）
+            # 過濾 stale handoff：
+            # Handoff 是 stale 當且僅當：
+            # 1. 來源 Ticket 已 completed（status: completed）
+            # 2. 且 Handoff 是從非 completed 狀態創建的（from_status != "completed"）
+            #
+            # 特殊情況（保留）：
+            # - 任務鏈 handoff（to-sibling/to-parent/to-child），即使 completed 也保留
+            # - Handoff 本身是從 completed 狀態創建的，不算 stale
+            if record.ticket_id and is_ticket_completed(record.ticket_id):
+                # Ticket 已 completed，檢查 handoff 狀態
+                if is_task_chain_direction(direction):
+                    # 任務鏈 handoff：進一步檢查目標 ticket 是否已啟動
+                    target_id = extract_direction_target_id(direction)
+                    if target_id and is_ticket_in_progress_or_completed(target_id):
+                        # 目標已啟動，此 handoff 為 stale（W4-002 計數）
                         stale_count += 1
                         continue
+                    # 目標未啟動或無 target_id，保留
+                    handoffs.append(record.data)
+                    continue
 
-                handoffs.append(data)
-            elif handoff_file.suffix == ".md":
-                # Markdown 格式的 handoff 檔案也支援
-                # 提取檔名作為 ticket_id
-                ticket_id = handoff_file.stem
+                # 非任務鏈：只有當 from_status 不是 completed 時才過濾為 stale
+                if record.from_status != "completed":
+                    # Stale handoff，跳過（W4-002 計數）
+                    stale_count += 1
+                    continue
 
-                # 過濾已完成 ticket 的 stale handoff
-                # Markdown 格式無 direction 資訊，保持原行為
-                if ticket_id and is_ticket_completed(ticket_id):
-                    stale_count += 1  # W4-002 計數
-                    continue  # 跳過 stale 條目
+            handoffs.append(record.data)
 
-                handoffs.append({
-                    "ticket_id": ticket_id,
-                    "format": "markdown",
-                    "path": str(handoff_file.relative_to(get_project_root()))
-                })
-        except (IOError, json.JSONDecodeError):
-            # 略過無法讀取的檔案
-            pass
+        elif record.format == "markdown":
+            # Markdown 格式：根據 ticket_id 檢查是否 completed
+            if record.ticket_id and is_ticket_completed(record.ticket_id):
+                stale_count += 1  # W4-002 計數
+                continue  # 跳過 stale 條目
+
+            handoffs.append(record.data)
 
     # W7-004：改為返回 namedtuple，取代函式屬性機制
     # 明確的返回值提高程式碼清晰度和類型安全性

@@ -5,17 +5,43 @@ Handoff 共用判斷函式模組
 消除跨模組私有函式引用，遵循模組封裝原則。
 """
 
-from typing import Optional
+import json
+from dataclasses import dataclass
+from pathlib import Path
+from typing import List, Optional
 
 from ticket_system.lib.constants import (
     STATUS_COMPLETED,
     STATUS_IN_PROGRESS,
     TASK_CHAIN_DIRECTION_TYPES,
+    HANDOFF_DIR,
+    HANDOFF_PENDING_SUBDIR,
 )
+from ticket_system.lib.paths import get_project_root
 from ticket_system.lib.ticket_ops import extract_version_from_ticket_id, load_and_validate_ticket
 
 # 所有已知的 direction 值
 _KNOWN_DIRECTION_VALUES = {"context-refresh", "auto"} | set(TASK_CHAIN_DIRECTION_TYPES)
+
+# Handoff JSON 必填欄位
+_HANDOFF_REQUIRED_FIELDS = ("ticket_id", "direction", "timestamp")
+
+
+@dataclass
+class ParsedHandoff:
+    """
+    解析後的 handoff 記錄
+
+    包含完整的檔案和資料信息，支援呼叫端自訂的error處理。
+    """
+    file_path: Path
+    ticket_id: str
+    direction: str
+    from_status: str
+    format: str  # "json" 或 "markdown"
+    data: dict  # 完整的 JSON 資料（markdown 時含預設欄位）
+    parse_error: Optional[str] = None  # JSON 讀取錯誤（IOError, JSONDecodeError）
+    schema_error: Optional[str] = None  # 必填欄位缺失
 
 
 def is_ticket_completed(ticket_id: str) -> bool:
@@ -146,3 +172,91 @@ def is_valid_direction(direction: str) -> bool:
     direction_type = direction.split(":")[0]
 
     return direction_type in _KNOWN_DIRECTION_VALUES
+
+
+def scan_pending_handoffs() -> List[ParsedHandoff]:
+    """
+    掃描 pending/ 目錄，解析所有 handoff 檔案。
+
+    實現共用的掃描邏輯，被 list_pending_handoffs() 和 _collect_stale_handoffs() 使用。
+    同時掃描 .json 和 .md 檔案，進行基本解析（JSON 讀取、必填欄位驗證）。
+
+    每個記錄包含：
+    - 成功解析的檔案：parse_error=None, schema_error=None
+    - JSON 讀取失敗：parse_error=<錯誤信息>, schema_error=None
+    - 必填欄位缺失：schema_error=<缺失欄位清單>
+
+    呼叫端可根據 parse_error/schema_error 決定是否統計計數或直接跳過。
+
+    Returns:
+        List[ParsedHandoff]: 解析結果清單（包含成功和失敗記錄）
+    """
+    root = get_project_root()
+    pending_dir = root / HANDOFF_DIR / HANDOFF_PENDING_SUBDIR
+
+    if not pending_dir.exists():
+        return []
+
+    records = []
+
+    # 同時掃描 .json 和 .md 檔案
+    for handoff_file in sorted(pending_dir.glob("*.json")) + sorted(pending_dir.glob("*.md")):
+        if handoff_file.suffix == ".json":
+            # JSON 格式
+            try:
+                with open(handoff_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+            except (IOError, json.JSONDecodeError) as e:
+                # 記錄讀取錯誤，不中斷迴圈
+                records.append(ParsedHandoff(
+                    file_path=handoff_file,
+                    ticket_id="",
+                    direction="",
+                    from_status="",
+                    format="json",
+                    data={},
+                    parse_error=str(e),
+                ))
+                continue
+
+            # 驗證必填欄位
+            missing_fields = [f for f in _HANDOFF_REQUIRED_FIELDS if not data.get(f)]
+            if missing_fields:
+                records.append(ParsedHandoff(
+                    file_path=handoff_file,
+                    ticket_id=data.get("ticket_id", ""),
+                    direction=data.get("direction", ""),
+                    from_status=data.get("from_status", ""),
+                    format="json",
+                    data=data,
+                    schema_error=f"缺少必填欄位：{', '.join(missing_fields)}",
+                ))
+                continue
+
+            # 成功解析
+            records.append(ParsedHandoff(
+                file_path=handoff_file,
+                ticket_id=data.get("ticket_id", ""),
+                direction=data.get("direction", ""),
+                from_status=data.get("from_status", ""),
+                format="json",
+                data=data,
+            ))
+
+        elif handoff_file.suffix == ".md":
+            # Markdown 格式（提取檔名作為 ticket_id）
+            ticket_id = handoff_file.stem
+            records.append(ParsedHandoff(
+                file_path=handoff_file,
+                ticket_id=ticket_id,
+                direction="",
+                from_status="",
+                format="markdown",
+                data={
+                    "ticket_id": ticket_id,
+                    "format": "markdown",
+                    "path": str(handoff_file.relative_to(root))
+                },
+            ))
+
+    return records

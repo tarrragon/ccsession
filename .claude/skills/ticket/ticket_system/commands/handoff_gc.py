@@ -12,23 +12,22 @@ if __name__ == "__main__":
     print_not_executable_and_exit()
 
 
-import json
 from pathlib import Path
 from typing import List, Tuple
 
 from ticket_system.lib.constants import (
     HANDOFF_DIR,
-    HANDOFF_PENDING_SUBDIR,
     HANDOFF_ARCHIVE_SUBDIR,
 )
 from ticket_system.lib.paths import get_project_root
 
-# 共用的 stale 判斷函式
+# 共用的掃描和判斷函式
 from ticket_system.lib.handoff_utils import (
     extract_direction_target_id,
     is_ticket_completed,
     is_task_chain_direction,
     is_ticket_in_progress_or_completed,
+    scan_pending_handoffs,
 )
 
 
@@ -44,58 +43,51 @@ def _collect_stale_handoffs() -> List[Tuple[Path, str, str]]:
        - 非任務鏈（context-refresh 等）：from_status != "completed"
        - 任務鏈（to-sibling/to-parent/to-child）：目標已 in_progress/completed
 
+    使用共用的 scan_pending_handoffs() 函式進行掃描，避免重複邏輯。
+
     Returns:
         List of (file_path, ticket_id, reason) tuples
     """
-    root = get_project_root()
-    pending_dir = root / HANDOFF_DIR / HANDOFF_PENDING_SUBDIR
-
-    if not pending_dir.exists():
-        return []
-
+    records = scan_pending_handoffs()
     stale = []
 
-    # 同時掃描 .json 和 .md 檔案
-    for handoff_file in sorted(pending_dir.glob("*.json")) + sorted(pending_dir.glob("*.md")):
-        if handoff_file.suffix == ".json":
-            try:
-                with open(handoff_file, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-            except (IOError, ValueError):
-                continue  # 無法讀取的檔案跳過，不算 stale
+    for record in records:
+        # 跳過解析/格式錯誤的檔案（不算 stale，保留作除錯用）
+        if record.parse_error or record.schema_error:
+            continue
 
-            ticket_id = data.get("ticket_id", "")
+        if record.format == "json":
+            ticket_id = record.ticket_id
             if not ticket_id:
                 continue
 
             if not is_ticket_completed(ticket_id):
                 continue  # 來源 ticket 未完成，保留
 
-            direction = data.get("direction", "")
-            from_status = data.get("from_status", "")
+            direction = record.direction
+            from_status = record.from_status
 
             if is_task_chain_direction(direction):
                 # 任務鏈：只有目標已啟動才算 stale
                 target_id = extract_direction_target_id(direction)
                 if target_id and is_ticket_in_progress_or_completed(target_id):
                     reason = f"任務鏈目標 {target_id} 已啟動"
-                    stale.append((handoff_file, ticket_id, reason))
+                    stale.append((record.file_path, ticket_id, reason))
                 # 無 target_id 或目標未啟動：不算 stale
             else:
                 # 非任務鏈（context-refresh 等）：from_status != "completed" 才 stale
                 if from_status != "completed":
                     reason = f"來源 ticket {ticket_id} 已完成（direction: {direction}）"
-                    stale.append((handoff_file, ticket_id, reason))
+                    stale.append((record.file_path, ticket_id, reason))
 
-        elif handoff_file.suffix == ".md":
+        elif record.format == "markdown":
             # Markdown 格式的 handoff 檔案
-            # 提取檔名作為 ticket_id
-            ticket_id = handoff_file.stem
+            ticket_id = record.ticket_id
 
             # Markdown 格式無 direction 資訊，保持原行為
             if ticket_id and is_ticket_completed(ticket_id):
                 reason = f"來源 ticket {ticket_id} 已完成（Markdown 格式）"
-                stale.append((handoff_file, ticket_id, reason))
+                stale.append((record.file_path, ticket_id, reason))
 
     return stale
 

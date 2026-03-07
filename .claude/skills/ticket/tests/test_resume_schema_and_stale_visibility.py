@@ -17,9 +17,9 @@ import pytest
 from ticket_system.commands.exceptions import HandoffSchemaError
 from ticket_system.commands.resume import (
     list_pending_handoffs,
-    _validate_handoff_schema,
     _execute_list,
 )
+from ticket_system.lib.handoff_utils import scan_pending_handoffs
 
 
 @pytest.fixture
@@ -69,62 +69,82 @@ def _valid_handoff(ticket_id: str, direction: str = "context-refresh") -> dict:
 # ==============================================================================
 
 
-class TestValidateHandoffSchema:
-    """測試 _validate_handoff_schema 函式"""
+class TestScanPendingHandoffsSchemaValidation:
+    """測試 scan_pending_handoffs() 的 schema 驗證行為"""
 
-    def test_valid_schema_no_exception(self):
-        """完整資料不應拋出例外"""
+    def test_valid_schema_no_error(self, temp_handoff_env):
+        """完整資料不應有 schema_error"""
+        project_root, handoff_dir = temp_handoff_env
         data = _valid_handoff("0.1.0-W4-001")
-        _validate_handoff_schema(data, "/path/handoff.json")  # 不應拋出
+        _write_json(handoff_dir, "0.1.0-W4-001", data)
 
-    def test_missing_ticket_id_raises_schema_error(self):
-        """缺少 ticket_id 應拋出 HandoffSchemaError"""
+        records = scan_pending_handoffs()
+        assert len(records) == 1
+        assert records[0].schema_error is None
+
+    def test_missing_ticket_id_sets_schema_error(self, temp_handoff_env):
+        """缺少 ticket_id 應設置 schema_error"""
+        project_root, handoff_dir = temp_handoff_env
         data = _valid_handoff("0.1.0-W4-001")
         del data["ticket_id"]
-        with pytest.raises(HandoffSchemaError) as exc_info:
-            _validate_handoff_schema(data, "/path/handoff.json")
-        assert "ticket_id" in exc_info.value.missing_fields
+        _write_json(handoff_dir, "0.1.0-W4-001", data)
 
-    def test_missing_direction_raises_schema_error(self):
-        """缺少 direction 應拋出 HandoffSchemaError"""
+        records = scan_pending_handoffs()
+        assert len(records) == 1
+        assert records[0].schema_error is not None
+        assert "ticket_id" in records[0].schema_error
+
+    def test_missing_direction_sets_schema_error(self, temp_handoff_env):
+        """缺少 direction 應設置 schema_error"""
+        project_root, handoff_dir = temp_handoff_env
         data = _valid_handoff("0.1.0-W4-001")
         del data["direction"]
-        with pytest.raises(HandoffSchemaError) as exc_info:
-            _validate_handoff_schema(data, "/path/handoff.json")
-        assert "direction" in exc_info.value.missing_fields
+        _write_json(handoff_dir, "0.1.0-W4-001", data)
 
-    def test_missing_timestamp_raises_schema_error(self):
-        """缺少 timestamp 應拋出 HandoffSchemaError"""
+        records = scan_pending_handoffs()
+        assert len(records) == 1
+        assert records[0].schema_error is not None
+        assert "direction" in records[0].schema_error
+
+    def test_missing_timestamp_sets_schema_error(self, temp_handoff_env):
+        """缺少 timestamp 應設置 schema_error"""
+        project_root, handoff_dir = temp_handoff_env
         data = _valid_handoff("0.1.0-W4-001")
         del data["timestamp"]
-        with pytest.raises(HandoffSchemaError) as exc_info:
-            _validate_handoff_schema(data, "/path/handoff.json")
-        assert "timestamp" in exc_info.value.missing_fields
+        _write_json(handoff_dir, "0.1.0-W4-001", data)
 
-    def test_missing_multiple_fields_lists_all(self):
-        """缺少多個欄位時，HandoffSchemaError 包含所有缺失欄位"""
-        data = {"from_status": "in_progress"}  # 缺少 ticket_id, direction, timestamp
-        with pytest.raises(HandoffSchemaError) as exc_info:
-            _validate_handoff_schema(data, "/path/handoff.json")
-        assert len(exc_info.value.missing_fields) >= 3
+        records = scan_pending_handoffs()
+        assert len(records) == 1
+        assert records[0].schema_error is not None
+        assert "timestamp" in records[0].schema_error
 
-    def test_schema_error_contains_guidance(self):
-        """HandoffSchemaError 包含 guidance（可操作指引）"""
-        data = _valid_handoff("0.1.0-W4-001")
-        del data["ticket_id"]
-        with pytest.raises(HandoffSchemaError) as exc_info:
-            _validate_handoff_schema(data, "/path/handoff.json")
-        assert exc_info.value.guidance != ""
-        assert exc_info.value.file_path == "/path/handoff.json"
+    def test_missing_multiple_fields_lists_all(self, temp_handoff_env):
+        """缺少多個欄位時，schema_error 包含所有缺失欄位"""
+        project_root, handoff_dir = temp_handoff_env
+        data = {"from_status": "in_progress"}
+        _write_json(handoff_dir, "0.1.0-W4-001", data)
 
-    def test_optional_fields_not_required(self):
-        """可選欄位（title, what, chain）缺少時不應拋出例外"""
+        records = scan_pending_handoffs()
+        assert len(records) == 1
+        assert records[0].schema_error is not None
+        # 應包含缺失的三個欄位
+        assert "ticket_id" in records[0].schema_error
+        assert "direction" in records[0].schema_error
+        assert "timestamp" in records[0].schema_error
+
+    def test_optional_fields_not_required(self, temp_handoff_env):
+        """可選欄位缺少時不應有 schema_error"""
+        project_root, handoff_dir = temp_handoff_env
         data = {
             "ticket_id": "0.1.0-W4-001",
             "direction": "context-refresh",
             "timestamp": "2026-01-30T12:00:00",
         }
-        _validate_handoff_schema(data, "/path/handoff.json")  # 不應拋出
+        _write_json(handoff_dir, "0.1.0-W4-001", data)
+
+        records = scan_pending_handoffs()
+        assert len(records) == 1
+        assert records[0].schema_error is None
 
 
 class TestListPendingHandoffsSchemaValidation:
