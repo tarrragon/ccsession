@@ -161,6 +161,8 @@ Error Patterns 是五重文件系統的核心組件之一，用於：
 | IMP-021 | 手動文字解析結構化格式 | 中 | v0.1.0 |
 | IMP-022 | 內聯 __import__ 重複實作共用邏輯 | 低 | v0.1.0 |
 | IMP-023 | uv tool install --force 不更新已安裝套件程式碼 | 中 | v0.3.0 |
+| IMP-024 | phase-completion-gate-hook 在編輯 tdd_phase 欄位時誤觸 Phase 3b 完成警告 | 低 | v0.1.0 |
+| IMP-025 | 新模組引入 except Exception: pass 靜默吞掉異常 | 中 | v0.1.0 |
 
 ### 流程合規 (PC)
 
