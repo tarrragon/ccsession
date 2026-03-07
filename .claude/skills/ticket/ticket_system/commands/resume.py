@@ -145,9 +145,6 @@ def list_pending_handoffs() -> HandoffListResult:
 
     Returns:
         HandoffListResult: 包含有效 handoff 清單、stale 計數、格式錯誤計數
-
-    Raises:
-        HandoffDirectionUnknownError: 遇到未知 direction 值時（由呼叫端捕捉）
     """
     pending_dir = _get_handoff_dir(HANDOFF_PENDING_SUBDIR)
 
@@ -176,7 +173,11 @@ def list_pending_handoffs() -> HandoffListResult:
                 # W7-003: 驗證 direction 值是否為已知類型
                 direction = data.get("direction", "")
                 if not is_valid_direction(direction):
-                    raise HandoffDirectionUnknownError(direction, str(handoff_file))
+                    # W9-001：改為逐檔案處理，不中斷整個迴圈
+                    # 遇到不合法 direction 時只跳過該檔案，而非中斷 list_pending_handoffs()
+                    schema_error_count += 1
+                    print(f"[WARNING] 跳過未知 direction 的 handoff：{handoff_file.name}（direction={direction!r}）", file=sys.stderr)
+                    continue
 
                 # 過濾 stale handoff：
                 # Handoff 是 stale 當且僅當：
@@ -440,13 +441,11 @@ def _execute_list() -> int:
     try:
         result = list_pending_handoffs()
     except HandoffDirectionUnknownError as e:
-        # W7-003: 捕捉未知 direction 異常，跳過該條目並顯示警告
-        print(f"[WARNING] 跳過未知 direction 的 handoff：{e}", file=sys.stderr)
+        # W9-001：安全網，正常情況不會觸發（未知 direction 已改為 per-file 處理）
+        # 此 exception 保留供未來邊界情況使用
+        print(f"[WARNING] 未預期的 direction 異常：{e}", file=sys.stderr)
         if e.guidance:
             print(f"  指引：{e.guidance}", file=sys.stderr)
-        # 繼續處理其他 handoff（遞迴呼叫不可行，故此處回傳 0）
-        # 注意：此處異常發生時，list_pending_handoffs() 會在第一個不合法 direction 處中斷
-        # 實際應用中，建議使用者修復損壞的 handoff 檔案後重試
         return 0
 
     # W7-004：從 namedtuple 提取 handoff 清單和 stale 計數

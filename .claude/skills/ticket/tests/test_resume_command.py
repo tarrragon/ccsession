@@ -250,8 +250,8 @@ class TestListPendingHandoffs:
 
         assert len(result.handoffs) == 1, "無 target_id 的任務鏈 handoff 應保留"
 
-    def test_unknown_direction_raises_error(self, temp_handoff_env):
-        """W7-003: 遇到未知 direction 值時拋出 HandoffDirectionUnknownError"""
+    def test_unknown_direction_skipped_with_warning(self, temp_handoff_env, capsys):
+        """W9-001: 遇到未知 direction 值時跳過該檔案，不中斷整個清單"""
         project_root, handoff_dir = temp_handoff_env
 
         # 建立含未知 direction 的 handoff 檔案
@@ -260,15 +260,25 @@ class TestListPendingHandoffs:
             direction="unknown-type"  # 不在已知列表中
         )
 
-        # 應拋出 HandoffDirectionUnknownError
-        with pytest.raises(HandoffDirectionUnknownError) as exc_info:
-            list_pending_handoffs()
+        # 同時建立有效的 handoff 檔案，驗證不會被中斷
+        _create_handoff_json(
+            handoff_dir, "0.31.0-W4-002",
+            direction="context-refresh"  # 有效的 direction
+        )
 
-        # 驗證異常資訊
-        error = exc_info.value
-        assert "unknown-type" in str(error)
-        assert error.direction == "unknown-type"
-        assert error.file_path is not None
+        # 應該返回結果而不拋出異常
+        result = list_pending_handoffs()
+
+        # 驗證：只有有效的 handoff 被列出
+        assert len(result.handoffs) >= 1, "有效的 handoff 應被列出"
+
+        # 驗證：損壞的 handoff 被記錄為 schema_error
+        assert result.schema_error_count == 1, "未知 direction 應計入 schema_error_count"
+
+        # 驗證：警告訊息被輸出到 stderr
+        captured = capsys.readouterr()
+        assert "跳過未知 direction 的 handoff" in captured.err, "應輸出警告訊息"
+        assert "unknown-type" in captured.err, "警告應包含未知 direction 值"
 
     def test_valid_directions_accepted(self, temp_handoff_env):
         """W7-003: 驗證所有已知 direction 值都被接受"""
