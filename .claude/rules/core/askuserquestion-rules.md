@@ -179,12 +179,18 @@ commit 成功
 [Checkpoint 2] AskUserQuestion #11（Handoff/路由確認）
 ```
 
+**#11 核心原則：Handoff first（PC-009）**
+
+> Context 是有限資源。每次 Ticket 完成後的 handoff 是保護下一個任務思考品質的方式。
+> **Handoff 永遠是第一選項且標記 (Recommended)；繼續在此 session 工作是例外，不是預設。**
+
 **#11 共通規則：完成摘要 + /clear 選項**
 
 所有 #11 子場景的 AskUserQuestion 必須：
 
 1. **在 question 中包含本次 session 的完成摘要**（已完成的 Checkpoint 項目）
 2. **提供 `/clear` 選項**（清空 session，不建立 handoff）
+3. **Handoff 選項為第一位且標記 (Recommended)**，繼續在此 session 工作選項排後
 
 **完成摘要格式**（嵌入 question 文字中）：
 

@@ -638,6 +638,10 @@ PM 必須使用 AskUserQuestion 確認收尾動作。
 
 偵測到 git commit 成功完成。
 
+[核心原則 - PC-009]：
+  Handoff first，繼續 session 是例外，不是預設。
+  Context 是有限資源，每次 Ticket 完成後 handoff 能保護下一個任務的思考品質。
+
 [錯誤學習檢查]：
   commit 完成後，先執行 AskUserQuestion #16（錯誤學習經驗確認），再進入 #11（Handoff 路由）。
   #16 選項：無需記錄 (Recommended) / 記錄錯誤學習經驗 / 稍後記錄
@@ -655,14 +659,15 @@ PM 必須使用 AskUserQuestion 確認收尾動作。
     → 無任何 pending    → #3b（/version-release check）
 
 [情境說明]：
-  情境 A:  ticket 仍 in_progress → Context 刷新，新 session 繼續
-  情境 B:  ticket completed + 同 Wave 有 pending → 任務切換
+  情境 A:  ticket 仍 in_progress → Handoff Context 刷新（Recommended），繼續是例外
+  情境 B:  ticket completed + 同 Wave 有 pending → Handoff 到下一 ticket（Recommended）
   情境 C1: 版本有其他 Wave pending → AskUserQuestion #3a（Wave 收尾 + 開始下一 Wave）
   情境 C2: 版本無任何 pending → /version-release check → AskUserQuestion #13
 
 [AskUserQuestion 共通規則]：
   1. question 中必須包含本次 session 的完成摘要（已完成項目 + commit hash）
   2. 選項中必須包含「/clear 結束 session」（清空對話，不建立 handoff）
+  3. Handoff 必須是第一選項且標記 (Recommended)，繼續在此 session 為次選
 
 提示: ToolSearch("select:AskUserQuestion") 載入後使用。
 詳見: .claude/rules/core/askuserquestion-rules.md（場景 11/16 共通規則）
