@@ -540,7 +540,7 @@ class ProcessSkipMessages:
     SKIP_ACCEPTANCE_DESCRIPTION = "跳過驗收檢查"
     SKIP_ACCEPTANCE_FULL_PROCESS = (
         "派發 acceptance-auditor 執行完整驗收（標準驗收）或簡化驗收"
-        "（認知負擔 < 5 或 DOC 類型）"
+        "（任務範圍單純 或 DOC 類型）"
     )
 
     # ========================================================================
@@ -578,7 +578,7 @@ class AskUserQuestionMessages:
 
 complete 前必須使用 AskUserQuestion 確認驗收方式：
 - 標準驗收 (Recommended) - 派發 acceptance-auditor
-- 簡化驗收 - DOC 類型或認知負擔 < 5
+- 簡化驗收 - DOC 類型或任務範圍單純
 - 先完成後補驗收 - P0 緊急任務
 
 complete 後必須使用 AskUserQuestion 選擇下一步。

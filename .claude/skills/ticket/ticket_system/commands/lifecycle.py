@@ -463,7 +463,7 @@ class TicketLifecycle:
         print("  2. 確認所有建議已處理（無 pending）")
         print("  3. 派發 acceptance-auditor 執行驗收")
         print()
-        print("  豁免條件：P0 緊急任務、純文件更新、認知負擔 < 5")
+        print("  豁免條件：P0 緊急任務、純文件更新、任務範圍單純")
 
         # 任務鏈後續步驟建議
         all_tickets = list_tickets(self.version)
