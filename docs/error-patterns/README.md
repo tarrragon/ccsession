@@ -4,9 +4,9 @@
 
 | 類別 | 數量 |
 |------|------|
-| 流程合規 (PC) | 4 |
+| 流程合規 (PC) | 5 |
 | 程式碼品質 (CQ) | 3 |
-| **總計** | **7** |
+| **總計** | **8** |
 
 ## 索引
 
@@ -22,7 +22,8 @@
 - [PC-002](./categories/process-compliance.md#pc-002-get_project_root-因-pubspecyaml-搜尋策略在-go混合型專案中靜默失效) get_project_root() 因 pubspec.yaml 搜尋策略在 Go/混合型專案中靜默失效
 - [PC-003](./categories/process-compliance.md#pc-003-cli-失敗時基於假設歸因而非調查實際語法) CLI 失敗時基於假設歸因而非調查實際語法
 - [PC-004](./categories/process-compliance.md#pc-004-任務鏈-handoff-過濾只判斷來源-ticket-狀態未判斷目標-ticket-是否已啟動) 任務鏈 handoff 過濾只判斷來源 ticket 狀態，未判斷目標 ticket 是否已啟動
+- [PC-005](./categories/process-compliance.md#pc-005-技術債改善-ticket-版本歸屬錯誤放入下一版本而非當前版本) 技術債/改善 ticket 版本歸屬錯誤（放入下一版本而非當前版本）
 
 ---
 
-*最後更新: 2026-03-07*
+*最後更新: 2026-03-07（PC-005 新增）*
