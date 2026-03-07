@@ -131,7 +131,7 @@ def list_pending_handoffs() -> HandoffListResult:
     pending_dir = _get_handoff_dir(HANDOFF_PENDING_SUBDIR)
 
     if not pending_dir.exists():
-        return []
+        return HandoffListResult(handoffs=[], stale_count=0, schema_error_count=0)
 
     handoffs = []
     stale_count = 0

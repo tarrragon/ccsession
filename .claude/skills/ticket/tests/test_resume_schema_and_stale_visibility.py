@@ -199,7 +199,7 @@ class TestStaleFilterVisibility:
 
         assert result.stale_count == 0
 
-    @patch("ticket_system.commands.resume._is_ticket_completed")
+    @patch("ticket_system.commands.resume.is_ticket_completed")
     def test_stale_count_increments_for_filtered_handoffs(
         self, mock_completed, temp_handoff_env
     ):
@@ -216,7 +216,7 @@ class TestStaleFilterVisibility:
 
         assert result.stale_count == 1
 
-    @patch("ticket_system.commands.resume._is_ticket_completed")
+    @patch("ticket_system.commands.resume.is_ticket_completed")
     def test_execute_list_shows_stale_hint_when_empty_and_stale_filtered(
         self, mock_completed, temp_handoff_env, capsys
     ):
@@ -234,7 +234,7 @@ class TestStaleFilterVisibility:
         captured = capsys.readouterr()
         assert "stale" in captured.out.lower() or "已過濾" in captured.out
 
-    @patch("ticket_system.commands.resume._is_ticket_completed")
+    @patch("ticket_system.commands.resume.is_ticket_completed")
     def test_execute_list_shows_stale_hint_in_result_list(
         self, mock_completed, temp_handoff_env, capsys
     ):

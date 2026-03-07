@@ -384,7 +384,6 @@ def _validate_no_duplicate_handoff(ticket_id: str) -> None:
     Raises:
         HandoffDuplicateError: 已存在相同目標的 pending handoff 時
     """
-    import json as _json
     root = get_project_root()
     pending_dir = root / HANDOFF_DIR / HANDOFF_PENDING_SUBDIR
 
@@ -398,7 +397,7 @@ def _validate_no_duplicate_handoff(ticket_id: str) -> None:
     # 讀取既有 handoff 的時間戳
     try:
         with open(existing_file, "r", encoding="utf-8") as f:
-            existing_data = _json.load(f)
+            existing_data = json.load(f)
         existing_timestamp = existing_data.get("timestamp", "（時間未知）")
     except (IOError, ValueError):
         existing_timestamp = "（無法讀取時間）"
