@@ -597,3 +597,95 @@ current_version: 0.1.0
 | 後續分析 | 以新 current_version 為前提 | 以 todolist.yaml 實際 active 版本為前提並先驗證其正確性 |
 
 > **核心教訓**：`current_version` 是版本狀態的 Source of Truth，提前推進會讓所有基於「當前版本」的分析和歸屬判斷失去依據。版本推進是「完成的宣告」，不是「意圖的宣告」。
+
+## PC-011: ticket track set-where 誤用不支援的 --layer --files 參數
+
+**發現日期**: 2026-03-08
+**相關 Ticket**: 0.1.0-W11-009
+
+### 症狀
+
+- `ticket track set-where <id> --layer hooks --files "path"` 報 Exit code 2
+- 錯誤訊息：`unrecognized arguments: --layer --files`
+
+### 根因
+
+假設 `set-where` 支援結構化參數（--layer / --files），但實際上該命令只接受單一字串值。
+未先 `--help` 確認語法就執行。
+
+### 解決方案
+
+```bash
+# 正確：傳入單一字串值
+ticket track set-where 0.1.0-W11-009 ".claude/hooks/version-consistency-guard-hook.py"
+
+# 錯誤：使用不支援的旗標
+ticket track set-where 0.1.0-W11-009 --layer hooks --files "path"
+```
+
+### 預防措施
+
+- 使用 `ticket track set-*` 前，先確認語法：`ticket track set-where --help`
+- 結構化欄位（layer/files）需直接編輯 Ticket frontmatter
+
+---
+
+## PC-012: Agent 派發 prompt 未包含 Ticket ID 格式
+
+**發現日期**: 2026-03-08
+**相關 Ticket**: 0.1.0-W11-009
+
+### 症狀
+
+- Agent 派發被 `agent-ticket-validation-hook.py` 拒絕
+- 錯誤訊息：`派發任務必須引用有效的 Ticket ID（格式：Ticket: {id} 或 #Ticket-{id} 或 [Ticket {id}]）`
+
+### 根因
+
+在 Agent prompt 中忘記加入 `Ticket: <id>` 格式的引用，
+validation hook 無法確認此派發對應到有效 Ticket。
+
+### 解決方案
+
+Agent prompt 開頭必須包含：
+```
+Ticket: 0.1.0-W11-009
+```
+或 `#Ticket-0.1.0-W11-009` 或 `[Ticket 0.1.0-W11-009]` 格式。
+
+### 預防措施
+
+- 派發 Agent 前，在 prompt 第一段明確寫 `Ticket: <id>`
+- 可用模板：`## 任務\n\nTicket: {id}\n\n### 目標...`
+
+---
+
+## PC-013: Ticket 缺少 decision_tree_path 欄位導致 Agent 派發被拒
+
+**發現日期**: 2026-03-08
+**相關 Ticket**: 0.1.0-W11-009
+
+### 症狀
+
+- Agent 派發被拒，錯誤：`Ticket {id} 缺少決策樹欄位，為無效 Ticket`
+- validation hook 檢查 `decision_tree_path:` 或 `## 決策樹` 標記
+
+### 根因
+
+建立 Ticket 後直接認領並嘗試派發，未先確認 `decision_tree_path` 欄位是否填寫。
+`ticket create` 不會自動填入此欄位。
+
+### 解決方案
+
+認領前在 Ticket frontmatter 中添加：
+```yaml
+decision_tree_path:
+  entry_point: skill_match
+  final_decision: dispatch_thyme
+  rationale: Hook 優化/修正任務，依決策樹第二層半派發 thyme-python-developer
+```
+
+### 預防措施
+
+- `ticket track claim` 後，先確認 frontmatter 含 `decision_tree_path` 再派發
+- 可加入認領 checklist：`[ ] decision_tree_path 已填寫`
