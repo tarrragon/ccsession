@@ -138,6 +138,15 @@ Ticket: {ticket_id} (type: {ticket_type})
 
 詳見: .claude/rules/flows/ticket-lifecycle.md（建立後品質驗收）"""
 
+    CONTRADICTORY_STATE_WARNING = """[WARNING] Ticket {ticket_id} 存在矛盾狀態（in_progress + creation_accepted: false）
+
+說明：
+  此 Ticket 已被認領（status: in_progress），但建立後品質驗收尚未通過（creation_accepted: false）。
+  此狀態通常發生在 Ticket 於建立審核機制加入前就已認領，系統允許繼續執行。
+
+建議操作：
+  執行 `ticket track accept-creation {ticket_id}` 修正矛盾狀態"""
+
     # ========================================================================
     # Main Thread Edit Restriction Hook
     # ========================================================================
