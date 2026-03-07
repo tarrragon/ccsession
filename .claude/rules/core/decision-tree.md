@@ -333,26 +333,25 @@ Skill 是預建的專用工具，優先於代理人派發。
     |   識別：PM 工作流為 TDD 模式，已完成 ticket 含 tdd_phase 欄位
     |
     +-- [情境 D] TDD Phase 完成路由（優先於情境 A/B/C）
+    |   識別：ticket 含 tdd_phase 欄位
+    |   核心規則：只有 Phase 3b 完成（D2）需要 AskUserQuestion，其他均為全自動路由
     |   |
-    |   +-- [D1] Phase 1/2/3a 完成 → 全自動，無分岔
-    |   |       → 直接派發下一 Phase 代理人，無需 AskUserQuestion
+    |   +-- [D1] [全自動] Phase 1/2/3a 完成 → 直接派發下一 Phase 代理人
     |   |       Phase 1→2: sage-test-architect（Phase 2 測試設計）
     |   |       Phase 2→3a: pepper-test-implementer（Phase 3a 策略規劃）
     |   |       Phase 3a→3b: parsley-flutter-developer（Phase 3b 實作）
     |   |
-    |   +-- [D2] Phase 3b 完成 → AskUserQuestion #13（Phase 3b 路由確認）
+    |   +-- [D2] [詢問] Phase 3b 完成 → AskUserQuestion #13（Phase 3b 路由確認）
     |   |       +-- 進入 Phase 4a（/parallel-evaluation B 多視角重構分析，Recommended）
     |   |       +-- 直接進入 Phase 4b（豁免條件：<=2 檔案/DOC 類型/認知 < 5）
     |   |       +-- 先 commit 再決定
     |   |
-    |   +-- [D3a] Phase 4a 完成 → 全自動，無分岔
-    |   |         → 直接派發 cinnamon-refactor-owl（Phase 4b 重構執行）
+    |   +-- [D3a] [全自動] Phase 4a 完成 → 直接派發 cinnamon-refactor-owl（Phase 4b 重構執行）
     |   |
-    |   +-- [D3b] Phase 4b 完成 → 全自動，無分岔
-    |   |         → 直接派發 /parallel-evaluation A（Phase 4c 多視角再審核）
+    |   +-- [D3b] [全自動] Phase 4b 完成 → 直接派發 /parallel-evaluation A（Phase 4c 多視角再審核）
     |   |         豁免（直接進入 /tech-debt-capture）：<=2 檔案/DOC 類型/認知 < 5
     |   |
-    |   +-- [D3c] Phase 4c 完成 → [強制] /tech-debt-capture
+    |   +-- [D3c] [強制] Phase 4c 完成 → /tech-debt-capture
     |           → 不可跳過，必須優先於 Wave 收尾判斷
     |           → /tech-debt-capture 完成後 AskUserQuestion #13（Phase 4 + tech-debt 路由）
     |           → commit 後回到情境 B/C 評估
