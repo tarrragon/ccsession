@@ -48,9 +48,7 @@ from ticket_system.lib.ui_constants import (
     SEPARATOR_WIDE,
     SEPARATOR_WIDE_DASH,
 )
-
-
-import re
+from ticket_system.lib.ticket_ops import extract_wave_from_ticket_id
 from typing import Tuple
 
 
@@ -63,9 +61,9 @@ def filter_incomplete_tickets(tickets: List[Dict[str, Any]]) -> List[Dict[str, A
 
 
 def extract_wave_number(ticket_id: str) -> str:
-    """從 Ticket ID 提取 Wave 號"""
-    match = re.search(r'-W(\d+)-', ticket_id or "")
-    return f"W{match.group(1)}" if match else "Unknown"
+    """從 Ticket ID 提取 Wave 號（顯示格式，如 W9）"""
+    wave = extract_wave_from_ticket_id(ticket_id)
+    return f"W{wave}" if wave is not None else "Unknown"
 
 
 def group_by_wave(tickets: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:

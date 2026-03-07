@@ -47,6 +47,7 @@ from ticket_system.lib.ticket_builder import (
     create_ticket_body,
     update_parent_children,
 )
+from ticket_system.lib.ticket_ops import extract_wave_from_ticket_id
 from ticket_system.lib.ui_constants import SEPARATOR_PRIMARY
 
 
@@ -72,14 +73,10 @@ def execute(args: argparse.Namespace) -> int:
             ))
         ticket_id = format_child_ticket_id(args.parent, child_seq)
 
-        # 從 parent_id 中提取 wave（如 0.31.0-W4-020 -> 4）
-        parent_parts = args.parent.split("-W")
-        if len(parent_parts) == 2:
-            wave_str = parent_parts[1].split("-")[0]
-            try:
-                wave = int(wave_str)
-            except ValueError:
-                pass
+        # 從 parent_id 中提取 wave
+        extracted_wave = extract_wave_from_ticket_id(args.parent)
+        if extracted_wave is not None:
+            wave = extracted_wave
     else:
         # 建立根任務 ID
         if not wave:
