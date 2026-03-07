@@ -76,3 +76,4 @@ server/go.work.sum
 .claude/worktrees/
 .claude/tool-results/
 .claude/handoff/archive/
+.claude/handoff/pending/

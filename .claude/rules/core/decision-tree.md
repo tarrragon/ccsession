@@ -413,6 +413,8 @@ Skill 是預建的專用工具，優先於代理人派發。
 
 **Handoff 強制動作**：選擇任何 Handoff 選項後，PM **必須**執行 `/ticket handoff` 建立標準 `pending/*.json` 檔案，**禁止**手動建立 `.claude/handoff/*.md` 交接文件。`/ticket handoff` 會自動判斷下一步方向（父/子/兄弟），確保 `resume --list` 在下一個 session 能正確偵測待恢復任務。
 
+> **注意**：`.claude/handoff/pending/` 已列入 `.gitignore`，`pending/*.json` 由 `/ticket handoff` 在**本地**建立，**不需要 git commit**。執行 handoff 後可直接結束 session，無需提交這些檔案。
+
 **流程省略防護（AskUserQuestion #12）**：主線程輸出含省略意圖關鍵字時，process-skip-guard-hook 自動偵測並提醒確認。
 
 > AskUserQuestion 場景 11-17 詳見：.claude/rules/core/askuserquestion-rules.md
@@ -508,4 +510,4 @@ Level 5: TDD 階段代理人 + thyme-python-developer
 ---
 
 **Last Updated**: 2026-03-07
-**Version**: 7.9.0 - 第三層半擴大至技術債/bug/回歸，明確「發現即建立，不詢問確認」（0.1.0-W9-013）
+**Version**: 7.10.0 - 補充 Handoff 強制動作說明：pending 檔案本地建立，不需 git commit（0.1.0-W9-014）
