@@ -140,7 +140,7 @@ class TestListPendingHandoffsSchemaValidation:
 
         result = list_pending_handoffs()
 
-        assert len(result) == 0, "格式錯誤的 handoff 應被跳過"
+        assert len(result.handoffs) == 0, "格式錯誤的 handoff 應被跳過"
 
     def test_malformed_json_warning_on_stderr(self, temp_handoff_env, capsys):
         """格式錯誤的 handoff 應在 stderr 輸出 WARNING"""
@@ -166,8 +166,8 @@ class TestListPendingHandoffsSchemaValidation:
 
         result = list_pending_handoffs()
 
-        assert len(result) == 1, "有效的 handoff 應被保留"
-        assert result[0]["ticket_id"] == "0.1.0-W4-002"
+        assert len(result.handoffs) == 1, "有效的 handoff 應被保留"
+        assert result.handoffs[0]["ticket_id"] == "0.1.0-W4-002"
 
     def test_schema_error_count_tracked(self, temp_handoff_env):
         """格式錯誤的 handoff 數量應被追蹤"""
@@ -176,9 +176,9 @@ class TestListPendingHandoffsSchemaValidation:
         bad_data = {"ticket_id": "0.1.0-W4-001", "timestamp": "2026-01-30T12:00:00"}
         _write_json(handoff_dir, "0.1.0-W4-001", bad_data)
 
-        list_pending_handoffs()
+        result = list_pending_handoffs()
 
-        assert list_pending_handoffs.last_schema_error_count == 1
+        assert result.schema_error_count == 1
 
 
 # ==============================================================================
@@ -195,9 +195,9 @@ class TestStaleFilterVisibility:
 
         _write_json(handoff_dir, "0.1.0-W4-001", _valid_handoff("0.1.0-W4-001"))
 
-        list_pending_handoffs()
+        result = list_pending_handoffs()
 
-        assert list_pending_handoffs.last_stale_count == 0
+        assert result.stale_count == 0
 
     @patch("ticket_system.commands.resume._is_ticket_completed")
     def test_stale_count_increments_for_filtered_handoffs(
@@ -212,9 +212,9 @@ class TestStaleFilterVisibility:
         data["from_status"] = "in_progress"  # 不是 completed，所以會被過濾
         _write_json(handoff_dir, "0.1.0-W4-001", data)
 
-        list_pending_handoffs()
+        result = list_pending_handoffs()
 
-        assert list_pending_handoffs.last_stale_count == 1
+        assert result.stale_count == 1
 
     @patch("ticket_system.commands.resume._is_ticket_completed")
     def test_execute_list_shows_stale_hint_when_empty_and_stale_filtered(

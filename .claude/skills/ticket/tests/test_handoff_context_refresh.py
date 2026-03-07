@@ -295,9 +295,9 @@ class TestResumeContextRefresh:
                 mock_root.return_value = tmpdir_path
 
                 # 執行 list_pending_handoffs
-                handoffs = list_pending_handoffs()
+                result = list_pending_handoffs()
 
                 # 驗證
-                assert len(handoffs) == 1
-                assert handoffs[0]["ticket_id"] == "0.1.0-W9-999"
-                assert handoffs[0]["direction"] == "context-refresh"
+                assert len(result.handoffs) == 1
+                assert result.handoffs[0]["ticket_id"] == "0.1.0-W9-999"
+                assert result.handoffs[0]["direction"] == "context-refresh"

@@ -13,7 +13,6 @@ if __name__ == "__main__":
 
 
 import json
-import sys
 from pathlib import Path
 from typing import List, Tuple
 

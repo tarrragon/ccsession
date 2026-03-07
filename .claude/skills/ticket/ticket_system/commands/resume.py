@@ -13,6 +13,7 @@ if __name__ == "__main__":
 import argparse
 import json
 import sys
+from collections import namedtuple
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional, List
@@ -49,6 +50,10 @@ from ticket_system.lib.ui_constants import SEPARATOR_PRIMARY
 
 # Handoff JSON 必填欄位
 _HANDOFF_REQUIRED_FIELDS = ("ticket_id", "direction", "timestamp")
+
+# W7-004：定義 handoff 列表結果型別（從函式屬性改為明確的返回值）
+# 包含有效 handoff 清單、過濾計數和格式錯誤計數
+HandoffListResult = namedtuple("HandoffListResult", ["handoffs", "stale_count", "schema_error_count"])
 
 
 def _validate_handoff_schema(data: dict, file_path: str) -> None:
@@ -111,14 +116,14 @@ def _find_handoff_file(ticket_id: str, subdir: str = HANDOFF_PENDING_SUBDIR) -> 
     return None
 
 
-def list_pending_handoffs() -> List[Dict[str, Any]]:
+def list_pending_handoffs() -> HandoffListResult:
     """
     列出所有待恢復的 handoff 檔案
 
     過濾規則：已 completed 的 Ticket 對應的 handoff 條目不顯示（stale handoff）
 
     Returns:
-        List[Dict]: 有效的（非 stale）handoff 資料列表
+        HandoffListResult: 包含有效 handoff 清單、stale 計數、格式錯誤計數
 
     Raises:
         HandoffDirectionUnknownError: 遇到未知 direction 值時（由呼叫端捕捉）
@@ -208,16 +213,13 @@ def list_pending_handoffs() -> List[Dict[str, Any]]:
             # 略過無法讀取的檔案
             pass
 
-    # W4-002: 儲存過濾計數，供 _execute_list() 顯示可見性提示
-    list_pending_handoffs.last_stale_count = stale_count
-    list_pending_handoffs.last_schema_error_count = schema_error_count
-
-    return handoffs
-
-
-# W4-002: 初始化計數器屬性（模組載入時預設為 0）
-list_pending_handoffs.last_stale_count = 0
-list_pending_handoffs.last_schema_error_count = 0
+    # W7-004：改為返回 namedtuple，取代函式屬性機制
+    # 明確的返回值提高程式碼清晰度和類型安全性
+    return HandoffListResult(
+        handoffs=handoffs,
+        stale_count=stale_count,
+        schema_error_count=schema_error_count
+    )
 
 
 def load_handoff_file(ticket_id: str) -> Optional[Dict[str, Any]]:
@@ -415,7 +417,7 @@ def _print_handoff_info(handoff: Dict[str, Any], ticket: Optional[Dict[str, Any]
 def _execute_list() -> int:
     """執行 --list 子命令"""
     try:
-        handoffs = list_pending_handoffs()
+        result = list_pending_handoffs()
     except HandoffDirectionUnknownError as e:
         # W7-003: 捕捉未知 direction 異常，跳過該條目並顯示警告
         print(f"[WARNING] 跳過未知 direction 的 handoff：{e}", file=sys.stderr)
@@ -426,8 +428,9 @@ def _execute_list() -> int:
         # 實際應用中，建議使用者修復損壞的 handoff 檔案後重試
         return 0
 
-    # W4-002: 顯示 stale 過濾可見性（讓用戶區分「無任務」vs「有 stale 被過濾」）
-    stale_count = list_pending_handoffs.last_stale_count
+    # W7-004：從 namedtuple 提取 handoff 清單和 stale 計數
+    handoffs = result.handoffs
+    stale_count = result.stale_count
     if not handoffs:
         print(ResumeMessages.NO_PENDING_RESUMPTIONS)
         if stale_count > 0:
