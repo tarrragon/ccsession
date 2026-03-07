@@ -5,9 +5,16 @@
 | 類別 | 數量 |
 |------|------|
 | 流程合規 (PC) | 4 |
-| **總計** | **4** |
+| 程式碼品質 (CQ) | 3 |
+| **總計** | **7** |
 
 ## 索引
+
+### 程式碼品質 (CQ)
+
+- [CQ-001](./categories/code-quality.md#cq-001-私有函式跨模組引用導致封裝破壞) 私有函式跨模組引用導致封裝破壞
+- [CQ-002](./categories/code-quality.md#cq-002-positional-argument-作為子命令偵測導致路由不一致) Positional Argument 作為子命令偵測導致路由不一致
+- [CQ-003](./categories/code-quality.md#cq-003-exception-定義後無實際拋出點設計意圖未實現) Exception 定義後無實際拋出點（設計意圖未實現）
 
 ### 流程合規 (PC)
 
