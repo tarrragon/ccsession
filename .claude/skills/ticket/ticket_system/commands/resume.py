@@ -22,10 +22,8 @@ from ticket_system.lib.constants import (
     HANDOFF_PENDING_SUBDIR,
     HANDOFF_ARCHIVE_SUBDIR,
     STATUS_COMPLETED,
-    STATUS_IN_PROGRESS,
-    TASK_CHAIN_DIRECTION_TYPES,
 )
-from ticket_system.commands.exceptions import HandoffSchemaError
+from ticket_system.commands.exceptions import HandoffSchemaError, HandoffDirectionUnknownError
 from ticket_system.lib.ticket_loader import resolve_version, load_ticket, get_project_root
 from ticket_system.lib.messages import (
     ErrorMessages,
@@ -40,8 +38,11 @@ from ticket_system.lib.command_lifecycle_messages import (
     ResumeMessages,
     format_msg,
 )
-from ticket_system.lib.ticket_ops import (
-    load_and_validate_ticket,
+from ticket_system.lib.handoff_utils import (
+    is_ticket_completed,
+    is_task_chain_direction,
+    is_ticket_in_progress_or_completed,
+    is_valid_direction,
 )
 from ticket_system.lib.ui_constants import SEPARATOR_PRIMARY
 
@@ -84,91 +85,6 @@ def _get_handoff_dir(subdir: str = HANDOFF_PENDING_SUBDIR) -> Path:
     return handoff_dir
 
 
-def _is_task_chain_direction(direction: str) -> bool:
-    """
-    判斷 handoff 的 direction 是否為任務鏈類型。
-
-    任務鏈 direction（to-sibling、to-parent、to-child）中，
-    來源 ticket completed 是預期狀態（先 complete 再 handoff 到下一任務），
-    不應被過濾為 stale。
-
-    格式：direction 格式可為 "to-sibling:target_id" 或 "to-sibling" 等，
-    使用 split(":") 提取第一段來判斷。
-
-    Args:
-        direction: Handoff direction 字符串，可能為 "to-sibling", "to-sibling:xxx", etc.
-
-    Returns:
-        bool: True 表示為任務鏈類型，False 表示為其他類型（context-refresh 等）
-    """
-    if not direction:
-        return False
-
-    # 提取 direction type（split ":" 取首段）
-    direction_type = direction.split(":")[0]
-
-    return direction_type in TASK_CHAIN_DIRECTION_TYPES
-
-
-def _is_ticket_completed(ticket_id: str) -> bool:
-    """
-    檢查 Ticket 是否已 completed。
-
-    從 ticket_id 提取版本後載入 ticket 檢查狀態。
-    若無法載入（不存在或格式錯誤），返回 False（保守策略：不確定時顯示）。
-
-    Args:
-        ticket_id: Ticket ID，格式如 "0.31.1-W5-004"
-
-    Returns:
-        bool: True 表示已完成，False 表示未完成或無法判斷
-    """
-    try:
-        # 從 ticket_id 提取版本（前三個數字段）
-        parts = ticket_id.split("-")
-        if len(parts) < 3:
-            return False
-        version = parts[0]  # "0.31.1"
-
-        ticket, error = load_and_validate_ticket(version, ticket_id, auto_print_error=False)
-        if error:
-            return False
-
-        return ticket.get("status") == STATUS_COMPLETED
-    except Exception:
-        return False  # 保守策略：無法判斷時顯示
-
-
-def _is_ticket_in_progress_or_completed(ticket_id: str) -> bool:
-    """
-    檢查 Ticket 是否已 in_progress 或 completed。
-
-    用於判斷任務鏈 handoff 的目標 ticket 是否已啟動。
-    若目標已啟動，表示此 handoff 已被接手，應過濾為 stale。
-
-    若無法載入（不存在或格式錯誤），返回 False（保守策略：不確定時顯示）。
-
-    Args:
-        ticket_id: Ticket ID，格式如 "0.31.1-W5-004"
-
-    Returns:
-        bool: True 表示已啟動（in_progress 或 completed），False 表示未啟動或無法判斷
-    """
-    try:
-        parts = ticket_id.split("-")
-        if len(parts) < 3:
-            return False
-        version = parts[0]
-
-        ticket, error = load_and_validate_ticket(version, ticket_id, auto_print_error=False)
-        if error:
-            return False
-
-        return ticket.get("status") in (STATUS_IN_PROGRESS, STATUS_COMPLETED)
-    except Exception:
-        return False  # 保守策略：無法判斷時顯示
-
-
 def _find_handoff_file(ticket_id: str, subdir: str = HANDOFF_PENDING_SUBDIR) -> Optional[tuple[Path, str]]:
     """
     尋找 handoff 檔案，返回 (路徑, 格式)
@@ -203,6 +119,9 @@ def list_pending_handoffs() -> List[Dict[str, Any]]:
 
     Returns:
         List[Dict]: 有效的（非 stale）handoff 資料列表
+
+    Raises:
+        HandoffDirectionUnknownError: 遇到未知 direction 值時（由呼叫端捕捉）
     """
     pending_dir = _get_handoff_dir(HANDOFF_PENDING_SUBDIR)
 
@@ -228,6 +147,11 @@ def list_pending_handoffs() -> List[Dict[str, Any]]:
                     print(f"[WARNING] 跳過格式錯誤的 handoff：{e}", file=sys.stderr)
                     continue
 
+                # W7-003: 驗證 direction 值是否為已知類型
+                direction = data.get("direction", "")
+                if not is_valid_direction(direction):
+                    raise HandoffDirectionUnknownError(direction, str(handoff_file))
+
                 # 過濾 stale handoff：
                 # Handoff 是 stale 當且僅當：
                 # 1. 來源 Ticket 已 completed（status: completed）
@@ -237,20 +161,19 @@ def list_pending_handoffs() -> List[Dict[str, Any]]:
                 # - 任務鏈 handoff（to-sibling/to-parent/to-child），即使 completed 也保留
                 # - Handoff 本身是從 completed 狀態創建的，不算 stale
                 ticket_id = data.get("ticket_id", "")
-                if ticket_id and _is_ticket_completed(ticket_id):
+                if ticket_id and is_ticket_completed(ticket_id):
                     # Ticket 已 completed，檢查 handoff 狀態
                     from_status = data.get("from_status", "")
-                    direction = data.get("direction", "")
 
                     # 檢查是否為任務鏈類型
-                    if _is_task_chain_direction(direction):
+                    if is_task_chain_direction(direction):
                         # 任務鏈 handoff：進一步檢查目標 ticket 是否已啟動
                         # 若 direction 含 target_id（如 to-sibling:0.1.0-W3-009），
                         # 且目標已 in_progress/completed，則視為 stale
                         direction_parts = direction.split(":", 1)
                         if len(direction_parts) > 1:
                             target_id = direction_parts[1]
-                            if target_id and _is_ticket_in_progress_or_completed(target_id):
+                            if target_id and is_ticket_in_progress_or_completed(target_id):
                                 # 目標已啟動，此 handoff 為 stale（W4-002 計數）
                                 stale_count += 1
                                 continue
@@ -272,7 +195,7 @@ def list_pending_handoffs() -> List[Dict[str, Any]]:
 
                 # 過濾已完成 ticket 的 stale handoff
                 # Markdown 格式無 direction 資訊，保持原行為
-                if ticket_id and _is_ticket_completed(ticket_id):
+                if ticket_id and is_ticket_completed(ticket_id):
                     stale_count += 1  # W4-002 計數
                     continue  # 跳過 stale 條目
 
@@ -491,7 +414,17 @@ def _print_handoff_info(handoff: Dict[str, Any], ticket: Optional[Dict[str, Any]
 
 def _execute_list() -> int:
     """執行 --list 子命令"""
-    handoffs = list_pending_handoffs()
+    try:
+        handoffs = list_pending_handoffs()
+    except HandoffDirectionUnknownError as e:
+        # W7-003: 捕捉未知 direction 異常，跳過該條目並顯示警告
+        print(f"[WARNING] 跳過未知 direction 的 handoff：{e}", file=sys.stderr)
+        if e.guidance:
+            print(f"  指引：{e.guidance}", file=sys.stderr)
+        # 繼續處理其他 handoff（遞迴呼叫不可行，故此處回傳 0）
+        # 注意：此處異常發生時，list_pending_handoffs() 會在第一個不合法 direction 處中斷
+        # 實際應用中，建議使用者修復損壞的 handoff 檔案後重試
+        return 0
 
     # W4-002: 顯示 stale 過濾可見性（讓用戶區分「無任務」vs「有 stale 被過濾」）
     stale_count = list_pending_handoffs.last_stale_count

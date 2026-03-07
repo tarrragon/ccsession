@@ -24,11 +24,11 @@ from ticket_system.lib.constants import (
 )
 from ticket_system.lib.paths import get_project_root
 
-# 與 resume.py 共用的 stale 判斷函式
-from ticket_system.commands.resume import (
-    _is_ticket_completed,
-    _is_task_chain_direction,
-    _is_ticket_in_progress_or_completed,
+# 共用的 stale 判斷函式
+from ticket_system.lib.handoff_utils import (
+    is_ticket_completed,
+    is_task_chain_direction,
+    is_ticket_in_progress_or_completed,
 )
 
 
@@ -39,6 +39,8 @@ def _collect_stale_handoffs() -> List[Tuple[Path, str, str]]:
     Stale 判斷規則（與 list_pending_handoffs() 一致）：
     1. 來源 ticket 已 completed
     2. 且：
+       - JSON 檔：檢查 direction 和 from_status 欄位
+       - Markdown 檔：直接認定為 stale（因無法提取 direction 資訊）
        - 非任務鏈（context-refresh 等）：from_status != "completed"
        - 任務鏈（to-sibling/to-parent/to-child）：目標已 in_progress/completed
 
@@ -53,36 +55,48 @@ def _collect_stale_handoffs() -> List[Tuple[Path, str, str]]:
 
     stale = []
 
-    for handoff_file in sorted(pending_dir.glob("*.json")):
-        try:
-            with open(handoff_file, "r", encoding="utf-8") as f:
-                data = json.load(f)
-        except (IOError, ValueError):
-            continue  # 無法讀取的檔案跳過，不算 stale
+    # 同時掃描 .json 和 .md 檔案
+    for handoff_file in sorted(pending_dir.glob("*.json")) + sorted(pending_dir.glob("*.md")):
+        if handoff_file.suffix == ".json":
+            try:
+                with open(handoff_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+            except (IOError, ValueError):
+                continue  # 無法讀取的檔案跳過，不算 stale
 
-        ticket_id = data.get("ticket_id", "")
-        if not ticket_id:
-            continue
+            ticket_id = data.get("ticket_id", "")
+            if not ticket_id:
+                continue
 
-        if not _is_ticket_completed(ticket_id):
-            continue  # 來源 ticket 未完成，保留
+            if not is_ticket_completed(ticket_id):
+                continue  # 來源 ticket 未完成，保留
 
-        direction = data.get("direction", "")
-        from_status = data.get("from_status", "")
+            direction = data.get("direction", "")
+            from_status = data.get("from_status", "")
 
-        if _is_task_chain_direction(direction):
-            # 任務鏈：只有目標已啟動才算 stale
-            direction_parts = direction.split(":", 1)
-            if len(direction_parts) > 1:
-                target_id = direction_parts[1]
-                if target_id and _is_ticket_in_progress_or_completed(target_id):
-                    reason = f"任務鏈目標 {target_id} 已啟動"
+            if is_task_chain_direction(direction):
+                # 任務鏈：只有目標已啟動才算 stale
+                direction_parts = direction.split(":", 1)
+                if len(direction_parts) > 1:
+                    target_id = direction_parts[1]
+                    if target_id and is_ticket_in_progress_or_completed(target_id):
+                        reason = f"任務鏈目標 {target_id} 已啟動"
+                        stale.append((handoff_file, ticket_id, reason))
+                # 無 target_id 或目標未啟動：不算 stale
+            else:
+                # 非任務鏈（context-refresh 等）：from_status != "completed" 才 stale
+                if from_status != "completed":
+                    reason = f"來源 ticket {ticket_id} 已完成（direction: {direction}）"
                     stale.append((handoff_file, ticket_id, reason))
-            # 無 target_id 或目標未啟動：不算 stale
-        else:
-            # 非任務鏈（context-refresh 等）：from_status != "completed" 才 stale
-            if from_status != "completed":
-                reason = f"來源 ticket {ticket_id} 已完成（direction: {direction}）"
+
+        elif handoff_file.suffix == ".md":
+            # Markdown 格式的 handoff 檔案
+            # 提取檔名作為 ticket_id
+            ticket_id = handoff_file.stem
+
+            # Markdown 格式無 direction 資訊，保持原行為
+            if ticket_id and is_ticket_completed(ticket_id):
+                reason = f"來源 ticket {ticket_id} 已完成（Markdown 格式）"
                 stale.append((handoff_file, ticket_id, reason))
 
     return stale
