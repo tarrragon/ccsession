@@ -217,6 +217,14 @@ question: "{完成摘要}\n\n此 ticket 仍在進行中。接下來要？"
 | 繼續在此 session 工作 | 留在當前 context 繼續 |
 | /clear 結束 session | 清空對話，不建立 handoff 檔案 |
 
+**#11a 對應 CLI 命令**（用戶確認後執行）：
+
+```bash
+ticket handoff <id> --context-refresh
+```
+
+> 注意：`--context-refresh` 僅適用 `in_progress` 狀態。**禁止**在 `completed` ticket 使用此旗標。
+
 **#11b：任務切換 Handoff**（情境 B — ticket 已 completed，有關聯任務）
 
 ```
@@ -229,6 +237,21 @@ question: "{完成摘要}\n\nTicket 已完成。切換到下一個任務嗎？"
 | 在此 session 繼續 {next_ticket_id} | 直接 claim，留在當前 context |
 | 查看所有待處理任務後決定 | 列出後讓用戶選擇 |
 | /clear 結束 session | 清空對話，不建立 handoff 檔案 |
+
+**#11b 對應 CLI 命令**（用戶確認後執行）：
+
+```bash
+# 切換到兄弟任務
+ticket handoff <id> --to-sibling <next_ticket_id>
+
+# 或返回父任務
+ticket handoff <id> --to-parent
+
+# 或讓 CLI 自動判斷方向（completed 狀態不加旗標）
+ticket handoff <id>
+```
+
+> 注意：ticket 已 `completed`，**不需要也不可以**使用 `--context-refresh`。
 
 **Handoff 後強制動作**：選擇任何 Handoff 選項後，PM **必須**執行 `/ticket handoff` 建立標準 `pending/*.json` 檔案。**禁止**手動建立 `.claude/handoff/*.md` 交接文件。這確保下一個 session 的 `resume --list` 能正確偵測待恢復任務。
 
