@@ -433,6 +433,111 @@ class TestFindHandoffFile:
         _, file_format = result
         assert file_format == "json"
 
+    def test_find_by_direction_target_to_sibling(self, temp_handoff_env):
+        """測試透過 direction 欄位反向查找目標 Ticket（to-sibling）"""
+        project_root, handoff_dir = temp_handoff_env
+
+        # 建立 handoff：來源是 0.31.0-W8-001，目標是 0.31.0-W9-001
+        _create_handoff_json(
+            handoff_dir,
+            "0.31.0-W8-001",
+            direction="to-sibling:0.31.0-W9-001",
+            title="Task moved to sibling"
+        )
+
+        # 用目標 Ticket ID 查詢，應該找到這個 handoff
+        result = _find_handoff_file("0.31.0-W9-001", "pending")
+
+        assert result is not None
+        file_path, file_format = result
+        assert file_path.name == "0.31.0-W8-001.json"
+        assert file_format == "json"
+
+    def test_find_by_direction_target_to_parent(self, temp_handoff_env):
+        """測試透過 direction 欄位反向查找目標 Ticket（to-parent）"""
+        project_root, handoff_dir = temp_handoff_env
+
+        # 建立 handoff：來源是 0.31.0-W8-002，目標是 0.31.0-W7-001
+        _create_handoff_json(
+            handoff_dir,
+            "0.31.0-W8-002",
+            direction="to-parent:0.31.0-W7-001",
+            title="Task returned to parent"
+        )
+
+        # 用目標 Ticket ID 查詢，應該找到這個 handoff
+        result = _find_handoff_file("0.31.0-W7-001", "pending")
+
+        assert result is not None
+        file_path, file_format = result
+        assert file_path.name == "0.31.0-W8-002.json"
+        assert file_format == "json"
+
+    def test_find_by_direction_target_to_child(self, temp_handoff_env):
+        """測試透過 direction 欄位反向查找目標 Ticket（to-child）"""
+        project_root, handoff_dir = temp_handoff_env
+
+        # 建立 handoff：來源是 0.31.0-W8-001，目標是 0.31.0-W9-002
+        _create_handoff_json(
+            handoff_dir,
+            "0.31.0-W8-001",
+            direction="to-child:0.31.0-W9-002",
+            title="Task delegated to child"
+        )
+
+        # 用目標 Ticket ID 查詢，應該找到這個 handoff
+        result = _find_handoff_file("0.31.0-W9-002", "pending")
+
+        assert result is not None
+        file_path, file_format = result
+        assert file_path.name == "0.31.0-W8-001.json"
+        assert file_format == "json"
+
+    def test_direct_match_preferred_over_reverse_match(self, temp_handoff_env):
+        """測試直接匹配優先於反向匹配"""
+        project_root, handoff_dir = temp_handoff_env
+
+        # 建立兩個 handoff：
+        # 1. 來源是 0.31.0-W9-001（直接匹配）
+        # 2. 來源是 0.31.0-W8-001，目標是 0.31.0-W9-001（反向匹配）
+        _create_handoff_json(
+            handoff_dir,
+            "0.31.0-W9-001",
+            direction="auto",
+            title="Direct match"
+        )
+        _create_handoff_json(
+            handoff_dir,
+            "0.31.0-W8-001",
+            direction="to-sibling:0.31.0-W9-001",
+            title="Reverse match"
+        )
+
+        # 查詢應該返回直接匹配的 handoff
+        result = _find_handoff_file("0.31.0-W9-001", "pending")
+
+        assert result is not None
+        file_path, _ = result
+        assert file_path.name == "0.31.0-W9-001.json"
+
+    def test_no_reverse_match_in_archive(self, temp_handoff_env):
+        """測試 archive 子目錄不執行反向匹配"""
+        project_root, handoff_dir = temp_handoff_env
+        archive_dir = project_root / ".claude" / "handoff" / "archive"
+
+        # 在 archive 中建立 handoff
+        _create_handoff_json(
+            archive_dir,
+            "0.31.0-W8-001",
+            direction="to-sibling:0.31.0-W9-001",
+            title="Archived task"
+        )
+
+        # 在 archive 中查詢目標 Ticket，不應執行反向匹配
+        result = _find_handoff_file("0.31.0-W9-001", "archive")
+
+        assert result is None
+
 
 class TestPrintFunctions:
     """測試列印輔助函式"""

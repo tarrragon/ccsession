@@ -94,6 +94,10 @@ def _find_handoff_file(ticket_id: str, subdir: str = HANDOFF_PENDING_SUBDIR) -> 
     """
     尋找 handoff 檔案，返回 (路徑, 格式)
 
+    支援兩種查詢方式：
+    1. 直接匹配：尋找以 ticket_id 命名的檔案（來源 ticket）
+    2. 反向匹配（僅 pending）：掃描 direction 欄位，找出指向目標 ticket 的 handoff
+
     Args:
         ticket_id: Ticket ID
         subdir: 子目錄名 ("pending" 或 "archive")
@@ -103,15 +107,32 @@ def _find_handoff_file(ticket_id: str, subdir: str = HANDOFF_PENDING_SUBDIR) -> 
     """
     dir_path = _get_handoff_dir(subdir)
 
-    # 優先檢查 JSON 格式
+    # 優先檢查 JSON 格式（直接匹配）
     json_file = dir_path / f"{ticket_id}.json"
     if json_file.exists():
         return (json_file, "json")
 
-    # 其次檢查 Markdown 格式
+    # 其次檢查 Markdown 格式（直接匹配）
     md_file = dir_path / f"{ticket_id}.md"
     if md_file.exists():
         return (md_file, "markdown")
+
+    # Fallback：僅在 pending 目錄掃描，透過 direction 欄位反向查找
+    # 例：找 0.1.0-W9-001 時，也會找到指向它的 handoff（direction: "to-sibling:0.1.0-W9-001"）
+    if subdir == HANDOFF_PENDING_SUBDIR:
+        for json_candidate in sorted(dir_path.glob("*.json")):
+            try:
+                with open(json_candidate, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                direction = data.get("direction", "")
+                if direction:
+                    # 提取 direction 的目標部分（format: "type:target_id"）
+                    parts = direction.split(":", 1)
+                    if len(parts) > 1 and parts[1] == ticket_id:
+                        return (json_candidate, "json")
+            except (json.JSONDecodeError, IOError):
+                # 略過無法解析的檔案
+                continue
 
     return None
 
