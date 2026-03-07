@@ -946,13 +946,20 @@ def _prompt_select_ticket(tickets: list[Dict[str, Any]]) -> Optional[Dict[str, A
             return None
 
 
+def _execute_gc(args: argparse.Namespace) -> int:
+    """執行 gc 子命令"""
+    from ticket_system.commands.handoff_gc import execute_gc
+    dry_run = getattr(args, "dry_run", False)
+    execute_mode = getattr(args, "execute", False)
+    # 預設為 dry-run（dry_run=True），除非明確指定 --execute
+    return execute_gc(dry_run=(dry_run or not execute_mode))
+
+
 def execute(args: argparse.Namespace) -> int:
     """執行 handoff 命令"""
-    # 檢查 gc 子命令（ticket handoff gc --dry-run / --execute）
-    if getattr(args, "ticket_id", None) == "gc":
-        from ticket_system.commands.handoff_gc import execute_gc
-        dry_run = not getattr(args, "execute", False)
-        return execute_gc(dry_run=dry_run)
+    # 檢查是否為 gc 子命令
+    if getattr(args, "handoff_command", None) == "gc":
+        return _execute_gc(args)
 
     # 檢查 --status 選項
     if getattr(args, "status", False):
@@ -1035,8 +1042,20 @@ def execute(args: argparse.Namespace) -> int:
 
 
 def register(subparsers: argparse._SubParsersAction) -> None:
-    """註冊 handoff 子命令"""
+    """註冊 handoff 主命令及子命令"""
     parser = subparsers.add_parser("handoff", help=HandoffMessages.HELP_TEXT)
+
+    # 建立 handoff 子命令解析器
+    handoff_subparsers = parser.add_subparsers(
+        dest="handoff_command",
+        required=False,
+        help="handoff 子命令"
+    )
+
+    # 註冊 gc 子命令
+    _register_handoff_gc(handoff_subparsers)
+
+    # 註冊主 handoff 命令的參數（用於傳統 handoff）
     parser.add_argument(
         "ticket_id",
         nargs="?",
@@ -1072,14 +1091,23 @@ def register(subparsers: argparse._SubParsersAction) -> None:
         "--version",
         help=HandoffMessages.ARG_VERSION_HELP
     )
-    parser.add_argument(
+    parser.set_defaults(func=execute)
+
+
+def _register_handoff_gc(subparsers: argparse._SubParsersAction) -> None:
+    """註冊 gc 子命令"""
+    gc_parser = subparsers.add_parser("gc", help="清理 stale handoff 檔案")
+
+    # 使用 mutually_exclusive_group 確保只能選一個
+    gc_group = gc_parser.add_mutually_exclusive_group()
+    gc_group.add_argument(
         "--dry-run",
         action="store_true",
-        help="（GC 模式）預覽 stale handoff 清單，不實際刪除"
+        help="預覽 stale handoff 清單，不實際刪除"
     )
-    parser.add_argument(
+    gc_group.add_argument(
         "--execute",
         action="store_true",
-        help="（GC 模式）執行清理，將 stale handoff 移至 archive/"
+        help="執行清理，將 stale handoff 移至 archive/"
     )
-    parser.set_defaults(func=execute)
+    gc_parser.set_defaults(func=execute)
