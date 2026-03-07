@@ -54,7 +54,41 @@ print(f"Ticket {tid} 建立成功")
 
 ---
 
-## 4. 魔法數字消除
+## 4. 常數管理（強制）
+
+> **核心原則**：Python 模組的業務邏輯常數必須集中定義，禁止硬編碼數值或業務字串散落各處。
+
+**常數定義位置**：
+
+| 作用域 | 定義方式 | 範例 |
+|--------|---------|------|
+| 單一模組使用 | 模組頂部常數 | `MAX_RETRIES = 3` |
+| 跨模組共用 | 獨立 `constants.py` 檔案 | `ticket_system/lib/constants.py` |
+| 相關常數群組 | `IntEnum` 或常數類別 | `class Limits(IntEnum)` |
+
+正確做法：
+
+```python
+# constants.py
+MAX_TICKET_TITLE_LENGTH = 200
+DEFAULT_WAVE = 1
+SUPPORTED_STATUS = {"pending", "in_progress", "completed", "blocked"}
+
+# 使用
+if len(title) > MAX_TICKET_TITLE_LENGTH:
+    raise ValueError(...)
+```
+
+錯誤做法：
+
+```python
+if len(title) > 200:  # 魔法數字
+    raise ValueError(...)
+```
+
+---
+
+## 5. 魔法數字消除
 
 Python 特有的處理方式：
 
@@ -66,7 +100,7 @@ Python 特有的處理方式：
 
 ---
 
-## 5. Python 品質檢查清單
+## 6. Python 品質檢查清單
 
 （在通用清單基礎上追加）
 
@@ -74,6 +108,7 @@ Python 特有的處理方式：
 - [ ] 型別標註完整
 - [ ] 公開函式有 docstring
 - [ ] 訊息提取到 Messages 類別，無硬編碼使用者訊息
+- [ ] 業務常數集中在 `constants.py`，無魔法數字
 - [ ] 魔法數字消除（使用 `len()`、`IntEnum` 或具名常數）
 
 ---
@@ -86,4 +121,4 @@ Python 特有的處理方式：
 ---
 
 **Last Updated**: 2026-03-08
-**Version**: 1.0.0 - 從 implementation-quality.md 拆分（W13-007）
+**Version**: 1.1.0 - 新增常數管理章節（parallel-evaluation 審核補充）

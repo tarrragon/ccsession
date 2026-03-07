@@ -692,6 +692,96 @@ decision_tree_path:
 
 ---
 
+## PC-015: command-entrance-gate-hook 未依 current_version 過濾 Ticket，跨版本誤觸發阻斷
+
+**發現日期**: 2026-03-08
+**相關 Ticket**: 0.1.0-W13-008
+
+### 症狀
+
+- 用戶在當前版本（v0.1.0）正常工作，Hook 卻報錯「Ticket {id} 缺少決策樹欄位，為無效 Ticket」
+- 被攔截的 Ticket ID 屬於另一個版本（如 v0.1.1-W1-004），不是當前工作版本
+- 用戶確認當前版本的所有 Ticket 均符合規範，Hook 仍阻斷執行
+- 用戶無法進行任何開發操作
+
+### 根因
+
+`find_ticket_files()` 的 glob 模式 `docs/work-logs/v*/tickets/` 掃描**所有版本**的 Ticket，
+`get_latest_pending_ticket()` 依 mtime 排序取最新的 in_progress Ticket，
+結果取到了新版本（v0.1.1）中 in_progress 但尚未完善的 Ticket。
+
+```python
+# 舊邏輯（不含版本過濾）
+def find_ticket_files(project_root):
+    tickets_dir = project_root / "docs" / "work-logs"
+    return list(tickets_dir.glob("v*/tickets/*.md"))  # 掃描所有 v* 目錄
+
+# 排序後取最新的 → 可能是其他版本的 Ticket
+def get_latest_pending_ticket(tickets):
+    return sorted(tickets, key=lambda x: x.stat().st_mtime)[-1]
+```
+
+**錯誤決策鏈**：
+
+```
+用戶在 v0.1.0 執行開發命令
+    → find_ticket_files() 掃描 v0.1.0/ 和 v0.1.1/
+    → get_latest_pending_ticket() 排序，v0.1.1-W1-004（最近修改）排最前
+    → 驗證 v0.1.1-W1-004 的 decision_tree_path → 缺少
+    → 阻斷執行，報 v0.1.1-W1-004 的錯誤
+    → 用戶 v0.1.0 工作被誤阻斷
+```
+
+### 解決方案
+
+新增 `read_current_version()` 讀取 `docs/todolist.yaml` 的 `current_version`，
+修改 `find_ticket_files()` 優先掃描當前版本目錄，fallback 才掃描所有版本：
+
+```python
+def read_current_version(project_root):
+    """從 todolist.yaml 讀取 current_version，作為版本過濾依據"""
+    todolist_path = project_root / "docs" / "todolist.yaml"
+    if todolist_path.exists():
+        with open(todolist_path) as f:
+            data = yaml.safe_load(f)
+        version = data.get("current_version")
+        if version:
+            return f"v{version}" if not str(version).startswith("v") else str(version)
+    return None
+
+def find_ticket_files(project_root):
+    current_version = read_current_version(project_root)
+    tickets_base = project_root / "docs" / "work-logs"
+    if current_version:
+        version_dir = tickets_base / current_version / "tickets"
+        if version_dir.exists():
+            return list(version_dir.glob("*.md"))  # 優先掃描當前版本
+    # fallback：掃描所有版本（讀取失敗時）
+    return list(tickets_base.glob("v*/tickets/*.md"))
+```
+
+### 預防措施
+
+1. **Hook 版本邊界原則**：掃描 Ticket 的 Hook 必須以 `todolist.yaml current_version` 為版本邊界，不允許跨版本干擾
+2. **Fallback 必須記錄警告**：當無法讀取 current_version 時，fallback 到全版本掃描並輸出警告 log，讓用戶知道版本過濾已失效
+3. **新 Hook 設計清單**：凡涉及「掃描 Ticket 狀態」的 Hook，設計時必須加入以下問題：「是否需要限制在當前版本範圍內？」
+4. **跨版本測試場景**：Hook 的測試案例必須包含「系統同時存在多個版本 Ticket」的情境
+
+### 行為模式分析
+
+此錯誤屬於「缺乏版本邊界意識」模式：
+
+| 設計假設 | 問題 | 修正 |
+|---------|------|------|
+| 只有一個版本的 Ticket | 多版本並存時會掃描到其他版本 | 以 current_version 為邊界 |
+| 最新修改的 Ticket = 當前工作目標 | 其他版本的 Ticket 可能更新 | 先過濾版本，再取最新 |
+| Fallback 到全版本是安全的 | Fallback 會誤觸跨版本干擾 | Fallback 時必須輸出警告 |
+
+> **核心教訓**：Hook 掃描 Ticket 時，`current_version` 是版本邊界的 Source of Truth。
+> 跨版本掃描不是「更完整」，而是「引入干擾」。
+
+---
+
 ## PC-014: Ticket where.files YAML 格式錯誤 + 驗收條件使用通用佔位符
 
 **發現日期**: 2026-03-08

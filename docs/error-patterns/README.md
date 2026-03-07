@@ -4,9 +4,9 @@
 
 | 類別 | 數量 |
 |------|------|
-| 流程合規 (PC) | 10 |
+| 流程合規 (PC) | 15 |
 | 程式碼品質 (CQ) | 3 |
-| **總計** | **13** |
+| **總計** | **18** |
 
 ## 索引
 
@@ -28,7 +28,12 @@
 - [PC-008](./categories/process-compliance.md#pc-008-model-在高-context-下語言一致性偶發失效韓文日文輸出) Model 在高 context 下語言一致性偶發失效（韓文/日文輸出）
 - [PC-009](./categories/process-compliance.md#pc-009-長-session-累積-context-導致認知負擔上升思考品質下降) 長 Session 累積 context 導致認知負擔上升，思考品質下降
 - [PC-010](./categories/process-compliance.md#pc-010-todolists-active-版本提前推進舊版本仍有未完成任務) todolist.yaml active 版本提前推進，舊版本仍有未完成任務
+- [PC-011](./categories/process-compliance.md#pc-011-ticket-track-set-where-誤用不支援的---layer---files-參數) ticket track set-where 誤用不支援的 --layer --files 參數
+- [PC-012](./categories/process-compliance.md#pc-012-agent-派發-prompt-未包含-ticket-id-格式) Agent 派發 prompt 未包含 Ticket ID 格式
+- [PC-013](./categories/process-compliance.md#pc-013-ticket-缺少-decision_tree_path-欄位導致-agent-派發被拒) Ticket 缺少 decision_tree_path 欄位導致 Agent 派發被拒
+- [PC-014](./categories/process-compliance.md#pc-014-ticket-wherefiles-yaml-格式錯誤--驗收條件使用通用佔位符) Ticket where.files YAML 格式錯誤 + 驗收條件使用通用佔位符
+- [PC-015](./categories/process-compliance.md#pc-015-command-entrance-gate-hook-未依-current_version-過濾-ticket跨版本誤觸發阻斷) command-entrance-gate-hook 未依 current_version 過濾 Ticket，跨版本誤觸發阻斷
 
 ---
 
-*最後更新: 2026-03-07（PC-010 新增：active 版本提前推進導致歸屬判斷錯誤）*
+*最後更新: 2026-03-08（PC-015 新增：Hook 跨版本誤觸發；PC-011~014 補錄索引）*
