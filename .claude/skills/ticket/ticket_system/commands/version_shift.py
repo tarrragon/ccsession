@@ -22,6 +22,7 @@ from ticket_system.lib.ticket_loader import (
     load_ticket,
     save_ticket,
 )
+from ticket_system.lib.constants import WORK_LOGS_DIR, TICKETS_DIR
 from ticket_system.lib.parser import parse_frontmatter
 from ticket_system.lib.messages import (
     ErrorMessages,
@@ -70,12 +71,12 @@ def _validate_versions(
         return (True, "SAME_VERSION")
 
     # 驗證 from_version 存在
-    from_dir = project_root / "docs" / "work-logs" / f"v{from_version}"
+    from_dir = project_root / WORK_LOGS_DIR / f"v{from_version}"
     if not from_dir.exists():
         return (False, VersionShiftMessages.ERROR_FROM_VERSION_NOT_EXISTS.format(version=from_version))
 
     # 驗證 to_version 不存在
-    to_dir = project_root / "docs" / "work-logs" / f"v{to_version}"
+    to_dir = project_root / WORK_LOGS_DIR / f"v{to_version}"
     if to_dir.exists():
         return (False, VersionShiftMessages.ERROR_TO_VERSION_EXISTS.format(version=to_version))
 
@@ -98,7 +99,7 @@ def _backup_version_dir(from_version: str, project_root: Path) -> Tuple[bool, Op
     backup_base = project_root / ".claude" / "migration-backups" / timestamp
     backup_base.mkdir(parents=True, exist_ok=True)
 
-    source_dir = project_root / "docs" / "work-logs" / f"v{from_version}"
+    source_dir = project_root / WORK_LOGS_DIR / f"v{from_version}"
     backup_dest = backup_base / f"v{from_version}"
 
     try:
@@ -232,7 +233,7 @@ def _shift_ticket_files(
     Returns:
         (更新計數, 跳過的檔案清單)
     """
-    tickets_dir = project_root / "docs" / "work-logs" / f"v{from_version}" / "tickets"
+    tickets_dir = project_root / WORK_LOGS_DIR / f"v{from_version}" / TICKETS_DIR
 
     if not tickets_dir.exists():
         return (0, [])
@@ -262,7 +263,7 @@ def _find_auxiliary_files(from_version: str, project_root: Path) -> List[Path]:
     Returns:
         附屬檔案路徑清單
     """
-    tickets_dir = project_root / "docs" / "work-logs" / f"v{from_version}" / "tickets"
+    tickets_dir = project_root / WORK_LOGS_DIR / f"v{from_version}" / TICKETS_DIR
 
     if not tickets_dir.exists():
         return []
@@ -302,7 +303,7 @@ def _rename_ticket_files_in_dir(
     Returns:
         重命名的檔案數量
     """
-    tickets_dir = project_root / "docs" / "work-logs" / f"v{from_version}" / "tickets"
+    tickets_dir = project_root / WORK_LOGS_DIR / f"v{from_version}" / TICKETS_DIR
 
     if not tickets_dir.exists():
         return 0
@@ -394,7 +395,7 @@ def _update_cross_version_refs(
     Returns:
         更新的檔案數量
     """
-    work_logs_root = project_root / "docs" / "work-logs"
+    work_logs_root = project_root / WORK_LOGS_DIR
     updated_count = 0
     old_prefix = f"{from_version}-"
 
@@ -434,8 +435,8 @@ def _rename_worklog_dir(from_version: str, to_version: str, project_root: Path) 
     Returns:
         是否成功
     """
-    from_dir = project_root / "docs" / "work-logs" / f"v{from_version}"
-    to_dir = project_root / "docs" / "work-logs" / f"v{to_version}"
+    from_dir = project_root / WORK_LOGS_DIR / f"v{from_version}"
+    to_dir = project_root / WORK_LOGS_DIR / f"v{to_version}"
 
     try:
         from_dir.rename(to_dir)
@@ -566,7 +567,7 @@ def _generate_dry_run_preview(
     lines.append("")
 
     # 掃描 Ticket 和附屬檔案
-    tickets_dir = project_root / "docs" / "work-logs" / f"v{from_version}" / "tickets"
+    tickets_dir = project_root / WORK_LOGS_DIR / f"v{from_version}" / TICKETS_DIR
     if tickets_dir.exists():
         main_tickets = []
         auxiliary_files = []
