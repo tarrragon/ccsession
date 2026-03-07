@@ -103,6 +103,95 @@ def register(subparsers):
 
 ---
 
+## CQ-004: namedtuple/dataclass 早退路徑返回裸型別（AttributeError 潛在 Bug）
+
+**發現日期**: 2026-03-07
+**相關 Ticket**: 0.1.0-W7-004, 0.1.0-W8-001
+
+### 症狀
+
+- 函式宣告返回 `namedtuple`（如 `HandoffListResult`）
+- 但函式中有早退路徑（early return）返回裸型別（如 `[]`）
+- 呼叫端統一以 `result.field` 存取，特定條件（如目錄不存在）時引發 `AttributeError`
+- 問題只在環境缺失（目錄不存在、資源不可用）時才觸發，一般測試難以發現
+
+### 根因
+
+重構函式返回型別時，開發者更新了主要路徑的返回值（namedtuple），但忘記同步更新早期保護性退出（如 `if not dir.exists(): return []`）。因為早退路徑通常簡短且邏輯明確，容易被遺漏。
+
+```python
+# 問題：函式宣告返回 HandoffListResult，但早退路徑返回 []
+def list_pending_handoffs() -> HandoffListResult:
+    pending_dir = _get_handoff_dir(HANDOFF_PENDING_SUBDIR)
+    if not pending_dir.exists():
+        return []  # Bug：型別與宣告不符，呼叫端 result.handoffs 引發 AttributeError
+    ...
+    return HandoffListResult(handoffs=..., stale_count=..., schema_error_count=...)
+```
+
+### 解決方案
+
+所有退出路徑統一返回完整的 namedtuple：
+
+```python
+def list_pending_handoffs() -> HandoffListResult:
+    pending_dir = _get_handoff_dir(HANDOFF_PENDING_SUBDIR)
+    if not pending_dir.exists():
+        return HandoffListResult(handoffs=[], stale_count=0, schema_error_count=0)  # 正確
+    ...
+    return HandoffListResult(handoffs=..., stale_count=..., schema_error_count=...)
+```
+
+### 預防措施
+
+1. 重構函式返回型別後，搜尋函式內所有 `return` 語句，逐一確認型別一致性
+2. 型別標注工具（mypy）可偵測此問題：`mypy --strict` 會報告型別不符的 `return` 語句
+3. 新增測試案例：在目錄不存在的環境下呼叫函式，驗證返回值可用 `.field` 存取
+
+---
+
+## CQ-005: Mock 路徑未隨函式遷移同步更新
+
+**發現日期**: 2026-03-07
+**相關 Ticket**: 0.1.0-W7-001, 0.1.0-W8-001
+
+### 症狀
+
+- 執行測試時出現 `AttributeError: <module> does not have the attribute '_function_name'`
+- `@patch("module.path._function_name")` 中的路徑找不到目標
+- 測試在重構前正常，重構後（函式遷移/重命名）出現失敗
+- 錯誤訊息明確指出缺少屬性，但初看像是模組載入問題
+
+### 根因
+
+W7-001 將 `resume.py` 中的私有函式 `_is_ticket_completed` 遷移至 `lib/handoff_utils.py` 並改名為公開函式 `is_ticket_completed`。`resume.py` 改以 `from handoff_utils import is_ticket_completed` 引入。
+
+測試的 `@patch("ticket_system.commands.resume._is_ticket_completed")` 路徑未隨之更新：
+- 名稱由 `_is_ticket_completed`（私有）改為 `is_ticket_completed`（公開）
+- 正確的 patch 位置是函式使用端（`resume.is_ticket_completed`），不是定義端
+
+```python
+# 問題：patch 舊的私有名稱，但該名稱在遷移後不存在
+@patch("ticket_system.commands.resume._is_ticket_completed")  # AttributeError
+
+# 正確：patch 使用端的名稱（at point of use）
+@patch("ticket_system.commands.resume.is_ticket_completed")   # 正確
+```
+
+### 解決方案
+
+1. 確認函式在目標模組中的實際引入方式（`from X import Y`→ patch 使用端）
+2. 更新 `@patch` 路徑為使用端模組 + 新名稱
+
+### 預防措施
+
+1. 函式遷移（特別是從私有升為公開）後，立即搜尋測試檔案中的相關 `@patch` 路徑
+2. `grep -r "_old_function_name" tests/` 找出需要更新的路徑
+3. 遷移 Ticket 的驗收條件中明確加入「更新相關測試 Mock 路徑」
+4. CI 全量測試才能覆蓋此類問題，本地只跑被修改模組的測試容易遺漏
+
+---
+
 ## CQ-003: Exception 定義後無實際拋出點（設計意圖未實現）
 
 **發現日期**: 2026-03-07
