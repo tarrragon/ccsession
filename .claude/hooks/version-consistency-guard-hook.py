@@ -27,7 +27,7 @@ from pathlib import Path
 from typing import Optional, Tuple, List, Dict
 
 sys.path.insert(0, str(Path(__file__).parent))
-from hook_utils import setup_hook_logging, run_hook_safely, get_project_root
+from hook_utils import setup_hook_logging, run_hook_safely, get_project_root, parse_ticket_frontmatter
 
 
 # ============================================================================
@@ -75,64 +75,6 @@ def version_is_older(version_a: Tuple[int, ...], version_b: Tuple[int, ...]) -> 
 
 
 # ============================================================================
-# Frontmatter parsing
-# ============================================================================
-
-def extract_status_from_ticket(file_path: Path, logger) -> Optional[str]:
-    """Extract status field from Ticket frontmatter.
-
-    Frontmatter format:
-        ---
-        id: 0.1.0-W1-001
-        title: ...
-        status: pending
-        ---
-
-    Args:
-        file_path: Path to Ticket .md file
-        logger: Logger instance
-
-    Returns:
-        Status string (pending/in_progress/completed/blocked), or None if not found
-    """
-    try:
-        content = file_path.read_text(encoding='utf-8')
-
-        # Check if starts with frontmatter
-        if not content.startswith('---'):
-            return None
-
-        # Find second ---
-        end_idx = content.find('---', 3)
-        if end_idx == -1:
-            return None
-
-        # Extract frontmatter text
-        frontmatter_text = content[3:end_idx]
-
-        # Search for status: field
-        for line in frontmatter_text.split('\n'):
-            # Skip indented lines (nested structures) and comments
-            if line.startswith(' ') or line.startswith('\t') or line.startswith('#'):
-                continue
-
-            # Match "status: value"
-            if ':' in line:
-                key, _, value = line.partition(':')
-                key = key.strip()
-                value = value.strip().strip("'\"")
-
-                if key == 'status':
-                    return value if value else None
-
-        return None
-
-    except Exception as e:
-        logger.warning(f"Failed to parse frontmatter from {file_path.name}: {e}")
-        return None
-
-
-# ============================================================================
 # Ticket discovery
 # ============================================================================
 
@@ -158,7 +100,8 @@ def get_incomplete_tickets(version_dir: Path, logger) -> List[Dict[str, str]]:
             # Extract ticket ID from filename (e.g. "0.1.0-W1-001.md" -> "0.1.0-W1-001")
             ticket_id = ticket_file.stem
 
-            status = extract_status_from_ticket(ticket_file, logger)
+            frontmatter = parse_ticket_frontmatter(ticket_file, logger)
+            status = frontmatter.get('status') if frontmatter else None
 
             if status in INCOMPLETE_STATUSES:
                 incomplete.append({
