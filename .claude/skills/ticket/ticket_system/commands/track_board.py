@@ -48,7 +48,7 @@ from ticket_system.lib.ui_constants import (
     SEPARATOR_WIDE,
     SEPARATOR_WIDE_DASH,
 )
-from ticket_system.lib.ticket_ops import extract_wave_from_ticket_id
+from ticket_system.lib.ticket_validator import extract_wave_from_ticket_id
 from typing import Tuple
 
 

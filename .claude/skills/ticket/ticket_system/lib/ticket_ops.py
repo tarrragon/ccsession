@@ -7,7 +7,6 @@ Ticket 操作共用函式模組
 - ticket_ops.py：命令層工具集，結合載入、驗證和錯誤輸出
 """
 
-import re
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
@@ -19,28 +18,6 @@ from ticket_system.lib.messages import (
     ErrorMessages,
     format_error,
 )
-
-
-def extract_wave_from_ticket_id(ticket_id: str) -> Optional[int]:
-    """
-    從 Ticket ID 提取 Wave 號（整數）。
-
-    格式：0.1.0-W9-002 → 9（以 regex 匹配 -W{num}- 模式）
-
-    Args:
-        ticket_id: Ticket ID，格式如 "0.1.0-W9-002"
-
-    Returns:
-        Optional[int]: Wave 號整數；格式不符時返回 None
-
-    Examples:
-        >>> extract_wave_from_ticket_id("0.1.0-W9-002")
-        9
-        >>> extract_wave_from_ticket_id("invalid")
-        None
-    """
-    match = re.search(r'-W(\d+)-', ticket_id or "")
-    return int(match.group(1)) if match else None
 
 
 def resolve_id_from_ref(ref: Any) -> str:

@@ -21,7 +21,10 @@ from ticket_system.lib.ticket_loader import (
     resolve_version,
     get_ticket_path,
 )
-from ticket_system.lib.ticket_validator import validate_ticket_id
+from ticket_system.lib.ticket_validator import (
+    validate_ticket_id,
+    extract_wave_from_ticket_id,
+)
 from ticket_system.lib.messages import (
     ErrorMessages,
     WarningMessages,
@@ -47,7 +50,6 @@ from ticket_system.lib.ticket_builder import (
     create_ticket_body,
     update_parent_children,
 )
-from ticket_system.lib.ticket_ops import extract_wave_from_ticket_id
 from ticket_system.lib.ui_constants import SEPARATOR_PRIMARY
 
 
