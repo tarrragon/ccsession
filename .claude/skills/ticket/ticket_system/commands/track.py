@@ -11,8 +11,6 @@ if __name__ == "__main__":
 
 
 import argparse
-import re
-from typing import Optional
 
 
 def _parse_wave_arg(value: str) -> int:
@@ -29,6 +27,7 @@ from ticket_system.lib.ticket_loader import (
     resolve_version,
     require_version,
 )
+from ticket_system.lib.ticket_ops import extract_version_from_ticket_id
 from ticket_system.lib.messages import (
     ErrorMessages,
     format_error,
@@ -162,37 +161,6 @@ def _create_command_handlers() -> dict:
     }
 
 
-def _extract_version_from_ticket_id(ticket_id: str) -> Optional[str]:
-    """
-    從 Ticket ID 中提取版本號
-
-    Ticket ID 格式: {version}-W{wave}-{seq[.seq...]}
-    例如: 0.1.0-W1-017 → 0.1.0
-         0.1.0-W1-017.1 → 0.1.0
-
-    Args:
-        ticket_id: Ticket ID 字串
-
-    Returns:
-        Optional[str]: 提取的版本號（不含 'v' 前綴），若無法提取則返回 None
-
-    Examples:
-        >>> _extract_version_from_ticket_id("0.1.0-W1-017")
-        '0.1.0'
-        >>> _extract_version_from_ticket_id("0.31.0-W4-001.1")
-        '0.31.0'
-        >>> _extract_version_from_ticket_id("invalid-id")
-        None
-    """
-    # 使用 Ticket ID 正則提取版本號
-    # 正則格式: ^(\d+\.\d+\.\d+)-W(\d+)-(\d+(?:\.\d+)*)$
-    # 第一個捕獲組就是版本號
-    match = re.match(r"^(\d+\.\d+\.\d+)-W(\d+)-(\d+(?:\.\d+)*)$", ticket_id)
-    if match:
-        return match.group(1)
-    return None
-
-
 def execute(args: argparse.Namespace) -> int:
     """執行 track 命令"""
     operation = args.operation
@@ -212,7 +180,7 @@ def execute(args: argparse.Namespace) -> int:
 
     # 如果未明確指定版本，嘗試從 Ticket ID 提取
     if not explicit_version and hasattr(args, 'ticket_id'):
-        extracted_version = _extract_version_from_ticket_id(args.ticket_id)
+        extracted_version = extract_version_from_ticket_id(args.ticket_id)
         if extracted_version:
             version = extracted_version
 

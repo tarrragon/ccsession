@@ -25,6 +25,7 @@ from ticket_system.lib.ticket_loader import (
     load_ticket,
     get_ticket_path,
 )
+from ticket_system.lib.ticket_ops import extract_version_from_ticket_id
 
 
 class TicketConfig(TypedDict, total=False):
@@ -208,11 +209,9 @@ def get_next_child_seq(parent_id: str) -> int:
         - 只有 001.1、001.2 會被計入
     """
     # 從 parent_id 中提取 version（如 0.31.0）
-    parts = parent_id.split("-W")
-    if len(parts) != 2:
+    version = extract_version_from_ticket_id(parent_id)
+    if version is None:
         return 1
-
-    version = parts[0]
 
     parent = load_ticket(version, parent_id)
     if not parent:
