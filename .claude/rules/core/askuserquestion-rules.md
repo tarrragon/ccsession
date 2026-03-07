@@ -270,8 +270,8 @@ question: "{完成摘要}\n\nTicket 已完成。切換到下一個任務嗎？"
 |-----------|--------|--------|--------|
 | 分析完成 | 進入實作（建立 Ticket） | /parallel-evaluation F（結論審查） | 先 commit 再決定 |
 | 規劃完成 | /parallel-evaluation C/G（審核） | 直接進入 TDD Phase 1 | 先 commit 再決定 |
-| Phase 3b 完成 | /parallel-evaluation A（程式碼審查，Recommended）→ 後進 Phase 4 | 直接進入 Phase 4（派發 cinnamon-refactor-owl） | 先 commit 再決定 |
-| Phase 4 + tech-debt 完成 | commit 並查看 Wave 狀態（Recommended） | Handoff，下個 session 繼續 Wave 路由 | 查看所有待處理 Ticket |
+| Phase 3b 完成 | 進入 Phase 4a（/parallel-evaluation B 多視角重構分析，Recommended） | 直接進入 Phase 4b（豁免：<=2 檔案/DOC 類型/認知 < 5） | 先 commit 再決定 |
+| Phase 4c + tech-debt 完成 | commit 並查看 Wave 狀態（Recommended） | Handoff，下個 session 繼續 Wave 路由 | 查看所有待處理 Ticket |
 | incident 分析完成 | /parallel-evaluation F（結論審查） | 直接建立修復 Ticket | 先 commit 再決定 |
 | Wave 完成（有下一 Wave） | 開始 Wave X+1（列出任務） | Handoff 到 Wave X+1 | 先 commit 再決定 |
 | 版本完成（無待處理任務） | /version-release check | 查看 ticket track summary | 延後版本推進 |
@@ -284,8 +284,8 @@ question: "{完成摘要}\n\nTicket 已完成。切換到下一個任務嗎？"
 
 | TDD 階段/事件 | 建議情境 | 視角 |
 |--------------|---------|------|
-| Phase 3b 完成 | A（程式碼審查） | Reuse, Quality, Efficiency |
-| Phase 4 開始前 | B（重構評估） | Redundancy, Coupling, Complexity |
+| Phase 3b 完成（→ Phase 4a） | B（重構評估） | Redundancy, Coupling, Complexity |
+| Phase 4b 完成（→ Phase 4c） | A（程式碼審查） | Reuse, Quality, Efficiency |
 | SA 審查完成 | C（架構評估） | Consistency, Impact, Simplicity |
 | 規則/Skill 變更 | G（系統設計） | Consistency, Completeness, CogLoad |
 | incident 分析 | F（結論審查） | Evidence, Alternatives, Scope |

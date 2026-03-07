@@ -248,7 +248,9 @@ Skill 是預建的專用工具，優先於代理人派發。
 | Phase 2 | sage-test-architect | Phase 1 完成 |
 | Phase 3a | pepper-test-implementer | Phase 2 完成 |
 | Phase 3b | parsley-flutter-developer | Phase 3a 完成 |
-| Phase 4 | cinnamon-refactor-owl | Phase 3b 完成 |
+| Phase 4a | /parallel-evaluation B（多視角重構分析） | Phase 3b 完成（標準流程） |
+| Phase 4b | cinnamon-refactor-owl（依 4a 報告執行） | Phase 4a 完成（或豁免時直接進入） |
+| Phase 4c | /parallel-evaluation A（多視角再審核） | Phase 4b 完成（標準流程） |
 
 > TDD 完整流程：.claude/rules/flows/tdd-flow.md
 
@@ -339,11 +341,18 @@ Skill 是預建的專用工具，優先於代理人派發。
     |   |       Phase 3a→3b: parsley-flutter-developer（Phase 3b 實作）
     |   |
     |   +-- [D2] Phase 3b 完成 → AskUserQuestion #13（Phase 3b 路由確認）
-    |   |       +-- /parallel-evaluation A → 程式碼審查後進 Phase 4（Recommended）
-    |   |       +-- 直接進入 Phase 4（派發 cinnamon-refactor-owl）
+    |   |       +-- 進入 Phase 4a（/parallel-evaluation B 多視角重構分析，Recommended）
+    |   |       +-- 直接進入 Phase 4b（豁免條件：<=2 檔案/DOC 類型/認知 < 5）
     |   |       +-- 先 commit 再決定
     |   |
-    |   +-- [D3] Phase 4 完成 → [強制] /tech-debt-capture
+    |   +-- [D3a] Phase 4a 完成 → 全自動，無分岔
+    |   |         → 直接派發 cinnamon-refactor-owl（Phase 4b 重構執行）
+    |   |
+    |   +-- [D3b] Phase 4b 完成 → 全自動，無分岔
+    |   |         → 直接派發 /parallel-evaluation A（Phase 4c 多視角再審核）
+    |   |         豁免（直接進入 /tech-debt-capture）：<=2 檔案/DOC 類型/認知 < 5
+    |   |
+    |   +-- [D3c] Phase 4c 完成 → [強制] /tech-debt-capture
     |           → 不可跳過，必須優先於 Wave 收尾判斷
     |           → /tech-debt-capture 完成後 AskUserQuestion #13（Phase 4 + tech-debt 路由）
     |           → commit 後回到情境 B/C 評估
@@ -376,8 +385,8 @@ Skill 是預建的專用工具，優先於代理人派發。
     |
     +-- 分析完成 → 實作 or /parallel-evaluation F
     +-- 規劃完成 → /parallel-evaluation C/G or TDD
-    +-- Phase 3b 完成 → /parallel-evaluation A or Phase 4
-    +-- Phase 4 完成 → /tech-debt-capture → 收尾
+    +-- Phase 3b 完成 → Phase 4a（/parallel-evaluation B 多視角重構分析）或直接 Phase 4b（豁免）
+    +-- Phase 4c 完成 → /tech-debt-capture → 收尾
     +-- 規則/Skill 變更 → /parallel-evaluation G
     +-- 無後續 → 場景 3（Wave 收尾）
     |
@@ -403,8 +412,10 @@ Skill 是預建的專用工具，優先於代理人派發。
 - **強制查詢**：`ticket track list --wave W{n} --status pending in_progress`（取得數據後再選路由）
 - **情境 D**（TDD Phase 完成，識別依據：ticket 含 tdd_phase 欄位，**優先於 A/B/C**）：
   - D1（Phase 1/2/3a）→ 全自動直接進入下一 Phase，無 AskUserQuestion
-  - D2（Phase 3b）→ AskUserQuestion #13（/parallel-evaluation A 或直接 Phase 4）
-  - D3（Phase 4）→ [強制] /tech-debt-capture → AskUserQuestion #13（tech-debt 後路由）→ commit 後情境 B/C
+  - D2（Phase 3b）→ AskUserQuestion #13（Phase 4a /parallel-evaluation B 或直接 Phase 4b 豁免）
+  - D3a（Phase 4a）→ 全自動派發 cinnamon-refactor-owl（Phase 4b）
+  - D3b（Phase 4b）→ 全自動派發 /parallel-evaluation A（Phase 4c）；豁免直接進入 /tech-debt-capture
+  - D3c（Phase 4c）→ [強制] /tech-debt-capture → AskUserQuestion #13（tech-debt 後路由）→ commit 後情境 B/C
 - **情境 A**（查詢結果有 in_progress ticket）→ AskUserQuestion #11a（Context 刷新），新 session 繼續同一 ticket
 - **情境 B**（ticket completed + 同 Wave 有 pending 任務）→ AskUserQuestion #11b（任務切換），切換到下一個 ticket
 - **情境 C**（ticket completed + 同 Wave 無待處理任務）→ 再次查詢版本全狀態 → 分為 C1 或 C2
@@ -510,4 +521,4 @@ Level 5: TDD 階段代理人 + thyme-python-developer
 ---
 
 **Last Updated**: 2026-03-07
-**Version**: 7.10.0 - 補充 Handoff 強制動作說明：pending 檔案本地建立，不需 git commit（0.1.0-W9-014）
+**Version**: 7.11.0 - Phase 4 重設計為三步驟（D2/D3a/D3b/D3c）；第五層代理人表更新 Phase 4a/4b/4c（0.1.1-W2-003）
