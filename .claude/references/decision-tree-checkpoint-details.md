@@ -80,7 +80,7 @@
 | 選項 | 說明 |
 |------|------|
 | 進入 Phase 4a（Recommended） | /parallel-evaluation B 多視角重構分析 |
-| 直接進入 Phase 4b | 豁免條件：<=2 檔案 / DOC 類型 / 任務範圍單純 |
+| 直接進入 Phase 4b | 豁免條件：<=2 檔案 / DOC 類型 / 任務範圍單純（單一模組、修改目的明確） |
 | 先 commit 再決定 | 延後決策 |
 
 #### D3a：Phase 4a 完成（全自動）
@@ -91,7 +91,7 @@
 
 直接派發 /parallel-evaluation A（Phase 4c 多視角再審核）。
 
-豁免（可直接進入 /tech-debt-capture）：<=2 檔案 / DOC 類型 / 任務範圍單純。
+豁免（可直接進入 /tech-debt-capture）：<=2 檔案 / DOC 類型 / 任務範圍單純（單一模組、修改目的明確）。
 
 #### D3c：Phase 4c 完成（強制）
 
