@@ -76,7 +76,7 @@ PM 需要用戶做任何決策時（包含多選路由和二元 yes/no 確認）
 | 10 | 開始/收尾確認 | 確認是否開始執行 | 決策樹第負一層 | - |
 | 11 | Commit 後情境感知 Handoff | git commit 後依情境路由（情境 A→11a；情境 B→11b；情境 C1→跳至 #3；情境 C2→跳至 #13，均不經 #11） | 決策樹第八層 | commit-handoff-hook |
 | 12 | 流程省略確認 | 省略意圖偵測 | 決策樹第八層 | process-skip-guard-hook |
-| 13 | 後續任務路由確認 | 任務完成後 | 決策樹第八層 | phase-completion-gate（擴充） |
+| 13 | 後續任務路由確認 | Phase 3b/4b（豁免）/4c 完成、版本完成（C2）、incident 或分析完成後有多個後續路由可選（Phase 1/2/3a 全自動，不觸發） | 決策樹第八層 | phase-completion-gate（擴充） |
 | 14 | parallel-evaluation 觸發確認 | 階段完成後 | 決策樹第八層 | phase-completion-gate（擴充） |
 | 15 | Bulk 變更前備份確認 | 批量修改前 | 決策樹第八層 | parallel-suggestion-hook（擴充） |
 | 16 | 錯誤學習經驗確認 | commit 完成後（#11 之前） | 決策樹第八層 Checkpoint 1.5 | commit-handoff-hook（擴充） |
@@ -144,5 +144,5 @@ PM 需要用戶做任何決策時（包含多選路由和二元 yes/no 確認）
 ---
 
 **Last Updated**: 2026-03-09
-**Version**: 2.9.0 - 澄清 Hook 覆蓋率聲明：#13/#14 為條件式觸發未計入 12/17；修復 #17 說明（與 #1 並存而非互斥）（0.1.0-W22-012）
+**Version**: 3.0.0 - 修正場景 #13 觸發條件過寬（「任務完成後」→限定為 Phase 3b/4b豁免/4c 完成、版本完成等，排除 Phase 1/2/3a 全自動情境）（0.1.0-W22-013）
 **Purpose**: AskUserQuestion 規則唯一 Source of Truth
