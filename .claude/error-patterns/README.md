@@ -120,6 +120,8 @@ Error Patterns 是五重文件系統的核心組件之一，用於：
 | DOC-004 | CLI 命令通配符表示導致 Agent 錯誤類推 | 中 | v0.31.1 |
 | DOC-005 | 新增原則時跨文件未同步更新 | 中 | feat/workflow-improvement |
 | DOC-006 | 規則文件局部更新後，同檔案總覽圖與入口文件未同步 | 中 | 0.1.1 |
+| DOC-007 | append-log section 參數值大小寫不一致 | 低 | v0.1.0 |
+| DOC-008 | 同一文件內定義替換遺漏（局部替換未使用全局 replace） | 中 | v0.1.0 |
 
 ### 架構 (ARCH)
 
