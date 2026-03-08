@@ -10,28 +10,28 @@
 新功能需求
     |
     v
-[Phase 0] SA 前置審查 → [saffron-system-analyst](../agents/saffron-system-analyst.md)
+[Phase 0] SA 前置審查 → [saffron-system-analyst](../../agents/saffron-system-analyst.md)
     |
     +-- 審查通過 --> 進入 TDD 流程
     +-- 審查不通過 --> 補充前置作業 --> 重新審查
     |
     v
-[Phase 1] 功能設計 → [lavender-interface-designer](../agents/lavender-interface-designer.md)
+[Phase 1] 功能設計 → [lavender-interface-designer](../../agents/lavender-interface-designer.md)
     |
     v
-[Phase 2] 測試設計 → [sage-test-architect](../agents/sage-test-architect.md)
+[Phase 2] 測試設計 → [sage-test-architect](../../agents/sage-test-architect.md)
     |
     v
-[Phase 3a] 策略規劃 → [pepper-test-implementer](../agents/pepper-test-implementer.md)
+[Phase 3a] 策略規劃 → [pepper-test-implementer](../../agents/pepper-test-implementer.md)
     |
     v
-[Phase 3b] 實作執行 → [parsley-flutter-developer](../agents/parsley-flutter-developer.md)
+[Phase 3b] 實作執行 → [parsley-flutter-developer](../../agents/parsley-flutter-developer.md)
     |
     v
 [Phase 4a] 多視角分析 → /parallel-evaluation B（Redundancy/Coupling/Complexity）
     |
     v（豁免時直接跳至 Phase 4b）
-[Phase 4b] 重構執行 → [cinnamon-refactor-owl](../agents/cinnamon-refactor-owl.md)
+[Phase 4b] 重構執行 → [cinnamon-refactor-owl](../../agents/cinnamon-refactor-owl.md)
     |
     v（豁免時直接到完成）
 [Phase 4c] 多視角再審核 → /parallel-evaluation A（Reuse/Quality/Efficiency）
