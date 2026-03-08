@@ -299,7 +299,8 @@ Skill 是預建的專用工具，優先於代理人派發。
     |       +-- 標準流程 → 派發 /parallel-evaluation B（Phase 4a）
     |       +-- 豁免（<=2 檔案/DOC/任務範圍單純）→ 直接派發 cinnamon-refactor-owl（4b）
     |   +-- D3a：Phase 4a 完成 → [全自動] 派發 cinnamon-refactor-owl（4b）
-    |   +-- D3b：Phase 4b 完成 → [全自動] 派發 /parallel-evaluation A（4c）
+    |   +-- D3b：Phase 4b 完成（標準）→ [全自動] 派發 /parallel-evaluation A（4c）
+    |            Phase 4b 完成（豁免，同 D2 豁免條件）→ [強制] /tech-debt-capture → AskUserQuestion #13
     |   +-- D3c：Phase 4c 完成 → [強制] /tech-debt-capture → AskUserQuestion #13
     |
     +-- [情境 A] ticket 仍 in_progress → AskUserQuestion #11a（Context 刷新）
@@ -314,6 +315,7 @@ Skill 是預建的專用工具，優先於代理人派發。
     +-- 分析完成 → 實作 or /parallel-evaluation F
     +-- 規劃完成 → /parallel-evaluation C/G or TDD
     +-- Phase 3b 完成 → Phase 4a 或直接 Phase 4b（豁免）
+    +-- Phase 4b 完成（豁免）→ /tech-debt-capture → 收尾
     +-- Phase 4c 完成 → /tech-debt-capture → 收尾
     +-- 規則/Skill 變更 → /parallel-evaluation G
     +-- 無後續 → 場景 3（Wave 收尾）
@@ -335,7 +337,7 @@ Skill 是預建的專用工具，優先於代理人派發。
 | 第七層 Ticket complete | 既有場景 2 → Checkpoint 1 |
 | SA 審查完成 | Checkpoint 3 |
 
-**Checkpoint 2 情境評估規則**：每次 commit 後 PM **必須**先執行強制查詢再評估情境，禁止依賴記憶判斷。情境 D（TDD Phase，識別：ticket 含 tdd_phase 欄位）優先於 A/B/C。D1/D3a/D3b 全自動，D2/D3c 需 AskUserQuestion。
+**Checkpoint 2 情境評估規則**：每次 commit 後 PM **必須**先執行強制查詢再評估情境，禁止依賴記憶判斷。情境 D（TDD Phase，識別：ticket 含 tdd_phase 欄位）優先於 A/B/C。D1/D3a 全自動；D3b 標準流程全自動、豁免路徑強制 /tech-debt-capture；D2/D3c 需 AskUserQuestion。
 
 **Handoff 強制動作**：選擇任何 Handoff 選項後，PM **必須**執行 `/ticket handoff` 建立標準 `pending/*.json` 檔案，**禁止**手動建立 `.claude/handoff/*.md` 交接文件。Handoff 前須執行 `ticket handoff --status` 確認無殘留。
 
@@ -421,4 +423,4 @@ Level 5: TDD 階段代理人 + thyme-python-developer
 ---
 
 **Last Updated**: 2026-03-08
-**Version**: 7.14.0 - 第八層 Checkpoint 詳細流程移至 reference 檔，主檔保留主幹流程圖（0.1.0-W13-003）
+**Version**: 7.15.0 - D3b 補充豁免路徑（→ /tech-debt-capture）+ Checkpoint 3 增加 Phase 4b 豁免路由 + 更新 Checkpoint 2 評估規則（0.1.0-W22-004）
