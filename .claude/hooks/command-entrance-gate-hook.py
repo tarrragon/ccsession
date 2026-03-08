@@ -220,15 +220,27 @@ def is_management_operation(prompt: str, logger) -> bool:
         "不要", "不用",
         # 理解確認
         "了解", "知道了", "收到", "明白", "got it",
-        # 數字選擇
+        # 數字選擇（0-20）
         "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10",
+        "11", "12", "13", "14", "15", "16", "17", "18", "19", "20",
     ]
 
-    # 檢查短回答：長度 <= 15 且完全匹配白名單
+    # 短回答正則模式（長度 <= 15 的特殊格式，需完整匹配整個字串）
+    short_answer_regex_patterns = [
+        r"^\d{1,2}(,\s*\d{1,2})*$",  # 組合多選：如 "2, 4" 或 "1,3,5"
+        r"^phase\s+\d+[a-z]?$",        # Phase 選項標籤：如 "Phase 4a"、"phase 3b"
+        r"^[a-z]$",                     # 單字母選項：如 "a"、"b"
+    ]
+
+    # 檢查短回答：長度 <= 15 且完全匹配白名單或正則模式
     if len(prompt_stripped) <= 15:
         if prompt_stripped.lower() in short_answer_patterns:
             logger.info(f"識別為短回答（白名單）: {prompt}")
             return True
+        for pattern in short_answer_regex_patterns:
+            if re.match(pattern, prompt_stripped.lower()):
+                logger.info(f"識別為短回答（正則模式 {pattern}）: {prompt}")
+                return True
 
     # Ticket 管理相關模式
     ticket_patterns = [
