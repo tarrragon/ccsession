@@ -818,6 +818,39 @@ PM 必須使用 AskUserQuestion 確認：
     # Checkpoint 1/1.5 強制提醒：ticket complete 成功後（PostToolUse）
     # ========================================================================
 
+    # ========================================================================
+    # 場景 17: 錯誤學習經驗確認（ticket complete 時）
+    # ========================================================================
+
+    ERROR_PATTERN_REMINDER = """============================================================
+[AskUserQuestion 強制提醒] 錯誤學習經驗確認（場景 #17）
+============================================================
+
+偵測到本 Ticket 執行期間有新增或修改的 error-pattern：
+
+{file_list}
+
+根據專案規範（ticket-lifecycle.md v5.2.0），此時應確認
+是否需要建立改進 Ticket 來解決這些已識別的問題。
+
+PM 必須使用 AskUserQuestion 選擇下一步：
+
+1. 建立改進 Ticket（Recommended）
+   - 為新增/修改的 error-pattern 建立修復或防護 Ticket
+   - 後續版本排程解決
+
+2. 已有對應 Ticket
+   - error-pattern 相關修復已在現有 Ticket 中
+   - 可跳過建立新 Ticket
+
+3. 延後處理
+   - 記錄到 todolist.yaml，後續版本排程
+   - 但建議至少建立 Ticket 追蹤
+
+提示: ToolSearch("select:AskUserQuestion") 載入後使用。
+詳見: .claude/rules/flows/ticket-lifecycle.md（場景 #17）
+============================================================"""
+
     POST_TICKET_COMPLETE_CHECKPOINT_REMINDER = """============================================================
 [強制提醒] Checkpoint 1/1.5/2 — ticket complete 後必須執行
 ============================================================

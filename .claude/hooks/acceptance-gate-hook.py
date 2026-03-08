@@ -407,10 +407,134 @@ def is_doc_type(ticket_type: Optional[str]) -> bool:
 
 
 # ============================================================================
+# Error Pattern 檢查
+# ============================================================================
+
+def get_ticket_created_time(ticket_file: Path, logger) -> Optional[datetime]:
+    """
+    從 Ticket frontmatter 讀取 created 欄位並解析為 datetime
+
+    Args:
+        ticket_file: Ticket MD 檔案路徑
+        logger: 日誌物件
+
+    Returns:
+        datetime 物件或 None（無法解析時）
+    """
+    try:
+        content = ticket_file.read_text(encoding="utf-8")
+        frontmatter = parse_ticket_frontmatter(content)
+
+        # 取得 created 欄位值
+        created_str = frontmatter.get("created", "").strip()
+        if not created_str:
+            logger.warning(f"Ticket frontmatter 缺少 created 欄位")
+            return None
+
+        # 嘗試多種格式解析日期
+        # 優先級 1: ISO 8601 (datetime.fromisoformat)
+        try:
+            dt = datetime.fromisoformat(created_str)
+            logger.info(f"Ticket created at: {dt.isoformat()}")
+            return dt
+        except ValueError:
+            pass
+
+        # 優先級 2: 簡單日期 YYYY-MM-DD (strptime)
+        try:
+            dt = datetime.strptime(created_str, "%Y-%m-%d")
+            logger.info(f"Ticket created at: {dt.isoformat()}")
+            return dt
+        except ValueError:
+            pass
+
+        # 優先級 3: RFC 3339 變體 (時間 + Z 或時區)
+        try:
+            # 移除時區後進行解析
+            if "+" in created_str or "Z" in created_str.upper():
+                # 移除時區資訊
+                dt_str = created_str.replace("Z", "").split("+")[0].split("-")
+                if len(dt_str) > 1:
+                    dt_str = "-".join(dt_str[:3])  # 保留日期和時間部分
+                else:
+                    dt_str = created_str.replace("Z", "")
+                dt = datetime.fromisoformat(dt_str)
+            else:
+                # 直接解析
+                dt = datetime.fromisoformat(created_str)
+            logger.info(f"Ticket created at: {dt.isoformat()}")
+            return dt
+        except (ValueError, TypeError):
+            pass
+
+        # 所有格式都失敗
+        logger.warning(f"無法解析 created 欄位: {created_str}")
+        return None
+
+    except Exception as e:
+        logger.warning(f"讀取 ticket created 時間失敗: {e}")
+        return None
+
+
+def check_error_patterns_changed(
+    project_root: Path,
+    ticket_created: datetime,
+    logger
+) -> Tuple[bool, List[str]]:
+    """
+    掃描 .claude/error-patterns/ 目錄，找出所有 mtime > ticket_created 的 .md 檔案
+
+    Args:
+        project_root: 專案根目錄
+        ticket_created: Ticket 建立時間
+        logger: 日誌物件
+
+    Returns:
+        tuple - (has_changed, file_list)
+            - has_changed: 是否有新增/修改的 error-pattern
+            - file_list: 新增/修改的檔案相對路徑清單
+    """
+    # 前置檢查
+    if ticket_created is None:
+        logger.warning("ticket created time 為 None，跳過檢查")
+        return False, []
+
+    # 檢查目錄是否存在
+    error_patterns_dir = project_root / ".claude" / "error-patterns"
+    if not error_patterns_dir.exists():
+        logger.info("error-patterns 目錄不存在，跳過檢查")
+        return False, []
+
+    changed_files = []
+    ticket_created_timestamp = ticket_created.timestamp()
+
+    try:
+        # 遞迴掃描所有 .md 檔案
+        for file_path in error_patterns_dir.rglob("*.md"):
+            try:
+                file_mtime = file_path.stat().st_mtime
+                if file_mtime > ticket_created_timestamp:
+                    relative_path = file_path.relative_to(project_root)
+                    changed_files.append(str(relative_path))
+                    logger.debug(f"找到新增檔案: {relative_path}")
+            except (OSError, PermissionError) as e:
+                logger.warning(f"無法讀取檔案 stat: {file_path}: {e}")
+                continue
+
+    except (OSError, PermissionError) as e:
+        logger.warning(f"讀取 error-patterns 目錄失敗: {e}")
+        return False, []
+
+    logger.info(f"掃描 error-patterns 目錄完成：發現 {len(changed_files)} 個新增/修改檔案")
+    has_changed = len(changed_files) > 0
+    return has_changed, changed_files
+
+
+# ============================================================================
 # 檢查邏輯
 # ============================================================================
 
-def check_acceptance_status(ticket_id: str, project_dir: Path, logger) -> Tuple[bool, bool, Optional[str]]:
+def check_acceptance_status(ticket_id: str, project_dir: Path, logger) -> Tuple[bool, bool, Optional[str], bool, List[str]]:
     """
     檢查 Ticket 的驗收狀態
 
@@ -420,17 +544,19 @@ def check_acceptance_status(ticket_id: str, project_dir: Path, logger) -> Tuple[
         logger: 日誌物件
 
     Returns:
-        tuple - (should_block, has_acceptance, message)
+        tuple - (should_block, has_acceptance, message, has_new_error_patterns, new_error_pattern_files)
             - should_block: 是否應該阻擋執行（子任務未完成）
             - has_acceptance: 是否有驗收記錄
             - message: 錯誤或警告訊息
+            - has_new_error_patterns: 是否有新增/修改的 error-pattern
+            - new_error_pattern_files: 新增/修改的 error-pattern 檔案清單
     """
     # 找到 Ticket 檔案
     ticket_file = find_ticket_file(ticket_id, project_dir, logger)
 
     if not ticket_file:
         logger.error(f"找不到 Ticket 檔案: {ticket_id}")
-        return False, False, None
+        return False, False, None, False, []
 
     try:
         content = ticket_file.read_text(encoding="utf-8")
@@ -461,7 +587,7 @@ def check_acceptance_status(ticket_id: str, project_dir: Path, logger) -> Tuple[
                 )
 
                 logger.error(f"Ticket {ticket_id} 有未完成的子任務 - 阻擋執行")
-                return True, False, error_msg
+                return True, False, error_msg, False, []
 
             logger.info(f"Ticket {ticket_id} 所有子任務已完成")
 
@@ -484,14 +610,37 @@ def check_acceptance_status(ticket_id: str, project_dir: Path, logger) -> Tuple[
             )
 
             logger.warning(f"Ticket {ticket_id} 未找到驗收記錄 - 輸出警告")
-            return False, False, warning_msg
+            return False, False, warning_msg, False, []
 
         logger.info(f"Ticket {ticket_id} 驗收檢查通過")
-        return False, has_acceptance, None
+
+        # [新增步驟 6.5] 檢查是否有新增 error-pattern
+        has_new_error_patterns = False
+        new_error_pattern_files = []
+
+        # 僅在不阻擋且需要檢查的情況下執行
+        if not False and should_check_acceptance:  # should_block 為 False（驗收已通過）
+            # 取得 ticket 建立時間
+            ticket_created = get_ticket_created_time(ticket_file, logger)
+
+            if ticket_created:
+                # 檢查 error-patterns 目錄
+                has_new_error_patterns, new_error_pattern_files = check_error_patterns_changed(
+                    project_dir,
+                    ticket_created,
+                    logger
+                )
+
+                if has_new_error_patterns:
+                    logger.info(f"發現 {len(new_error_pattern_files)} 個新增/修改的 error-pattern")
+            else:
+                logger.warning(f"無法取得 ticket {ticket_id} 的建立時間，跳過 error-pattern 檢查")
+
+        return False, has_acceptance, None, has_new_error_patterns, new_error_pattern_files
 
     except Exception as e:
         logger.error(f"檢查驗收狀態失敗: {e}", exc_info=True)
-        return False, False, None
+        return False, False, None, False, []
 
 
 # ============================================================================
@@ -502,7 +651,9 @@ def generate_hook_output(
     should_block: bool,
     message: Optional[str],
     ask_user_reminder: bool = False,
-    next_step_reminder: bool = False
+    next_step_reminder: bool = False,
+    has_new_error_patterns: bool = False,
+    new_error_pattern_files: Optional[List[str]] = None
 ) -> Dict[str, Any]:
     """
     生成 Hook 輸出
@@ -512,6 +663,8 @@ def generate_hook_output(
         message: 錯誤或警告訊息
         ask_user_reminder: 是否追加 complete 流程提醒（驗收方式）
         next_step_reminder: 是否追加 complete 後下一步提醒（場景 #2）
+        has_new_error_patterns: 是否有新增/修改的 error-pattern
+        new_error_pattern_files: 新增/修改的 error-pattern 檔案清單
 
     Returns:
         dict - Hook 輸出 JSON
@@ -529,12 +682,20 @@ def generate_hook_output(
     if message:
         context_parts.append(message)
 
-    # 第二優先級：complete 流程提醒（驗收方式，場景 #1）
-    if ask_user_reminder:
+    # [新增] 第二優先級：error-pattern 場景 #17 提醒（僅在無訊息時）
+    if has_new_error_patterns and not message:
+        file_list_formatted = "\n".join(f"  - {f}" for f in (new_error_pattern_files or []))
+        reminder_msg = AskUserQuestionMessages.ERROR_PATTERN_REMINDER.format(
+            file_list=file_list_formatted
+        )
+        context_parts.append(reminder_msg)
+
+    # 第三優先級（原第二）：complete 流程提醒（驗收方式，場景 #1）
+    if ask_user_reminder and not message:
         context_parts.append(AskUserQuestionMessages.COMPLETE_REMINDER)
 
-    # 第三優先級：complete 後下一步提醒（路由選擇，場景 #2，僅在無訊息時追加）
-    if next_step_reminder and not message:
+    # 第四優先級（原第三）：complete 後下一步提醒（路由選擇，場景 #2，僅在無訊息且無 error-pattern 時追加）
+    if next_step_reminder and not message and not has_new_error_patterns:
         context_parts.append(AskUserQuestionMessages.COMPLETE_NEXT_STEP_REMINDER)
 
     if context_parts:
@@ -654,8 +815,13 @@ def main() -> int:
         import os
         project_dir = Path(os.getenv("CLAUDE_PROJECT_DIR", Path.cwd()))
 
-        should_block, has_acceptance, message = check_acceptance_status(ticket_id, project_dir, logger)
-        logger.info(f"驗收狀態檢查: should_block={should_block}, has_acceptance={has_acceptance}")
+        should_block, has_acceptance, message, has_new_error_patterns, new_error_pattern_files = check_acceptance_status(ticket_id, project_dir, logger)
+        logger.info(
+            f"驗收狀態檢查: "
+            f"should_block={should_block}, "
+            f"has_acceptance={has_acceptance}, "
+            f"has_new_error_patterns={has_new_error_patterns}"
+        )
 
         # 步驟 7: 決定是否追加下一步提醒
         # 場景 #1（complete 前）：驗收方式確認
@@ -669,7 +835,9 @@ def main() -> int:
             should_block,
             message,
             ask_user_reminder=True,
-            next_step_reminder=next_step_prompt
+            next_step_reminder=next_step_prompt,
+            has_new_error_patterns=has_new_error_patterns,
+            new_error_pattern_files=new_error_pattern_files
         )
         print(json.dumps(output, ensure_ascii=False, indent=2))
 
