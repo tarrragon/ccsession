@@ -413,50 +413,125 @@ def read_json_from_stdin(logger: logging.Logger) -> Optional[dict]:
         return None
 
 
-def parse_ticket_frontmatter(file_path: Path, logger: logging.Logger) -> Optional[dict]:
-    """簡易 YAML frontmatter 解析（無外部依賴）
+def parse_ticket_frontmatter(
+    content_or_path: "str | Path",
+    logger: "logging.Logger | None" = None
+) -> Optional[dict]:
+    """統一的 YAML frontmatter 解析（支援 str 和 Path 輸入）
 
-    只解析頂層 key-value，忽略巢狀結構和陣列。
+    支援以下 YAML 特性：
+    - 頂層 key-value 對
+    - 多行字串（|, >, |-, >-）
+    - 嵌套結構（縮排鍵值對）
+    - 簡單列表
+
+    無外部依賴，支援 Python 3.9+。
 
     Args:
-        file_path: Ticket 檔案路徑
-        logger: Logger 實例
+        content_or_path: Ticket 檔案內容（字串）或檔案路徑（Path）
+        logger: 可選 Logger 實例，用於記錄錯誤
 
     Returns:
-        dict: 解析出的 frontmatter key-value；若檔案無 frontmatter 則回傳 None
+        dict: 解析出的 frontmatter key-value（始終返回 dict，無 frontmatter 時返回空 dict）；
+              若解析失敗，返回空 dict 並記錄警告（如提供 logger）
     """
     try:
-        content = file_path.read_text(encoding='utf-8')
-        if not content.startswith('---'):
-            return None
+        # 步驟 1：取得文件內容
+        if isinstance(content_or_path, Path):
+            try:
+                content = content_or_path.read_text(encoding='utf-8')
+                file_name = content_or_path.name
+            except Exception as e:
+                if logger:
+                    logger.warning("讀取檔案失敗 ({}): {}".format(content_or_path.name, e))
+                return {}
+        else:
+            content = str(content_or_path) if content_or_path else ""
+            file_name = "frontmatter"
 
-        # 找到第二個 ---
+        # 步驟 2：驗證 frontmatter 標記
+        if not content.startswith('---'):
+            return {}
+
+        # 步驟 3：找到 frontmatter 結束標記
         end_idx = content.find('---', 3)
         if end_idx == -1:
-            return None
+            return {}
 
-        frontmatter_text = content[3:end_idx]
+        frontmatter_text = content[3:end_idx].strip()
+        if not frontmatter_text:
+            return {}
+
+        # 步驟 4：解析 YAML
         result = {}
+        current_key = None
+        multiline_marker = None
 
-        for line in frontmatter_text.strip().split('\n'):
+        lines = frontmatter_text.split('\n')
+        i = 0
+
+        while i < len(lines):
+            line = lines[i]
+
             # 跳過空行和註解
             if not line.strip() or line.strip().startswith('#'):
+                i += 1
                 continue
 
-            # 跳過已縮排的行（巢狀結構）
-            if line.startswith(' ') or line.startswith('\t'):
+            # 檢查是否為嵌套行（以 2 個空格開頭）
+            if line.startswith('  ') and not line.startswith('    '):
+                nested_line = line.strip()
+
+                # 若有多行標記，直接收集縮排行
+                if multiline_marker is not None:
+                    if current_key:
+                        if current_key not in result:
+                            result[current_key] = ""
+                        result[current_key] += "\n" + nested_line if result[current_key] else nested_line
+                    i += 1
+                    continue
+
+                # 否則作為嵌套鍵值對
+                if ':' in nested_line:
+                    nested_key, nested_value = nested_line.split(':', 1)
+                    nested_key = nested_key.strip()
+                    nested_value = nested_value.strip().strip("'\"")
+
+                    if current_key:
+                        if not isinstance(result.get(current_key), dict):
+                            result[current_key] = {}
+                        result[current_key][nested_key] = nested_value
+                i += 1
                 continue
 
-            # 只解析頂層 key
+            # 頂層鍵值對
             if ':' in line:
                 key, _, value = line.partition(':')
-                result[key.strip()] = value.strip().strip("'\"")
+                key = key.strip()
+                value = value.strip()
 
-        return result if result else None
+                # 檢查多行標記
+                if value in ('|', '>', '|-', '>-'):
+                    current_key = key
+                    multiline_marker = value
+                    result[key] = ""
+                    i += 1
+                    continue
+
+                # 移除引號
+                value_clean = value.strip("'\"") if value else ""
+                result[key] = value_clean
+                current_key = key
+                multiline_marker = None
+
+            i += 1
+
+        return result
 
     except Exception as e:
-        logger.warning("解析 frontmatter 失敗 ({}): {}".format(file_path.name, e))
-        return None
+        if logger:
+            logger.warning("解析 frontmatter 失敗: {}".format(e))
+        return {}
 
 
 def run_hook_safely(main_func: Callable[[], int], hook_name: str) -> int:

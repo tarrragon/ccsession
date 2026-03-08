@@ -48,7 +48,7 @@ _hooks_dir = Path(__file__).parent
 if _hooks_dir not in [p for p in sys.path if Path(p) == _hooks_dir]:
     sys.path.insert(0, str(_hooks_dir))
 
-from hook_utils import setup_hook_logging, run_hook_safely, read_json_from_stdin
+from hook_utils import setup_hook_logging, run_hook_safely, read_json_from_stdin, parse_ticket_frontmatter
 from lib.hook_messages import GateMessages, CoreMessages, AskUserQuestionMessages, format_message
 
 import re
@@ -188,67 +188,6 @@ def find_ticket_file(ticket_id: str, project_dir: Path, logger) -> Optional[Path
     return None
 
 
-def parse_ticket_frontmatter(content: str) -> Dict[str, str]:
-    """
-    解析 Ticket YAML frontmatter
-
-    Args:
-        content: Ticket 檔案內容
-
-    Returns:
-        dict - frontmatter 鍵值對
-    """
-    frontmatter = {}
-
-    if not content.startswith("---"):
-        return frontmatter
-
-    # 找到 frontmatter 結尾
-    end_marker = content.find("---", 3)
-    if end_marker == -1:
-        return frontmatter
-
-    frontmatter_text = content[3:end_marker]
-
-    # 簡單的 YAML 解析（只針對我們需要的欄位）
-    lines = frontmatter_text.split("\n")
-    i = 0
-    while i < len(lines):
-        line = lines[i]
-        if ":" in line and not line.startswith("#"):
-            key, value = line.split(":", 1)
-            key = key.strip()
-            value = value.strip()
-
-            # 處理多行 YAML 字符串 (e.g., "children: |")
-            if value in ["|", ">", "|-", ">-"] or value == "":
-                # 收集下面的縮排行
-                multiline_value = []
-                i += 1
-                while i < len(lines):
-                    next_line = lines[i]
-                    # 如果行以 2+ 個空格開頭，則屬於多行值
-                    if next_line.startswith("  ") and next_line.strip():
-                        multiline_value.append(next_line.strip())
-                        i += 1
-                    elif not next_line.strip():
-                        # 空行
-                        i += 1
-                        break
-                    else:
-                        # 新的 key-value 對
-                        break
-
-                if multiline_value:
-                    frontmatter[key] = "\n".join(multiline_value)
-                else:
-                    frontmatter[key] = value
-            else:
-                frontmatter[key] = value
-
-        i += 1
-
-    return frontmatter
 
 
 # ============================================================================
