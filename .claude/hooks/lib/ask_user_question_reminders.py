@@ -138,8 +138,8 @@ PM 必須使用 AskUserQuestion 確認收尾動作。
 
 [第一步 - 強制] AskUserQuestion #16（錯誤學習確認）：
   → ToolSearch("select:AskUserQuestion") 載入後使用
-  → 選項：無需記錄 (Recommended) / 記錄錯誤學習 / 稍後記錄
-  → 選擇「記錄」→ /error-pattern add → 重新確認 #16 直到選擇「無需記錄」或「稍後記錄」
+  → 選項：無需記錄 (Recommended) / 記錄錯誤學習
+  → 選擇「記錄」→ /error-pattern add → 重新確認 #16 直到選擇「無需記錄」
 
 [第二步 - 強制] 執行查詢：
   ticket track list --wave {n} --status pending
@@ -165,6 +165,36 @@ PM 必須使用 AskUserQuestion 確認收尾動作。
   3. Handoff 必須是第一選項且標記 (Recommended)，繼續在此 session 為次選
 
 詳見: .claude/rules/core/askuserquestion-rules.md（場景 11/16 共通規則）
+============================================================"""
+
+    COMMIT_HANDOFF_SKIP16_REMINDER = """============================================================
+[AskUserQuestion 強制提醒] Commit 後情境感知路由（已跳過 #16）
+============================================================
+
+偵測到 git commit 成功完成。
+commit 類型為文件/格式/維護類（docs/chore/style/revert/test/ci/build），自動跳過場景 #16。
+
+[核心原則 - PC-009]：
+  Handoff first，繼續 session 是例外，不是預設。
+
+[第一步 - 強制] 執行查詢：
+  ticket track list --wave {n} --status pending
+  （{n} 為當前 Wave 編號）
+
+[第二步] 根據查詢結果 AskUserQuestion #11：
+  有 in_progress ticket → 情境 A，使用 AskUserQuestion #11a
+  有 pending ticket     → 情境 B，使用 AskUserQuestion #11b
+  皆無（Wave 完成）     → 情境 C，再執行：
+    ticket track list --status pending
+    → 有其他 Wave pending → #3a（Wave 收尾）
+    → 無任何 pending    → #3b（/version-release check）
+
+[AskUserQuestion 共通規則]：
+  1. question 中必須包含本次 session 的完成摘要（已完成項目 + commit hash）
+  2. 選項中必須包含「/clear 結束 session」（清空對話，不建立 handoff）
+  3. Handoff 必須是第一選項且標記 (Recommended)，繼續在此 session 為次選
+
+詳見: .claude/rules/core/askuserquestion-rules.md（場景 11）
 ============================================================"""
 
     # ========================================================================
