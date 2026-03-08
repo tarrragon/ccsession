@@ -53,11 +53,21 @@ ticket track complete <id>
               → 情境 C（無 pending）→ 查全版本 → AskUserQuestion #3a 或 #13
 ```
 
+## 根本原因（W15-010 三層分析）
+
+**第一層（設計邊界）**：`COMPLETE_NEXT_STEP_REMINDER` 在 PreToolUse 觸發，與驗收確認混合，PM 注意力在「能否 complete」，對後續提醒注意力低。
+
+**第二層（使用情境）**：`ticket track complete` 成功後無 PostToolUse hook，PM 看到「已完成」訊息後認知上產生完成感，容易停止。
+
+**第三層（說明充分性）**：決策樹第八層規則詳細，但 Checkpoint 1/1.5 缺少執行點的強制提醒，規則與 Hook 觸發點解耦。
+
 ## 預防措施
 
 1. **記憶點**：`ticket track complete` 完成後，下一步永遠是 Checkpoint 1（git status），不是結束。
 2. **觸發詞**：看到 CLI 輸出「已完成」時，立即問自己：「Checkpoint 1 做了嗎？」
-3. **Hook 強化**（建議建立 Ticket）：在 `acceptance-gate-hook` 的完成提示輸出中，加入 Checkpoint 流程提示。
+3. **Hook 強化**（已建立 Ticket）：
+   - 0.1.0-W15-011：新增 `post-ticket-complete-checkpoint-hook`（PostToolUse），在 complete 成功後強制輸出 Checkpoint 1/1.5 提醒
+   - 0.1.0-W15-012：調整 `commit-handoff-hook` 將 AskUserQuestion #16 移到強制流程第一動作項目
 
 ## 相關錯誤模式
 
