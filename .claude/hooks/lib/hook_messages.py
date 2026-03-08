@@ -683,15 +683,16 @@ PM 必須使用 AskUserQuestion 確認收尾動作。
   Handoff first，繼續 session 是例外，不是預設。
   Context 是有限資源，每次 Ticket 完成後 handoff 能保護下一個任務的思考品質。
 
-[錯誤學習檢查]：
-  commit 完成後，先執行 AskUserQuestion #16（錯誤學習經驗確認），再進入 #11（Handoff 路由）。
-  #16 選項：無需記錄 (Recommended) / 記錄錯誤學習經驗 / 稍後記錄
+[第一步 - 強制] AskUserQuestion #16（錯誤學習確認）：
+  → ToolSearch("select:AskUserQuestion") 載入後使用
+  → 選項：無需記錄 (Recommended) / 記錄錯誤學習 / 稍後記錄
+  → 選擇「記錄」→ /error-pattern add → 重新確認 #16 直到選擇「無需記錄」或「稍後記錄」
 
-[必須先執行的查詢]：
+[第二步 - 強制] 執行查詢：
   ticket track list --wave {n} --status pending
   （{n} 為當前 Wave 編號，例如 30）
 
-[根據查詢結果選擇路由]：
+[第三步] 根據查詢結果 AskUserQuestion #11：
   有 in_progress ticket → 情境 A，使用 AskUserQuestion #11a
   有 pending ticket     → 情境 B，使用 AskUserQuestion #11b
   皆無（Wave 完成）     → 情境 C，再執行：
@@ -710,7 +711,6 @@ PM 必須使用 AskUserQuestion 確認收尾動作。
   2. 選項中必須包含「/clear 結束 session」（清空對話，不建立 handoff）
   3. Handoff 必須是第一選項且標記 (Recommended)，繼續在此 session 為次選
 
-提示: ToolSearch("select:AskUserQuestion") 載入後使用。
 詳見: .claude/rules/core/askuserquestion-rules.md（場景 11/16 共通規則）
 ============================================================"""
 

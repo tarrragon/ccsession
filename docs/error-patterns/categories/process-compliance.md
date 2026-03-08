@@ -827,3 +827,60 @@ acceptance:
   - 新建/修改的函式名稱
   - 具體的測試指令
   - 可外部觀察的行為變化
+
+---
+
+## PC-016: ticket complete 後未主動跟進 Checkpoint 流程，等待用戶詢問才反應
+
+**發現日期**: 2026-03-08
+**相關 Ticket**: 0.1.0-W15-012 執行後
+
+### 症狀
+
+- `ticket track complete` 成功後，`post-ticket-complete-checkpoint-hook` 輸出了 Checkpoint 1/1.5 強制提醒
+- PM 在 Hook 提醒輸出後直接結束回應，未執行任何 Checkpoint 步驟
+- 用戶需要主動詢問「下一個任務是什麼？」PM 才反應
+- 同 Wave 有 pending ticket（W15-013）但 PM 未主動發現並路由
+
+### 根因
+
+1. **提醒可見但未執行**：post-ticket-complete-checkpoint-hook 的輸出（Checkpoint 1/1.5）出現在 tool result 中，但 PM 的注意力在「ticket complete 成功」這個訊號，未繼續讀取後續的 Hook 提醒
+2. **回應終止點錯誤**：PM 將「Ticket 完成摘要」視為回應的終點，而非「開始 Checkpoint 流程」的起點
+3. **缺乏主動路由意識**：即使不考慮 Hook 提醒，Ticket complete 後 PM 應自動查詢同 Wave pending 狀態並路由，而非被動等待用戶
+
+### 解決方案
+
+`ticket track complete` 成功後，PM 必須主動執行以下流程（不等待用戶詢問）：
+
+```
+ticket track complete 成功
+    ↓
+[Checkpoint 1] git status
+    → 有未提交變更 → 執行 /commit-as-prompt
+    → 無未提交變更 → 進入 Checkpoint 1.5
+    ↓
+[Checkpoint 1.5] AskUserQuestion #16（錯誤學習確認）
+    → 完成後進入 Checkpoint 2
+    ↓
+[Checkpoint 2] commit 後由 commit-handoff-hook 自動觸發
+    → 若無 commit：直接查詢 ticket track list --wave {n} --status pending
+    → 根據查詢結果路由（AskUserQuestion #11a/11b/3a）
+```
+
+### 預防措施
+
+1. **Ticket complete 回應不是終點**：每次 `ticket track complete` 後，PM 的下一句話必須是「執行 git status」或「AskUserQuestion #16」，不能是「任務摘要 + 等待」
+2. **Hook 提醒必須立即跟進**：Hook 在 tool result 中輸出的強制提醒（如 Checkpoint 1/1.5），PM 必須在下一輪立即執行，不可跳過
+3. **同 Wave 路由是 PM 職責**：Ticket 完成後 PM 應主動查詢同 Wave pending 任務，不應等待用戶詢問「下一個任務」
+
+### 行為模式分析
+
+此錯誤屬於「提醒可見但注意力漂移」模式：
+
+| 步驟 | 錯誤行為 | 正確行為 |
+|------|---------|---------|
+| ticket complete 成功 | 給出完成摘要，等待用戶 | 立即執行 git status（Checkpoint 1） |
+| Hook 提醒輸出 | 閱讀但未執行 | 下一輪立即執行 Checkpoint 步驟 |
+| 同 Wave 路由 | 等待用戶詢問 | 主動查詢 pending 並 AskUserQuestion #11 |
+
+> **核心教訓**：`ticket track complete` 是流程的中間點，不是終點。完成提醒 ≠ 任務結束，Checkpoint 1/1.5/2 才是真正的結束流程。
