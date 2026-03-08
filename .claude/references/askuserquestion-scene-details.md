@@ -8,12 +8,25 @@
 
 **觸發**：`ticket track complete` 命令
 
-**驗收方式確認選項**：
+### #1 自動決定規則（減少觸發）
+
+acceptance-gate-hook 讀取 Ticket 的 `type` 和 `priority` 欄位，依下表自動決定驗收方式：
+
+| 條件 | 自動選擇 | 是否觸發 #1 提醒 |
+|------|---------|----------------|
+| type = DOC | 簡化驗收 | 否（自動，不需確認） |
+| type = ANA | 簡化驗收 | 否（自動，不需確認） |
+| priority = P0 | 顯示 2 選項供選擇 | 是（2 選項） |
+| 其他（IMP/ADJ/TST + 非 P0） | 標準驗收 | 否（自動，不需確認） |
+| type 未知 | 標準驗收 | 否（保守預設） |
+
+**觸發時機**：僅 priority = P0 的 Ticket 才觸發 #1 AskUserQuestion。
+
+**驗收方式確認選項**（P0 限定）：
 
 | 選項 | 說明 |
 |------|------|
 | 標準驗收（Recommended） | 派發 acceptance-auditor 執行完整驗收 |
-| 簡化驗收 | DOC 類型或任務範圍單純（單一模組、修改目的明確）的任務 |
 | 先完成後補驗收 | P0 緊急任務，24 小時內補驗收 |
 
 **Complete 後下一步選項**（動態生成）：
@@ -289,25 +302,36 @@ ticket handoff <id>
 
 **觸發時機**：Checkpoint 1.5（commit 成功 → #16 → #11）
 
+### #16 commit message 語義過濾（減少觸發）
+
+commit-handoff-hook 解析 commit message 前綴，依下表決定是否觸發 #16：
+
+| commit message 前綴 | #16 行為 | 說明 |
+|--------------------|---------|------|
+| `docs:`, `chore:`, `style:`, `refactor:`, `test:` | 自動跳過 | 純文件/格式/重構 commit，錯誤學習機會低 |
+| `fix:`, `bug:`, `patch:` | 強制觸發 | 錯誤修復 commit，錯誤學習機會高 |
+| 其他（`feat:`, 無前綴等） | 觸發二元確認 | 標準流程 |
+
+### #16 簡化為二元確認
+
 **question 格式**：
 
 ```
-本次 commit 涉及的變更中，是否有值得記錄的錯誤學習經驗？
+本次 commit 是否有需要記錄的錯誤學習經驗？
 （例如：踩到的坑、發現的反模式、設計決策教訓）
 ```
 
-**選項**：
+**選項**（二元）：
 
 | 選項 | 說明 |
 |------|------|
-| 無需記錄（Recommended） | 本次 commit 無特殊錯誤經驗 |
-| 記錄錯誤學習經驗 | 執行 `/error-pattern add` 記錄本次發現的模式 |
-| 稍後記錄 | 繼續工作，之後再補記錄 |
+| 無（Recommended） | 本次 commit 無特殊錯誤經驗 |
+| 有，執行 /error-pattern add | 記錄本次發現的模式 |
 
-**選擇「記錄」後的流程**：
+**選擇「有」後的流程**：
 
 ```
-選擇「記錄錯誤學習經驗」
+選擇「有，執行 /error-pattern add」
     ↓
 執行 /error-pattern add
     ↓
@@ -315,7 +339,7 @@ ticket handoff <id>
     ↓
 回到 Checkpoint 1.5（再次確認是否有更多經驗要記錄）
     ↓
-選擇「無需記錄」或「稍後記錄」→ 進入 #11
+選擇「無」→ 進入 #11
 ```
 
 ---

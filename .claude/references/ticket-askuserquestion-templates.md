@@ -591,29 +591,25 @@
 
 ## 場景 #16：錯誤學習經驗確認
 
-**觸發條件**：每次 git commit 成功後，在進入 #11 之前（commit-handoff-hook 觸發）
+**觸發條件**：git commit 成功後（commit-handoff-hook 觸發）；docs:/chore:/style:/refactor:/test: 前綴 commit 自動跳過
 
 **執行順序**：#16 → #11（Checkpoint 1.5 → Checkpoint 2，不可跳過或顛倒）
 
-**AskUserQuestion 配置**：
+**AskUserQuestion 配置**（二元確認）：
 
 ```json
 {
   "questions": [{
-    "question": "本次 commit 涉及的變更中，是否有值得記錄的錯誤學習經驗？（例如：踩到的坑、發現的反模式、設計決策教訓）",
+    "question": "本次 commit 是否有需要記錄的錯誤學習經驗？（例如：踩到的坑、發現的反模式、設計決策教訓）",
     "header": "錯誤學習",
     "options": [
       {
-        "label": "無需記錄 (Recommended)",
+        "label": "無 (Recommended)",
         "description": "本次 commit 無特殊錯誤經驗"
       },
       {
-        "label": "記錄錯誤學習經驗",
-        "description": "執行 /error-pattern add 記錄本次發現的模式"
-      },
-      {
-        "label": "稍後記錄",
-        "description": "繼續工作，之後再補記錄"
+        "label": "有，執行 /error-pattern add",
+        "description": "記錄本次發現的模式"
       }
     ],
     "multiSelect": false
@@ -621,10 +617,10 @@
 }
 ```
 
-**選擇「記錄」後的流程**：
+**選擇「有」後的流程**：
 1. 執行 /error-pattern add
 2. 記錄完成後回到 Checkpoint 1.5（再次確認）
-3. 選擇「無需記錄」或「稍後記錄」後進入 #11
+3. 選擇「無」後進入 #11
 
 ---
 

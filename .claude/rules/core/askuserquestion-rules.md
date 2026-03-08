@@ -93,7 +93,7 @@ PM 需要用戶做任何決策時（包含多選路由和二元 yes/no 確認）
 
 | # | 場景 | 觸發條件 | 決策點 | Hook 提醒 |
 |---|------|---------|--------|-----------|
-| 1 | 驗收方式確認 | ticket track complete 前 | ticket-lifecycle 驗收階段 | acceptance-gate-hook |
+| 1 | 驗收方式確認 | ticket track complete 前（P0 優先級時觸發；DOC/ANA/非 P0 IMP 自動決定，不觸發） | ticket-lifecycle 驗收階段 | acceptance-gate-hook |
 | 2 | Complete 後下一步 | ticket track complete 後 | ticket-lifecycle 完成階段 | acceptance-gate-hook |
 | 3 | Wave/任務收尾確認 | 當前 Wave 無 pending Ticket（情境 C1：版本仍有其他 Wave pending） | ticket-lifecycle 收尾 | parallel-suggestion-hook |
 | 4 | 方案選擇 | 多個技術方案 | 決策樹第負一層 | prompt-submit-hook |
@@ -108,7 +108,7 @@ PM 需要用戶做任何決策時（包含多選路由和二元 yes/no 確認）
 | 13 | 後續任務路由確認 | Phase 3b/4b（豁免）/4c 完成、版本完成（C2）、incident 或分析完成後有多個後續路由可選（Phase 1/2/3a 全自動，不觸發） | 決策樹第八層 | phase-completion-gate（擴充） |
 | 14 | parallel-evaluation 觸發確認 | 階段完成後 | 決策樹第八層 | phase-completion-gate（擴充） |
 | 15 | Bulk 變更前備份確認 | 批量修改前 | 決策樹第八層 | parallel-suggestion-hook（擴充） |
-| 16 | 錯誤學習經驗確認 | commit 完成後（#11 之前） | 決策樹第八層 Checkpoint 1.5 | commit-handoff-hook（擴充） |
+| 16 | 錯誤學習經驗確認 | commit 完成後（#11 之前）；docs:/chore:/style: 等 commit 自動跳過；選項簡化為二元確認 | 決策樹第八層 Checkpoint 1.5 | commit-handoff-hook（擴充） |
 | 17 | 錯誤經驗改進追蹤 | ticket complete 時有新增 error-pattern | ticket-lifecycle 完成階段 | acceptance-gate-hook（擴充） |
 
 **Hook 覆蓋狀態**：12/17 場景有 Hook 自動提醒（12/17 = 71%）。其中 #13/#14 為條件式觸發（僅當 TDD Phase 完成且 worklog 更新時），未計入 12/17 計數，列於下方 Hook 提醒機制表僅供參考。
