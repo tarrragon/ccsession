@@ -814,6 +814,32 @@ PM 必須使用 AskUserQuestion 確認：
 詳見: .claude/rules/core/decision-tree.md（第八層）
 ============================================================"""
 
+    # ========================================================================
+    # Checkpoint 1/1.5 強制提醒：ticket complete 成功後（PostToolUse）
+    # ========================================================================
+
+    POST_TICKET_COMPLETE_CHECKPOINT_REMINDER = """============================================================
+[強制提醒] Checkpoint 1/1.5 — ticket complete 後必須執行
+============================================================
+
+ticket track complete 已成功。下一步強制流程：
+
+[Checkpoint 1] 檢查未提交變更
+  → 執行: git status
+  → 有未提交變更 → 執行 /commit-as-prompt
+  → 無未提交變更 → 進入 Checkpoint 1.5
+
+[Checkpoint 1.5] AskUserQuestion #16（錯誤學習確認）
+  → 本 Ticket 執行期間是否有新發現的錯誤模式？
+  → 使用: ToolSearch("select:AskUserQuestion") 載入後使用
+  → 選項: 無需記錄 (Recommended) / 記錄錯誤學習 / 稍後記錄
+
+[Checkpoint 2] commit 後由 commit-handoff-hook 自動觸發
+
+禁止：直接結束回應或進入下一個 Ticket（跳過 Checkpoint 1/1.5）
+詳見: .claude/rules/core/decision-tree.md（第八層）
+============================================================"""
+
 
 # ============================================================================
 # Helper Functions
