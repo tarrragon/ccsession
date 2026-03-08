@@ -89,7 +89,7 @@ PM 需要用戶做任何決策時（包含多選路由和二元 yes/no 確認）
 
 ## 場景列表
 
-### 17 個強制使用場景
+### 18 個強制使用場景（#11 細分為 #11a/#11b）
 
 | # | 場景 | 觸發條件 | 決策點 | Hook 提醒 |
 |---|------|---------|--------|-----------|
@@ -103,15 +103,16 @@ PM 需要用戶做任何決策時（包含多選路由和二元 yes/no 確認）
 | 8 | 執行方向確認 | 並行/序列、先後順序 | 決策樹第負一層 | - |
 | 9 | Handoff 方向選擇 | 多個兄弟/子任務可選 | ticket-lifecycle 完成階段 | - |
 | 10 | 開始/收尾確認 | 確認是否開始執行 | 決策樹第負一層 | - |
-| 11 | Commit 後情境感知 Handoff | git commit 後依情境路由（情境 A→11a；情境 B→11b；情境 C1→跳至 #3；情境 C2→跳至 #13，均不經 #11） | 決策樹第八層 | commit-handoff-hook |
+| 11a | Commit 後 Context 刷新 Handoff（情境 A） | ticket 仍 in_progress | 決策樹第八層 Checkpoint 2 | commit-handoff-hook |
+| 11b | Commit 後任務切換 Handoff（情境 B） | ticket completed + 同 Wave 有 pending | 決策樹第八層 Checkpoint 2 | commit-handoff-hook |
 | 12 | 流程省略確認 | 省略意圖偵測 | 決策樹第八層 | process-skip-guard-hook |
 | 13 | 後續任務路由確認 | Phase 3b/4b（豁免）/4c 完成、版本完成（C2）、incident 或分析完成後有多個後續路由可選（Phase 1/2/3a 全自動，不觸發） | 決策樹第八層 | phase-completion-gate（擴充） |
 | 14 | parallel-evaluation 觸發確認 | 階段完成後 | 決策樹第八層 | phase-completion-gate（擴充） |
 | 15 | Bulk 變更前備份確認 | 批量修改前 | 決策樹第八層 | parallel-suggestion-hook（擴充） |
-| 16 | 錯誤學習經驗確認 | commit 完成後（#11 之前）；docs:/chore:/style: 等 commit 自動跳過；選項簡化為二元確認 | 決策樹第八層 Checkpoint 1.5 | commit-handoff-hook（擴充） |
+| 16 | 錯誤學習經驗確認 | commit 完成後（#11a/#11b 之前）；docs:/chore:/style: 等 commit 自動跳過；選項簡化為二元確認 | 決策樹第八層 Checkpoint 1.5 | commit-handoff-hook（擴充） |
 | 17 | 錯誤經驗改進追蹤 | ticket complete 時有新增 error-pattern | ticket-lifecycle 完成階段 | acceptance-gate-hook（擴充） |
 
-**Hook 覆蓋狀態**：12/17 場景有 Hook 自動提醒（12/17 = 71%）。其中 #13/#14 為條件式觸發（僅當 TDD Phase 完成且 worklog 更新時），未計入 12/17 計數，列於下方 Hook 提醒機制表僅供參考。
+**Hook 覆蓋狀態**：13/18 場景有 Hook 自動提醒（13/18 = 72%）。其中 #13/#14 為條件式觸發（僅當 TDD Phase 完成且 worklog 更新時），未計入 13/18 計數，列於下方 Hook 提醒機制表僅供參考。
 
 ### 場景執行順序約束
 
@@ -119,9 +120,9 @@ PM 需要用戶做任何決策時（包含多選路由和二元 yes/no 確認）
 
 | 約束 | 說明 | 違反後果 |
 |------|------|---------|
-| **#16 必須先於 #11**（強制） | commit 後先執行 #16（錯誤學習確認 @ Checkpoint 1.5），再進入 #11（Commit Handoff @ Checkpoint 2） | 跳過 #16 直接 #11 → 該次 commit 的錯誤學習永久遺漏，無從追溯 |
+| **#16 必須先於 #11a/#11b**（強制） | commit 後先執行 #16（錯誤學習確認 @ Checkpoint 1.5），再進入 #11a 或 #11b（Commit Handoff @ Checkpoint 2） | 跳過 #16 直接 #11a/#11b → 該次 commit 的錯誤學習永久遺漏，無從追溯 |
 
-**執行流程**：`git commit 成功 → Checkpoint 1.5（#16）→ Checkpoint 2（#11）`
+**執行流程**：`git commit 成功 → Checkpoint 1.5（#16）→ Checkpoint 2（#11a 或 #11b，依情境）`
 
 > 詳見：decision-tree.md 第八層 Checkpoint 1.5、askuserquestion-scene-details.md 場景 16
 
@@ -173,5 +174,5 @@ PM 需要用戶做任何決策時（包含多選路由和二元 yes/no 確認）
 ---
 
 **Last Updated**: 2026-03-09
-**Version**: 3.1.0 - 新增「使用對象限制」章節：明確 AskUserQuestion 僅限 PM 使用，subagent 遇路由決策必須回報 PM 中轉（0.1.0-W22-014）
+**Version**: 3.2.0 - 場景 #11 細分為 #11a（情境 A/Context 刷新）和 #11b（情境 B/任務切換），統一 decision-tree.md 情境命名（0.1.0-W22-017）
 **Purpose**: AskUserQuestion 規則唯一 Source of Truth

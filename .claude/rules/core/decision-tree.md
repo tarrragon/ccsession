@@ -305,8 +305,8 @@ Skill 是預建的專用工具，優先於代理人派發。
     |            Phase 4b 完成（豁免，同 D2 豁免條件）→ [強制] /tech-debt-capture → AskUserQuestion #13
     |   +-- D3c：Phase 4c 完成 → [強制] /tech-debt-capture → AskUserQuestion #13
     |
-    +-- [情境 A] ticket 仍 in_progress → AskUserQuestion #11a（Context 刷新）
-    +-- [情境 B] ticket completed + 同 Wave 有 pending → AskUserQuestion #11b（任務切換）
+    +-- [情境 A | #11a] ticket 仍 in_progress → AskUserQuestion #11a（Context 刷新）
+    +-- [情境 B | #11b] ticket completed + 同 Wave 有 pending → AskUserQuestion #11b（任務切換）
     +-- [情境 C] ticket completed + 同 Wave 無 pending → 再查詢版本全狀態
         +-- C1：有其他 Wave pending → AskUserQuestion #3a（Wave 收尾）
         +-- C2：版本全部完成 → [強制] /version-release check → AskUserQuestion #13
@@ -339,7 +339,7 @@ Skill 是預建的專用工具，優先於代理人派發。
 | 第七層 Ticket complete | 既有場景 2 → Checkpoint 1 |
 | SA 審查完成 | Checkpoint 3 |
 
-**Checkpoint 2 情境評估規則**：每次 commit 後 PM **必須**先執行強制查詢再評估情境，禁止依賴記憶判斷。情境 D（TDD Phase，識別：ticket 含 tdd_phase 欄位）優先於 A/B/C。D1/D3a 全自動；D3b 標準流程全自動、豁免路徑強制 /tech-debt-capture；D2/D3c 需 AskUserQuestion。
+**Checkpoint 2 情境評估規則**：每次 commit 後 PM **必須**先執行強制查詢再評估情境，禁止依賴記憶判斷。情境 D（TDD Phase，識別：ticket 含 tdd_phase 欄位）優先於 A/B/C。D1/D3a 全自動；D3b 標準流程全自動、豁免路徑強制 /tech-debt-capture；D2/D3c 需 AskUserQuestion。**情境命名對應**：情境 A = AskUserQuestion #11a（Context 刷新）；情境 B = AskUserQuestion #11b（任務切換）；情境 C1 = #3；情境 C2 = #13。
 
 **Handoff 強制動作**：選擇任何 Handoff 選項後，PM **必須**執行 `/ticket handoff` 建立標準 `pending/*.json` 檔案，**禁止**手動建立 `.claude/handoff/*.md` 交接文件。Handoff 前須執行 `ticket handoff --status` 確認無殘留。
 
@@ -425,4 +425,4 @@ Level 5: TDD 階段代理人 + thyme-python-developer
 ---
 
 **Last Updated**: 2026-03-09
-**Version**: 7.16.0 - 第負一層新增 Subagent 禁止事項：遇路由決策禁止直接向用戶呈現選擇，必須回報 PM 中轉（0.1.0-W22-014）
+**Version**: 7.17.0 - Checkpoint 2 情境 A/B 標籤加入 #11a/#11b 對應場景號，補充情境命名對應說明（0.1.0-W22-017）
