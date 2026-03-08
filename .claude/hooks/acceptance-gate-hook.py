@@ -48,7 +48,14 @@ _hooks_dir = Path(__file__).parent
 if _hooks_dir not in [p for p in sys.path if Path(p) == _hooks_dir]:
     sys.path.insert(0, str(_hooks_dir))
 
-from hook_utils import setup_hook_logging, run_hook_safely, read_json_from_stdin, parse_ticket_frontmatter
+from hook_utils import (
+    setup_hook_logging,
+    run_hook_safely,
+    read_json_from_stdin,
+    parse_ticket_frontmatter,
+    parse_ticket_date,
+    check_error_patterns_changed,
+)
 from lib.hook_messages import GateMessages, CoreMessages, AskUserQuestionMessages, format_message
 
 import re
@@ -68,6 +75,8 @@ class AcceptanceCheckResult(NamedTuple):
     has_new_error_patterns: bool
     new_error_pattern_files: List[str]
     pending_sibling_tickets: List[str] = []
+    task_type: str = ""
+    priority: str = ""
 
 
 # ============================================================================
@@ -502,62 +511,6 @@ def find_pending_sibling_tickets(
 # Error Pattern 檢查
 # ============================================================================
 
-def _parse_ticket_date(value: any, logger) -> Optional[datetime]:
-    """
-    支援多格式的日期解析。
-
-    格式優先級：
-    1. datetime.date 物件（YAML 直接解析）
-    2. ISO 8601 / RFC 3339 字串（fromisoformat）
-    3. 簡單日期字串 YYYY-MM-DD
-
-    Args:
-        value: 日期值（可能是 datetime、date 或字串）
-        logger: 日誌物件
-
-    Returns:
-        datetime 物件或 None（無法解析時）
-    """
-    from datetime import date
-
-    # 已經是 datetime 物件
-    if isinstance(value, datetime):
-        return value
-
-    # 是 date 物件，轉為 datetime
-    if isinstance(value, date):
-        return datetime.combine(value, datetime.min.time())
-
-    # 字串解析
-    if not isinstance(value, str):
-        logger.warning(f"無法解析日期類型: {type(value)}")
-        return None
-
-    value = value.strip()
-    if not value:
-        return None
-
-    # 優先級 1: ISO 8601 / RFC 3339（使用 fromisoformat）
-    try:
-        dt = datetime.fromisoformat(value)
-        logger.debug(f"日期解析成功（ISO 8601）: {dt.isoformat()}")
-        return dt
-    except ValueError:
-        pass
-
-    # 優先級 2: 簡單日期 YYYY-MM-DD（strptime）
-    try:
-        dt = datetime.strptime(value, "%Y-%m-%d")
-        logger.debug(f"日期解析成功（YYYY-MM-DD）: {dt.isoformat()}")
-        return dt
-    except ValueError:
-        pass
-
-    # 所有格式都失敗
-    logger.warning(f"無法解析日期字串: {value}")
-    return None
-
-
 def get_ticket_created_time(ticket_file: Path, logger) -> Optional[datetime]:
     """
     從 Ticket frontmatter 讀取 created 欄位並解析為 datetime
@@ -579,8 +532,8 @@ def get_ticket_created_time(ticket_file: Path, logger) -> Optional[datetime]:
             logger.warning("Ticket frontmatter 缺少 created 欄位")
             return None
 
-        # 使用通用日期解析函式
-        dt = _parse_ticket_date(created_value, logger)
+        # 使用通用日期解析函式（來自 hook_utils）
+        dt = parse_ticket_date(created_value, logger)
         if dt:
             logger.info(f"Ticket created at: {dt.isoformat()}")
         return dt
@@ -588,60 +541,6 @@ def get_ticket_created_time(ticket_file: Path, logger) -> Optional[datetime]:
     except Exception as e:
         logger.warning(f"讀取 ticket created 時間失敗: {e}")
         return None
-
-
-def check_error_patterns_changed(
-    project_root: Path,
-    ticket_created: datetime,
-    logger
-) -> Tuple[bool, List[str]]:
-    """
-    掃描 .claude/error-patterns/ 目錄，找出所有 mtime > ticket_created 的 .md 檔案
-
-    Args:
-        project_root: 專案根目錄
-        ticket_created: Ticket 建立時間
-        logger: 日誌物件
-
-    Returns:
-        tuple - (has_changed, file_list)
-            - has_changed: 是否有新增/修改的 error-pattern
-            - file_list: 新增/修改的檔案相對路徑清單
-    """
-    # 前置檢查
-    if ticket_created is None:
-        logger.warning("ticket created time 為 None，跳過檢查")
-        return False, []
-
-    # 檢查目錄是否存在
-    error_patterns_dir = project_root / ".claude" / "error-patterns"
-    if not error_patterns_dir.exists():
-        logger.info("error-patterns 目錄不存在，跳過檢查")
-        return False, []
-
-    changed_files = []
-    ticket_created_timestamp = ticket_created.timestamp()
-
-    try:
-        # 遞迴掃描所有 .md 檔案
-        for file_path in error_patterns_dir.rglob("*.md"):
-            try:
-                file_mtime = file_path.stat().st_mtime
-                if file_mtime > ticket_created_timestamp:
-                    relative_path = file_path.relative_to(project_root)
-                    changed_files.append(str(relative_path))
-                    logger.debug(f"找到新增檔案: {relative_path}")
-            except (OSError, PermissionError) as e:
-                logger.warning(f"無法讀取檔案 stat: {file_path}: {e}")
-                continue
-
-    except (OSError, PermissionError) as e:
-        logger.warning(f"讀取 error-patterns 目錄失敗: {e}")
-        return False, []
-
-    logger.info(f"掃描 error-patterns 目錄完成：發現 {len(changed_files)} 個新增/修改檔案")
-    has_changed = len(changed_files) > 0
-    return has_changed, changed_files
 
 
 # ============================================================================
@@ -828,13 +727,18 @@ def check_acceptance_status(ticket_id: str, project_dir: Path, logger) -> Accept
         pending_siblings = find_pending_sibling_tickets(ticket_id, project_dir, logger)
         logger.info(f"發現 {len(pending_siblings)} 個 pending sibling tickets")
 
+        task_type = frontmatter.get("type", "")
+        priority = frontmatter.get("priority", "")
+
         return AcceptanceCheckResult(
             False,
             has_acceptance,
             None,
             has_new_error_patterns,
             new_error_pattern_files,
-            pending_siblings
+            pending_siblings,
+            task_type,
+            priority,
         )
 
     except Exception as e:
@@ -911,14 +815,26 @@ def generate_hook_output(
         logger.info(f"新增場景 #9 (Handoff 方向) 提醒，sibling 數量: {len(check_result.pending_sibling_tickets)}")
 
     # 優先級 4：complete 流程提醒（驗收方式，場景 #1）
+    # 觸發條件：P0 且非 DOC/ANA 類型 → 需人工確認驗收方式
+    # 豁免條件：DOC/ANA 類型 或 非 P0（P1/P2/...） → 自動採用簡化驗收，不觸發
     # 注意：即使有 error-pattern（#17 已觸發），仍需提醒驗收方式確認
     # 修復：原本 has_new_error_patterns 會壓制 #1，導致 PM 錯過驗收確認（W22-012）
     if (
         not check_result.message
         and len(check_result.pending_sibling_tickets) < 2
     ):
-        context_parts.append(AskUserQuestionMessages.COMPLETE_REMINDER)
-        logger.info("新增場景 #1 (complete 流程) 提醒")
+        ticket_type_upper = (check_result.task_type or "").upper()
+        priority_upper = (check_result.priority or "").upper()
+        is_auto_accept_type = ticket_type_upper in ("DOC", "ANA")
+        needs_manual_confirmation = priority_upper == "P0" and not is_auto_accept_type
+
+        if needs_manual_confirmation:
+            context_parts.append(AskUserQuestionMessages.COMPLETE_REMINDER)
+            logger.info(f"新增場景 #1 (complete 流程) 提醒（P0 Ticket，type={ticket_type_upper}）")
+        else:
+            logger.info(
+                f"跳過場景 #1（自動簡化驗收，priority={priority_upper}, type={ticket_type_upper}）"
+            )
 
         # 優先級 5：complete 後下一步提醒（路由選擇，場景 #2）
         context_parts.append(AskUserQuestionMessages.COMPLETE_NEXT_STEP_REMINDER)
@@ -965,137 +881,150 @@ def save_check_log(ticket_id: str, should_block: bool, project_dir: Path, logger
 
 
 # ============================================================================
+# 主入口點輔助函式
+# ============================================================================
+
+def _parse_and_validate_input(input_data: Dict[str, Any], logger) -> Optional[Tuple[str, str]]:
+    """
+    解析並驗證輸入資料。
+
+    驗證 Hook 輸入格式並提取必要欄位。若輸入無效，直接輸出 allow JSON 並回傳 None。
+
+    Args:
+        input_data: Hook 輸入資料
+        logger: 日誌物件
+
+    Returns:
+        Tuple[str, str] - (tool_name, command) 或 None（無效時）
+    """
+    if not validate_input(input_data, logger):
+        logger.error("輸入格式錯誤")
+        print(json.dumps({
+            "hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "allow"}
+        }, ensure_ascii=False, indent=2))
+        return None
+
+    tool_name = input_data.get("tool_name", "")
+    tool_input = input_data.get("tool_input", {})
+    command = tool_input.get("command", "")
+
+    return tool_name, command
+
+
+def _extract_ticket_or_skip(tool_name: str, command: str, logger) -> Optional[str]:
+    """
+    識別 complete 命令並提取 Ticket ID。
+
+    驗證是 Bash 工具且是 complete 命令，則提取 Ticket ID。
+    不符合條件時，直接輸出 allow JSON 並回傳 None。
+
+    Args:
+        tool_name: 工具名稱
+        command: Bash 命令字串
+        logger: 日誌物件
+
+    Returns:
+        str - Ticket ID 或 None（不符合條件時）
+    """
+    # 不是 Bash 工具
+    if tool_name != "Bash":
+        logger.debug(f"非 Bash 工具: {tool_name}，直接放行")
+        print(json.dumps({
+            "hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "allow"}
+        }, ensure_ascii=False, indent=2))
+        return None
+
+    # 不是 complete 命令
+    if not is_complete_command(command):
+        logger.debug(f"非 ticket track complete 命令: {command}")
+        print(json.dumps({
+            "hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "allow"}
+        }, ensure_ascii=False, indent=2))
+        return None
+
+    logger.info(f"識別到 ticket track complete 命令: {command}")
+
+    # 提取 Ticket ID
+    ticket_id = extract_ticket_id_from_command(command, logger)
+    if not ticket_id:
+        logger.error("無法從命令中提取 Ticket ID")
+        print(json.dumps({
+            "hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "allow"}
+        }, ensure_ascii=False, indent=2))
+        return None
+
+    logger.info(f"提取 Ticket ID: {ticket_id}")
+    return ticket_id
+
+
+# ============================================================================
 # 主入口點
 # ============================================================================
 
 def main() -> int:
     """
-    主入口點
+    主入口點 - 驗收流程協調
 
-    執行流程:
-    1. 初始化日誌
-    2. 讀取 JSON 輸入
-    3. 驗證輸入格式
-    4. 識別是否為 ticket track complete 命令
-    5. 提取 Ticket ID
-    6. 檢查驗收狀態（子任務 + 驗收記錄）
-    7. 決定是否追加下一步提醒（場景 #1 complete 流程 + 場景 #2 complete 後下一步）
-    8. 生成 Hook 輸出
-    9. 儲存日誌
-    10. 決定 exit code
+    驗收流程：
+    1. 解析驗證輸入
+    2. 識別 complete 命令並提取 Ticket ID
+    3. 檢查驗收狀態
+    4. 生成 Hook 輸出並儲存日誌
+    5. 決定 exit code
 
     Returns:
         int - Exit code (EXIT_SUCCESS, EXIT_BLOCK, 或 EXIT_ERROR)
     """
-    # 初始化 logger
     logger = setup_hook_logging("acceptance-gate")
 
     try:
-        # 步驟 1: 初始化日誌
         logger.info(CoreMessages.HOOK_START.format(hook_name="Acceptance Gate Hook"))
 
-        # 步驟 2: 讀取 JSON 輸入
+        # 步驟 1: 解析驗證輸入
         input_data = read_json_from_stdin(logger)
+        parsed = _parse_and_validate_input(input_data, logger)
+        if parsed is None:
+            return EXIT_SUCCESS
+        tool_name, command = parsed
 
-        # 步驟 3: 驗證輸入格式
-        if not validate_input(input_data, logger):
-            logger.error("輸入格式錯誤")
-            print(json.dumps({
-                "hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "allow"}
-            }, ensure_ascii=False, indent=2))
+        # 步驟 2: 識別命令並提取 Ticket ID
+        ticket_id = _extract_ticket_or_skip(tool_name, command, logger)
+        if ticket_id is None:
             return EXIT_SUCCESS
 
-        tool_name = input_data.get("tool_name", "")
-        tool_input = input_data.get("tool_input", {})
-
-        # 不是 Bash 工具，直接放行
-        if tool_name != "Bash":
-            logger.debug(f"非 Bash 工具: {tool_name}，直接放行")
-            output = generate_hook_output(False, None)
-            print(json.dumps(output, ensure_ascii=False, indent=2))
-            return EXIT_SUCCESS
-
-        command = tool_input.get("command", "")
-
-        # 步驟 4: 識別是否為 ticket track complete 命令
-        if not is_complete_command(command):
-            logger.debug(f"非 ticket track complete 命令: {command}")
-            output = generate_hook_output(False, None)
-            print(json.dumps(output, ensure_ascii=False, indent=2))
-            return EXIT_SUCCESS
-
-        logger.info(f"識別到 ticket track complete 命令: {command}")
-
-        # 步驟 5: 提取 Ticket ID
-        ticket_id = extract_ticket_id_from_command(command, logger)
-
-        if not ticket_id:
-            logger.error("無法從命令中提取 Ticket ID")
-            output = generate_hook_output(False, None)
-            print(json.dumps(output, ensure_ascii=False, indent=2))
-            return EXIT_SUCCESS
-
-        logger.info(f"提取 Ticket ID: {ticket_id}")
-
-        # 步驟 6: 檢查驗收狀態
+        # 步驟 3: 檢查驗收狀態
         import os
         project_dir = Path(os.getenv("CLAUDE_PROJECT_DIR", Path.cwd()))
-
         result = check_acceptance_status(ticket_id, project_dir, logger)
         logger.info(
-            f"驗收狀態檢查: "
-            f"should_block={result.should_block}, "
-            f"has_acceptance={result.has_acceptance}, "
-            f"has_new_error_patterns={result.has_new_error_patterns}"
-        )
-
-        # 步驟 7: 決定是否追加下一步提醒
-        # 場景 #1（complete 前）：驗收方式確認
-        # 場景 #2（complete 後的邏輯）：complete 後下一步選擇
-        # 場景 #9（Handoff 方向選擇）：同 Wave 中有 2+ pending sibling tickets
-        # 此時仍處於 PreToolUse，complete 尚未執行，故追加完整 complete 流程提醒
-        logger.info(
-            f"驗收結果摘要: "
-            f"should_block={result.should_block}, "
+            f"驗收結果: should_block={result.should_block}, "
             f"has_acceptance={result.has_acceptance}, "
             f"has_new_error_patterns={result.has_new_error_patterns}, "
             f"pending_siblings={len(result.pending_sibling_tickets)}"
         )
 
-        # 步驟 8: 生成 Hook 輸出
-        output = generate_hook_output(
-            ticket_id,
-            result,
-            project_dir,
-            logger
-        )
+        # 步驟 4: 生成輸出並儲存日誌
+        output = generate_hook_output(ticket_id, result, project_dir, logger)
         print(json.dumps(output, ensure_ascii=False, indent=2))
-
-        # 步驟 9: 儲存日誌
         save_check_log(ticket_id, result.should_block, project_dir, logger)
 
-        # 步驟 10: 決定 exit code
+        # 步驟 5: 決定 exit code
         if result.should_block:
             logger.warning("Acceptance Gate Hook：子任務未完成，阻止執行")
             return EXIT_BLOCK
-
         logger.info("Acceptance Gate Hook 檢查完成：允許執行")
         return EXIT_SUCCESS
 
     except Exception as e:
         logger.critical(f"Hook 執行錯誤: {e}", exc_info=True)
-        error_output = {
+        print(json.dumps({
             "hookSpecificOutput": {
                 "hookEventName": "PreToolUse",
                 "permissionDecision": "allow",
                 "additionalContext": "Hook 執行錯誤，詳見日誌: .claude/hook-logs/acceptance-gate/"
             },
-            "error": {
-                "type": type(e).__name__,
-                "message": str(e)
-            }
-        }
-        print(json.dumps(error_output, ensure_ascii=False, indent=2))
+            "error": {"type": type(e).__name__, "message": str(e)}
+        }, ensure_ascii=False, indent=2))
         return EXIT_ERROR
 
 
