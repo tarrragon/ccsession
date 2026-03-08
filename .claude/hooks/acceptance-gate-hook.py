@@ -13,9 +13,12 @@ Acceptance Gate Hook - 驗收流程完整引導
 - 監控 Bash 工具中的 ticket track complete 命令
 - 檢查子任務是否全部完成（阻塊）
 - 檢查是否有驗收記錄（警告）
+- 檢查同 Wave 中的 pending sibling tickets（場景 #9）
 - 在檢查完成後輸出 AskUserQuestion 場景提醒：
   * 場景 #1（complete 前）：驗收方式確認（標準/簡化/先完成後補）
   * 場景 #2（complete 後的邏輯）：complete 後下一步選擇（下個 Ticket/Wave 收尾/版本發布）
+  * 場景 #9（Handoff 方向選擇）：同 Wave 中有 2+ pending sibling tickets 時觸發
+  * 場景 #17（錯誤學習確認）：執行期間新增 error-pattern 時觸發
   * 補充說明：此時仍在 PreToolUse，complete 尚未執行，故提醒涵蓋整個 complete 流程
 - 使用 hook_utils 統一日誌系統
 
@@ -63,6 +66,7 @@ class AcceptanceCheckResult(NamedTuple):
     message: Optional[str]
     has_new_error_patterns: bool
     new_error_pattern_files: List[str]
+    pending_sibling_tickets: List[str] = []
 
 
 # ============================================================================
@@ -420,6 +424,141 @@ def is_doc_type(ticket_type: Optional[str]) -> bool:
 
 
 # ============================================================================
+# Sibling Ticket 檢查（場景 #9）
+# ============================================================================
+
+def extract_wave_from_ticket_id(ticket_id: str, logger) -> Optional[int]:
+    """
+    從 Ticket ID 中提取 Wave 號
+
+    格式範例: "0.1.0-W22-025" → wave=22
+
+    Args:
+        ticket_id: Ticket ID (格式: version-WN-number)
+        logger: 日誌物件
+
+    Returns:
+        int - Wave 號，或 None（格式不符）
+    """
+    # 使用正則表達式提取 W 後面的數字
+    wave_match = re.search(r'-W(\d+)-', ticket_id)
+    if wave_match:
+        wave_num = int(wave_match.group(1))
+        logger.debug(f"從 Ticket ID {ticket_id} 提取 Wave 號: {wave_num}")
+        return wave_num
+    else:
+        logger.warning(f"無法從 Ticket ID 中提取 Wave 號: {ticket_id}")
+        return None
+
+
+def extract_version_from_ticket_id(ticket_id: str, logger) -> Optional[str]:
+    """
+    從 Ticket ID 中提取版本號
+
+    格式範例: "0.1.0-W22-025" → version="0.1.0"
+
+    Args:
+        ticket_id: Ticket ID (格式: version-WN-number)
+        logger: 日誌物件
+
+    Returns:
+        str - 版本號，或 None（格式不符）
+    """
+    # 使用正則表達式提取版本號（版本號格式: \d+\.\d+\.\d+）
+    version_match = re.match(r'(\d+\.\d+\.\d+)-W', ticket_id)
+    if version_match:
+        version = version_match.group(1)
+        logger.debug(f"從 Ticket ID {ticket_id} 提取版本號: {version}")
+        return version
+    else:
+        logger.warning(f"無法從 Ticket ID 中提取版本號: {ticket_id}")
+        return None
+
+
+def find_pending_sibling_tickets(
+    ticket_id: str,
+    project_dir: Path,
+    logger
+) -> List[str]:
+    """
+    查詢同 Wave 中的 pending sibling tickets
+
+    搜尋邏輯:
+    1. 從 ticket_id 提取 wave 號和版本號
+    2. 掃描 docs/work-logs/v{version}/tickets/ 目錄
+    3. 找出所有 "WN-" 中 N 相同的 tickets，且 status=pending
+    4. 排除當前 ticket 自身
+    5. 返回 pending sibling 清單（不排序，保持掃描順序）
+
+    Args:
+        ticket_id: 當前 Ticket ID (e.g., "0.1.0-W22-025")
+        project_dir: 專案根目錄
+        logger: 日誌物件
+
+    Returns:
+        list - pending sibling ticket ID 清單，若查詢失敗或無 sibling，返回 []
+    """
+    # 步驟 1: 提取 wave 號和版本號
+    wave_num = extract_wave_from_ticket_id(ticket_id, logger)
+    version = extract_version_from_ticket_id(ticket_id, logger)
+
+    if wave_num is None or version is None:
+        logger.warning(f"無法從 {ticket_id} 提取 wave 或 version，返回空清單")
+        return []
+
+    # 步驟 2: 構造 tickets 目錄路徑
+    tickets_dir = project_dir / "docs" / "work-logs" / f"v{version}" / "tickets"
+
+    if not tickets_dir.exists():
+        logger.debug(f"Tickets 目錄不存在: {tickets_dir}，返回空清單")
+        return []
+
+    logger.info(f"掃描 sibling tickets 在 Wave {wave_num}，目錄: {tickets_dir}")
+
+    sibling_tickets = []
+
+    try:
+        # 步驟 3-5: 掃描並過濾 tickets
+        for ticket_file in sorted(tickets_dir.glob("*.md")):
+            try:
+                file_ticket_id = ticket_file.stem  # 移除 .md 副檔名
+
+                # 排除當前 ticket 自身
+                if file_ticket_id == ticket_id:
+                    logger.debug(f"排除自身 Ticket: {file_ticket_id}")
+                    continue
+
+                # 檢查是否為同 Wave
+                file_wave = extract_wave_from_ticket_id(file_ticket_id, logger)
+                if file_wave != wave_num:
+                    logger.debug(f"不同 Wave: {file_ticket_id} (Wave {file_wave})")
+                    continue
+
+                # 讀取檔案取得 status
+                content = ticket_file.read_text(encoding="utf-8")
+                frontmatter = parse_ticket_frontmatter(content)
+                status = frontmatter.get("status", "unknown")
+
+                # 篩選 pending 狀態
+                if status == "pending":
+                    sibling_tickets.append(file_ticket_id)
+                    logger.info(f"找到 pending sibling ticket: {file_ticket_id}")
+                else:
+                    logger.debug(f"非 pending 狀態，排除: {file_ticket_id} (status: {status})")
+
+            except Exception as e:
+                logger.warning(f"讀取 Ticket 檔案失敗 {ticket_file}: {e}")
+                continue
+
+    except Exception as e:
+        logger.warning(f"掃描 sibling tickets 失敗: {e}")
+        return []
+
+    logger.info(f"掃描完成，共找到 {len(sibling_tickets)} 個 pending sibling tickets: {sibling_tickets}")
+    return sibling_tickets
+
+
+# ============================================================================
 # Error Pattern 檢查
 # ============================================================================
 
@@ -694,10 +833,11 @@ def check_acceptance_status(ticket_id: str, project_dir: Path, logger) -> Accept
     """
     檢查 Ticket 的驗收狀態（主協調函式）
 
-    此函式協調三個子檢查函式：
+    此函式協調四個子檢查函式：
     1. 子任務完成度檢查
     2. 驗收記錄驗證
     3. Error-pattern 新增檢查
+    4. Sibling tickets 完成度檢查（場景 #9）
 
     Args:
         ticket_id: Ticket ID
@@ -711,6 +851,7 @@ def check_acceptance_status(ticket_id: str, project_dir: Path, logger) -> Accept
             - message: 錯誤或警告訊息
             - has_new_error_patterns: 是否有新增/修改的 error-pattern
             - new_error_pattern_files: 新增/修改的 error-pattern 檔案清單
+            - pending_sibling_tickets: 同 Wave 中的 pending sibling tickets（場景 #9）
     """
     # 找到 Ticket 檔案
     ticket_file = find_ticket_file(ticket_id, project_dir, logger)
@@ -743,7 +884,18 @@ def check_acceptance_status(ticket_id: str, project_dir: Path, logger) -> Accept
         if should_check_acceptance:
             has_new_error_patterns, new_error_pattern_files = _check_error_patterns(ticket_file, project_dir, logger)
 
-        return AcceptanceCheckResult(False, has_acceptance, None, has_new_error_patterns, new_error_pattern_files)
+        # 步驟 4：檢查 pending sibling tickets（場景 #9）
+        pending_siblings = find_pending_sibling_tickets(ticket_id, project_dir, logger)
+        logger.info(f"發現 {len(pending_siblings)} 個 pending sibling tickets")
+
+        return AcceptanceCheckResult(
+            False,
+            has_acceptance,
+            None,
+            has_new_error_patterns,
+            new_error_pattern_files,
+            pending_siblings
+        )
 
     except Exception as e:
         logger.error(f"檢查驗收狀態失敗: {e}", exc_info=True)
@@ -755,61 +907,87 @@ def check_acceptance_status(ticket_id: str, project_dir: Path, logger) -> Accept
 # ============================================================================
 
 def generate_hook_output(
-    should_block: bool,
-    message: Optional[str],
-    ask_user_reminder: bool = False,
-    next_step_reminder: bool = False,
-    has_new_error_patterns: bool = False,
-    new_error_pattern_files: Optional[List[str]] = None
+    ticket_id: str,
+    check_result: AcceptanceCheckResult,
+    project_dir: Path,
+    logger,
 ) -> Dict[str, Any]:
     """
     生成 Hook 輸出
 
     Args:
-        should_block: 是否應該阻擋執行
-        message: 錯誤或警告訊息
-        ask_user_reminder: 是否追加 complete 流程提醒（驗收方式）
-        next_step_reminder: 是否追加 complete 後下一步提醒（場景 #2）
-        has_new_error_patterns: 是否有新增/修改的 error-pattern
-        new_error_pattern_files: 新增/修改的 error-pattern 檔案清單
+        ticket_id: Ticket ID（用於日誌和調試）
+        check_result: AcceptanceCheckResult 物件，包含驗收狀態和 sibling tickets
+        project_dir: 專案根目錄（用於 sibling 查詢，已通過 check_result.pending_sibling_tickets 傳入）
+        logger: 日誌物件（用於日誌記錄）
 
     Returns:
         dict - Hook 輸出 JSON
+
+    優先級順序:
+    1. 錯誤或警告訊息（should_block 或 message）
+    2. Error-pattern 場景 #17 提醒（has_new_error_patterns）
+    3. Handoff 方向選擇（場景 #9，pending siblings >= 2）
+    4. complete 流程提醒（場景 #1，驗收方式確認）
+    5. complete 後下一步提醒（場景 #2，路由選擇）
     """
     output = {
         "hookSpecificOutput": {
             "hookEventName": "PreToolUse",
-            "permissionDecision": "deny" if should_block else "allow"
+            "permissionDecision": "deny" if check_result.should_block else "allow"
         }
     }
 
     context_parts = []
 
-    # 第一優先級：錯誤或警告訊息
-    if message:
-        context_parts.append(message)
+    # 優先級 1：錯誤或警告訊息
+    if check_result.message:
+        context_parts.append(check_result.message)
 
-    # [新增] 第二優先級：error-pattern 場景 #17 提醒（僅在無訊息時）
-    if has_new_error_patterns and not message:
-        file_list_formatted = "\n".join(f"  - {f}" for f in (new_error_pattern_files or []))
+    # 優先級 2：error-pattern 場景 #17 提醒（僅在無訊息時）
+    if check_result.has_new_error_patterns and not check_result.message:
+        file_list_formatted = "\n".join(f"  - {f}" for f in (check_result.new_error_pattern_files or []))
         reminder_msg = AskUserQuestionMessages.ERROR_PATTERN_REMINDER.format(
             file_list=file_list_formatted
         )
         context_parts.append(reminder_msg)
+        logger.info(f"新增場景 #17 (error-pattern) 提醒")
 
-    # 第三優先級（原第二）：complete 流程提醒（驗收方式，場景 #1）
-    if ask_user_reminder and not message:
+    # 優先級 3：Handoff 方向選擇 場景 #9（僅在無訊息且無 error-pattern 時，sibling >= 2）
+    if (
+        not check_result.message
+        and not check_result.has_new_error_patterns
+        and len(check_result.pending_sibling_tickets) >= 2
+    ):
+        sibling_list_formatted = "\n".join(
+            f"  - {sibling_id}"
+            for sibling_id in check_result.pending_sibling_tickets
+        )
+        reminder_msg = AskUserQuestionMessages.HANDOFF_DIRECTION_REMINDER.format(
+            sibling_count=len(check_result.pending_sibling_tickets),
+            sibling_list=sibling_list_formatted
+        )
+        context_parts.append(reminder_msg)
+        logger.info(f"新增場景 #9 (Handoff 方向) 提醒，sibling 數量: {len(check_result.pending_sibling_tickets)}")
+
+    # 優先級 4：complete 流程提醒（驗收方式，場景 #1）
+    if (
+        not check_result.message
+        and not check_result.has_new_error_patterns
+        and len(check_result.pending_sibling_tickets) < 2
+    ):
         context_parts.append(AskUserQuestionMessages.COMPLETE_REMINDER)
+        logger.info("新增場景 #1 (complete 流程) 提醒")
 
-    # 第四優先級（原第三）：complete 後下一步提醒（路由選擇，場景 #2，僅在無訊息且無 error-pattern 時追加）
-    if next_step_reminder and not message and not has_new_error_patterns:
+        # 優先級 5：complete 後下一步提醒（路由選擇，場景 #2）
         context_parts.append(AskUserQuestionMessages.COMPLETE_NEXT_STEP_REMINDER)
+        logger.info("新增場景 #2 (complete 後下一步) 提醒")
 
     if context_parts:
         output["hookSpecificOutput"]["additionalContext"] = "\n\n".join(context_parts)
 
     output["check_result"] = {
-        "should_block": should_block,
+        "should_block": check_result.should_block,
         "timestamp": datetime.now().isoformat()
     }
 
@@ -933,18 +1111,22 @@ def main() -> int:
         # 步驟 7: 決定是否追加下一步提醒
         # 場景 #1（complete 前）：驗收方式確認
         # 場景 #2（complete 後的邏輯）：complete 後下一步選擇
+        # 場景 #9（Handoff 方向選擇）：同 Wave 中有 2+ pending sibling tickets
         # 此時仍處於 PreToolUse，complete 尚未執行，故追加完整 complete 流程提醒
-        next_step_prompt = not result.should_block and not result.message
-        logger.info(f"是否追加下一步提醒: {next_step_prompt}")
+        logger.info(
+            f"驗收結果摘要: "
+            f"should_block={result.should_block}, "
+            f"has_acceptance={result.has_acceptance}, "
+            f"has_new_error_patterns={result.has_new_error_patterns}, "
+            f"pending_siblings={len(result.pending_sibling_tickets)}"
+        )
 
         # 步驟 8: 生成 Hook 輸出
         output = generate_hook_output(
-            result.should_block,
-            result.message,
-            ask_user_reminder=True,
-            next_step_reminder=next_step_prompt,
-            has_new_error_patterns=result.has_new_error_patterns,
-            new_error_pattern_files=result.new_error_pattern_files
+            ticket_id,
+            result,
+            project_dir,
+            logger
         )
         print(json.dumps(output, ensure_ascii=False, indent=2))
 

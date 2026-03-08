@@ -851,6 +851,32 @@ PM 必須使用 AskUserQuestion 選擇下一步：
 詳見: .claude/rules/flows/ticket-lifecycle.md（場景 #17）
 ============================================================"""
 
+    HANDOFF_DIRECTION_REMINDER = """============================================================
+[AskUserQuestion 強制提醒] Handoff 方向選擇（場景 #9）
+============================================================
+
+偵測到同 Wave 中有 {sibling_count} 個 pending sibling tickets：
+
+{sibling_list}
+
+完成此 ticket 後，PM 必須使用 AskUserQuestion 確認 Handoff 方向：
+
+選項指南（必須使用 AskUserQuestion）：
+1. 繼續執行特定 sibling ticket
+   - 選擇同 Wave 中的下一個 pending ticket
+   - 執行: /ticket track claim {next_ticket_id}
+
+2. 等待依賴完成
+   - 當前 ticket 完成後，檢查是否有依賴項
+   - 完成依賴後再執行下一個 sibling
+
+3. 讓用戶決定下一步
+   - 由用戶通過 AskUserQuestion 選擇下一個 ticket
+
+提示: ToolSearch("select:AskUserQuestion") 載入後使用。
+詳見: .claude/rules/core/askuserquestion-rules.md（場景 #9）
+============================================================"""
+
     POST_TICKET_COMPLETE_CHECKPOINT_REMINDER = """============================================================
 [強制提醒] Checkpoint 1/1.5/2 — ticket complete 後必須執行
 ============================================================
