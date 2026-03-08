@@ -295,7 +295,9 @@ Skill 是預建的專用工具，優先於代理人派發。
     |
     +-- [情境 D] TDD Phase 完成（優先，識別：ticket 含 tdd_phase 欄位）
     |   +-- D1：Phase 1/2/3a 完成 → [全自動] 直接派發下一 Phase
-    |   +-- D2：Phase 3b 完成 → AskUserQuestion #13（進入 4a 或豁免進 4b）
+    |   +-- D2：Phase 3b 完成 → AskUserQuestion #13
+    |       +-- 標準流程 → 派發 /parallel-evaluation B（Phase 4a）
+    |       +-- 豁免（<=2 檔案/DOC/任務範圍單純）→ 直接派發 cinnamon-refactor-owl（4b）
     |   +-- D3a：Phase 4a 完成 → [全自動] 派發 cinnamon-refactor-owl（4b）
     |   +-- D3b：Phase 4b 完成 → [全自動] 派發 /parallel-evaluation A（4c）
     |   +-- D3c：Phase 4c 完成 → [強制] /tech-debt-capture → AskUserQuestion #13
