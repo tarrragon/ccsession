@@ -63,41 +63,16 @@
 
 **識別**：ticket 含 `tdd_phase` 欄位
 
-**核心規則**：只有 Phase 3b 完成（D2）需要 AskUserQuestion，其他均為全自動路由。
+| Phase 完成 | 路由 |
+|-----------|------|
+| Phase 1/2/3a | 全自動 → 下一 Phase 代理人 [注 1] |
+| Phase 3b | AskUserQuestion #13：進入 Phase 4a（標準）或豁免直接 4b [注 2] |
+| Phase 4a/4b | 全自動 → 下一 Phase（Phase 4b 可豁免跳至 tech-debt [注 2]） |
+| Phase 4c | 強制 /tech-debt-capture → AskUserQuestion #13（不可跳過） |
 
-#### D1：Phase 1/2/3a 完成（全自動）
+**注 [1] Phase 代理人對應**：Phase 1 → sage-test-architect、Phase 2 → pepper-test-implementer、Phase 3a → parsley-flutter-developer
 
-直接派發下一 Phase 代理人，無 AskUserQuestion：
-
-| 當前完成 | 下一步 |
-|---------|-------|
-| Phase 1 | sage-test-architect（Phase 2 測試設計） |
-| Phase 2 | pepper-test-implementer（Phase 3a 策略規劃） |
-| Phase 3a | parsley-flutter-developer（Phase 3b 實作） |
-
-#### D2：Phase 3b 完成（AskUserQuestion #13）
-
-| 選項 | 說明 |
-|------|------|
-| 進入 Phase 4a（Recommended） | /parallel-evaluation B 多視角重構分析 |
-| 直接進入 Phase 4b | 豁免條件：<=2 檔案 / DOC 類型 / 任務範圍單純（單一模組、修改目的明確） |
-| 先 commit 再決定 | 延後決策 |
-
-#### D3a：Phase 4a 完成（全自動）
-
-直接派發 cinnamon-refactor-owl 執行 Phase 4b 重構。
-
-#### D3b：Phase 4b 完成（全自動）
-
-直接派發 /parallel-evaluation A（Phase 4c 多視角再審核）。
-
-豁免（可直接進入 /tech-debt-capture）：<=2 檔案 / DOC 類型 / 任務範圍單純（單一模組、修改目的明確）。
-
-#### D3c：Phase 4c 完成（強制）
-
-必須執行 /tech-debt-capture，不可跳過，優先於 Wave 收尾判斷。
-
-/tech-debt-capture 完成後 AskUserQuestion #13（Phase 4 + tech-debt 路由），commit 後回到情境 B/C 評估。
+**注 [2] 豁免條件**（Phase 3b → 跳過 4a；Phase 4b → 跳過 4c）：`<=2 檔案` / `DOC 類型` / `任務範圍單純（單一模組、修改目的明確）`
 
 ---
 
@@ -252,4 +227,4 @@ ticket handoff --gc --execute
 ---
 
 **Last Updated**: 2026-03-08
-**Version**: 1.1.0 - 移除重複 #11/#12 內容，改為引用 askuserquestion-scene-details.md（W14-001）
+**Version**: 1.2.0 - 情境 D 重構：D1-D3c 五子情境合併為 4 行路由總覽表，認知負擔從 >15 降至 ~10（W22-002）
