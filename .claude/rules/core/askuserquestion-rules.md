@@ -84,6 +84,18 @@ PM 需要用戶做任何決策時（包含多選路由和二元 yes/no 確認）
 
 **Hook 覆蓋狀態**：12/17 場景有 Hook 自動提醒（從 10/15 提升到 12/17 = 71%）。
 
+### 場景執行順序約束
+
+部分場景有強制的先後順序，**新 session 接手或 commit 後必須遵守**：
+
+| 約束 | 說明 | 違反後果 |
+|------|------|---------|
+| **#16 必須先於 #11**（強制） | commit 後先執行 #16（錯誤學習確認 @ Checkpoint 1.5），再進入 #11（Commit Handoff @ Checkpoint 2） | 跳過 #16 直接 #11 → 該次 commit 的錯誤學習永久遺漏，無從追溯 |
+
+**執行流程**：`git commit 成功 → Checkpoint 1.5（#16）→ Checkpoint 2（#11）`
+
+> 詳見：decision-tree.md 第八層 Checkpoint 1.5、askuserquestion-scene-details.md 場景 16
+
 ### AskUserQuestion 工具能力
 
 - 2-4 個選項，帶標籤和描述
@@ -131,7 +143,6 @@ PM 需要用戶做任何決策時（包含多選路由和二元 yes/no 確認）
 
 ---
 
-**Last Updated**: 2026-03-08
-**Version**: 2.7.0 - 場景 #3 觸發條件精確化（C1 only）；場景 #11 描述明確區分 C1→#3、C2→#13 路由（0.1.0-W22-006）
-**Purpose**: AskUserQuestion 規則唯一 Source of Truth
+**Last Updated**: 2026-03-09
+**Version**: 2.8.0 - 新增「場景執行順序約束」章節，明確 #16 必須先於 #11 的強制執行順序（0.1.0-W22-010）
 **Purpose**: AskUserQuestion 規則唯一 Source of Truth
