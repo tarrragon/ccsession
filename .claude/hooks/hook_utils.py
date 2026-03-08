@@ -20,9 +20,9 @@ import os
 import sys
 import time
 import traceback
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Callable, List, Optional, Tuple
 
 # ============================================================================
 # 常數定義
@@ -532,6 +532,122 @@ def parse_ticket_frontmatter(
         if logger:
             logger.warning("解析 frontmatter 失敗: {}".format(e))
         return {}
+
+
+def parse_ticket_date(value: "any", logger: "logging.Logger | None" = None) -> Optional[datetime]:
+    """支援多格式的 Ticket 日期解析。
+
+    格式優先級：
+    1. datetime.date 物件（YAML 直接解析）
+    2. ISO 8601 / RFC 3339 字串（fromisoformat）
+    3. 簡單日期字串 YYYY-MM-DD
+
+    Args:
+        value: 日期值（可能是 datetime、date 或字串）
+        logger: 日誌物件（可選）
+
+    Returns:
+        datetime 物件或 None（無法解析時）
+    """
+    # 已經是 datetime 物件
+    if isinstance(value, datetime):
+        return value
+
+    # 是 date 物件，轉為 datetime
+    if isinstance(value, date):
+        return datetime.combine(value, datetime.min.time())
+
+    # 字串解析
+    if not isinstance(value, str):
+        if logger:
+            logger.warning("無法解析日期類型: {}".format(type(value)))
+        return None
+
+    value = value.strip()
+    if not value:
+        return None
+
+    # 優先級 1: ISO 8601 / RFC 3339（使用 fromisoformat）
+    try:
+        dt = datetime.fromisoformat(value)
+        if logger:
+            logger.debug("日期解析成功（ISO 8601）: {}".format(dt.isoformat()))
+        return dt
+    except ValueError:
+        pass
+
+    # 優先級 2: 簡單日期 YYYY-MM-DD（strptime）
+    try:
+        dt = datetime.strptime(value, "%Y-%m-%d")
+        if logger:
+            logger.debug("日期解析成功（YYYY-MM-DD）: {}".format(dt.isoformat()))
+        return dt
+    except ValueError:
+        pass
+
+    # 所有格式都失敗
+    if logger:
+        logger.warning("無法解析日期字串: {}".format(value))
+    return None
+
+
+def check_error_patterns_changed(
+    project_root: Path,
+    ticket_created: datetime,
+    logger: "logging.Logger | None" = None
+) -> "Tuple[bool, List[str]]":
+    """掃描 .claude/error-patterns/ 目錄，找出所有 mtime > ticket_created 的 .md 檔案。
+
+    Args:
+        project_root: 專案根目錄
+        ticket_created: Ticket 建立時間
+        logger: 日誌物件（可選）
+
+    Returns:
+        tuple - (has_changed, file_list)
+            - has_changed: 是否有新增/修改的 error-pattern
+            - file_list: 新增/修改的檔案相對路徑清單
+    """
+    # 前置檢查
+    if ticket_created is None:
+        if logger:
+            logger.warning("ticket created time 為 None，跳過檢查")
+        return False, []
+
+    # 檢查目錄是否存在
+    error_patterns_dir = project_root / ".claude" / "error-patterns"
+    if not error_patterns_dir.exists():
+        if logger:
+            logger.info("error-patterns 目錄不存在，跳過檢查")
+        return False, []
+
+    changed_files = []
+    ticket_created_timestamp = ticket_created.timestamp()
+
+    try:
+        # 遞迴掃描所有 .md 檔案
+        for file_path in error_patterns_dir.rglob("*.md"):
+            try:
+                file_mtime = file_path.stat().st_mtime
+                if file_mtime > ticket_created_timestamp:
+                    relative_path = file_path.relative_to(project_root)
+                    changed_files.append(str(relative_path))
+                    if logger:
+                        logger.debug("找到新增檔案: {}".format(relative_path))
+            except (OSError, PermissionError) as e:
+                if logger:
+                    logger.warning("無法讀取檔案 stat: {}: {}".format(file_path, e))
+                continue
+
+    except (OSError, PermissionError) as e:
+        if logger:
+            logger.warning("讀取 error-patterns 目錄失敗: {}".format(e))
+        return False, []
+
+    if logger:
+        logger.info("掃描 error-patterns 目錄完成：發現 {} 個新增/修改檔案".format(len(changed_files)))
+    has_changed = len(changed_files) > 0
+    return has_changed, changed_files
 
 
 def run_hook_safely(main_func: Callable[[], int], hook_name: str) -> int:

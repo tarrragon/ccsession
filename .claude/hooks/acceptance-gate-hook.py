@@ -48,7 +48,14 @@ _hooks_dir = Path(__file__).parent
 if _hooks_dir not in [p for p in sys.path if Path(p) == _hooks_dir]:
     sys.path.insert(0, str(_hooks_dir))
 
-from hook_utils import setup_hook_logging, run_hook_safely, read_json_from_stdin, parse_ticket_frontmatter
+from hook_utils import (
+    setup_hook_logging,
+    run_hook_safely,
+    read_json_from_stdin,
+    parse_ticket_frontmatter,
+    parse_ticket_date,
+    check_error_patterns_changed,
+)
 from lib.hook_messages import GateMessages, CoreMessages, AskUserQuestionMessages, format_message
 
 import re
@@ -502,62 +509,6 @@ def find_pending_sibling_tickets(
 # Error Pattern 檢查
 # ============================================================================
 
-def _parse_ticket_date(value: any, logger) -> Optional[datetime]:
-    """
-    支援多格式的日期解析。
-
-    格式優先級：
-    1. datetime.date 物件（YAML 直接解析）
-    2. ISO 8601 / RFC 3339 字串（fromisoformat）
-    3. 簡單日期字串 YYYY-MM-DD
-
-    Args:
-        value: 日期值（可能是 datetime、date 或字串）
-        logger: 日誌物件
-
-    Returns:
-        datetime 物件或 None（無法解析時）
-    """
-    from datetime import date
-
-    # 已經是 datetime 物件
-    if isinstance(value, datetime):
-        return value
-
-    # 是 date 物件，轉為 datetime
-    if isinstance(value, date):
-        return datetime.combine(value, datetime.min.time())
-
-    # 字串解析
-    if not isinstance(value, str):
-        logger.warning(f"無法解析日期類型: {type(value)}")
-        return None
-
-    value = value.strip()
-    if not value:
-        return None
-
-    # 優先級 1: ISO 8601 / RFC 3339（使用 fromisoformat）
-    try:
-        dt = datetime.fromisoformat(value)
-        logger.debug(f"日期解析成功（ISO 8601）: {dt.isoformat()}")
-        return dt
-    except ValueError:
-        pass
-
-    # 優先級 2: 簡單日期 YYYY-MM-DD（strptime）
-    try:
-        dt = datetime.strptime(value, "%Y-%m-%d")
-        logger.debug(f"日期解析成功（YYYY-MM-DD）: {dt.isoformat()}")
-        return dt
-    except ValueError:
-        pass
-
-    # 所有格式都失敗
-    logger.warning(f"無法解析日期字串: {value}")
-    return None
-
-
 def get_ticket_created_time(ticket_file: Path, logger) -> Optional[datetime]:
     """
     從 Ticket frontmatter 讀取 created 欄位並解析為 datetime
@@ -579,8 +530,8 @@ def get_ticket_created_time(ticket_file: Path, logger) -> Optional[datetime]:
             logger.warning("Ticket frontmatter 缺少 created 欄位")
             return None
 
-        # 使用通用日期解析函式
-        dt = _parse_ticket_date(created_value, logger)
+        # 使用通用日期解析函式（來自 hook_utils）
+        dt = parse_ticket_date(created_value, logger)
         if dt:
             logger.info(f"Ticket created at: {dt.isoformat()}")
         return dt
@@ -588,60 +539,6 @@ def get_ticket_created_time(ticket_file: Path, logger) -> Optional[datetime]:
     except Exception as e:
         logger.warning(f"讀取 ticket created 時間失敗: {e}")
         return None
-
-
-def check_error_patterns_changed(
-    project_root: Path,
-    ticket_created: datetime,
-    logger
-) -> Tuple[bool, List[str]]:
-    """
-    掃描 .claude/error-patterns/ 目錄，找出所有 mtime > ticket_created 的 .md 檔案
-
-    Args:
-        project_root: 專案根目錄
-        ticket_created: Ticket 建立時間
-        logger: 日誌物件
-
-    Returns:
-        tuple - (has_changed, file_list)
-            - has_changed: 是否有新增/修改的 error-pattern
-            - file_list: 新增/修改的檔案相對路徑清單
-    """
-    # 前置檢查
-    if ticket_created is None:
-        logger.warning("ticket created time 為 None，跳過檢查")
-        return False, []
-
-    # 檢查目錄是否存在
-    error_patterns_dir = project_root / ".claude" / "error-patterns"
-    if not error_patterns_dir.exists():
-        logger.info("error-patterns 目錄不存在，跳過檢查")
-        return False, []
-
-    changed_files = []
-    ticket_created_timestamp = ticket_created.timestamp()
-
-    try:
-        # 遞迴掃描所有 .md 檔案
-        for file_path in error_patterns_dir.rglob("*.md"):
-            try:
-                file_mtime = file_path.stat().st_mtime
-                if file_mtime > ticket_created_timestamp:
-                    relative_path = file_path.relative_to(project_root)
-                    changed_files.append(str(relative_path))
-                    logger.debug(f"找到新增檔案: {relative_path}")
-            except (OSError, PermissionError) as e:
-                logger.warning(f"無法讀取檔案 stat: {file_path}: {e}")
-                continue
-
-    except (OSError, PermissionError) as e:
-        logger.warning(f"讀取 error-patterns 目錄失敗: {e}")
-        return False, []
-
-    logger.info(f"掃描 error-patterns 目錄完成：發現 {len(changed_files)} 個新增/修改檔案")
-    has_changed = len(changed_files) > 0
-    return has_changed, changed_files
 
 
 # ============================================================================
