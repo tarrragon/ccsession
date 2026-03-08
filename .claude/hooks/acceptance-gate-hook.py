@@ -965,137 +965,150 @@ def save_check_log(ticket_id: str, should_block: bool, project_dir: Path, logger
 
 
 # ============================================================================
+# 主入口點輔助函式
+# ============================================================================
+
+def _parse_and_validate_input(input_data: Dict[str, Any], logger) -> Optional[Tuple[str, str]]:
+    """
+    解析並驗證輸入資料。
+
+    驗證 Hook 輸入格式並提取必要欄位。若輸入無效，直接輸出 allow JSON 並回傳 None。
+
+    Args:
+        input_data: Hook 輸入資料
+        logger: 日誌物件
+
+    Returns:
+        Tuple[str, str] - (tool_name, command) 或 None（無效時）
+    """
+    if not validate_input(input_data, logger):
+        logger.error("輸入格式錯誤")
+        print(json.dumps({
+            "hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "allow"}
+        }, ensure_ascii=False, indent=2))
+        return None
+
+    tool_name = input_data.get("tool_name", "")
+    tool_input = input_data.get("tool_input", {})
+    command = tool_input.get("command", "")
+
+    return tool_name, command
+
+
+def _extract_ticket_or_skip(tool_name: str, command: str, logger) -> Optional[str]:
+    """
+    識別 complete 命令並提取 Ticket ID。
+
+    驗證是 Bash 工具且是 complete 命令，則提取 Ticket ID。
+    不符合條件時，直接輸出 allow JSON 並回傳 None。
+
+    Args:
+        tool_name: 工具名稱
+        command: Bash 命令字串
+        logger: 日誌物件
+
+    Returns:
+        str - Ticket ID 或 None（不符合條件時）
+    """
+    # 不是 Bash 工具
+    if tool_name != "Bash":
+        logger.debug(f"非 Bash 工具: {tool_name}，直接放行")
+        print(json.dumps({
+            "hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "allow"}
+        }, ensure_ascii=False, indent=2))
+        return None
+
+    # 不是 complete 命令
+    if not is_complete_command(command):
+        logger.debug(f"非 ticket track complete 命令: {command}")
+        print(json.dumps({
+            "hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "allow"}
+        }, ensure_ascii=False, indent=2))
+        return None
+
+    logger.info(f"識別到 ticket track complete 命令: {command}")
+
+    # 提取 Ticket ID
+    ticket_id = extract_ticket_id_from_command(command, logger)
+    if not ticket_id:
+        logger.error("無法從命令中提取 Ticket ID")
+        print(json.dumps({
+            "hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "allow"}
+        }, ensure_ascii=False, indent=2))
+        return None
+
+    logger.info(f"提取 Ticket ID: {ticket_id}")
+    return ticket_id
+
+
+# ============================================================================
 # 主入口點
 # ============================================================================
 
 def main() -> int:
     """
-    主入口點
+    主入口點 - 驗收流程協調
 
-    執行流程:
-    1. 初始化日誌
-    2. 讀取 JSON 輸入
-    3. 驗證輸入格式
-    4. 識別是否為 ticket track complete 命令
-    5. 提取 Ticket ID
-    6. 檢查驗收狀態（子任務 + 驗收記錄）
-    7. 決定是否追加下一步提醒（場景 #1 complete 流程 + 場景 #2 complete 後下一步）
-    8. 生成 Hook 輸出
-    9. 儲存日誌
-    10. 決定 exit code
+    驗收流程：
+    1. 解析驗證輸入
+    2. 識別 complete 命令並提取 Ticket ID
+    3. 檢查驗收狀態
+    4. 生成 Hook 輸出並儲存日誌
+    5. 決定 exit code
 
     Returns:
         int - Exit code (EXIT_SUCCESS, EXIT_BLOCK, 或 EXIT_ERROR)
     """
-    # 初始化 logger
     logger = setup_hook_logging("acceptance-gate")
 
     try:
-        # 步驟 1: 初始化日誌
         logger.info(CoreMessages.HOOK_START.format(hook_name="Acceptance Gate Hook"))
 
-        # 步驟 2: 讀取 JSON 輸入
+        # 步驟 1: 解析驗證輸入
         input_data = read_json_from_stdin(logger)
+        parsed = _parse_and_validate_input(input_data, logger)
+        if parsed is None:
+            return EXIT_SUCCESS
+        tool_name, command = parsed
 
-        # 步驟 3: 驗證輸入格式
-        if not validate_input(input_data, logger):
-            logger.error("輸入格式錯誤")
-            print(json.dumps({
-                "hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "allow"}
-            }, ensure_ascii=False, indent=2))
+        # 步驟 2: 識別命令並提取 Ticket ID
+        ticket_id = _extract_ticket_or_skip(tool_name, command, logger)
+        if ticket_id is None:
             return EXIT_SUCCESS
 
-        tool_name = input_data.get("tool_name", "")
-        tool_input = input_data.get("tool_input", {})
-
-        # 不是 Bash 工具，直接放行
-        if tool_name != "Bash":
-            logger.debug(f"非 Bash 工具: {tool_name}，直接放行")
-            output = generate_hook_output(False, None)
-            print(json.dumps(output, ensure_ascii=False, indent=2))
-            return EXIT_SUCCESS
-
-        command = tool_input.get("command", "")
-
-        # 步驟 4: 識別是否為 ticket track complete 命令
-        if not is_complete_command(command):
-            logger.debug(f"非 ticket track complete 命令: {command}")
-            output = generate_hook_output(False, None)
-            print(json.dumps(output, ensure_ascii=False, indent=2))
-            return EXIT_SUCCESS
-
-        logger.info(f"識別到 ticket track complete 命令: {command}")
-
-        # 步驟 5: 提取 Ticket ID
-        ticket_id = extract_ticket_id_from_command(command, logger)
-
-        if not ticket_id:
-            logger.error("無法從命令中提取 Ticket ID")
-            output = generate_hook_output(False, None)
-            print(json.dumps(output, ensure_ascii=False, indent=2))
-            return EXIT_SUCCESS
-
-        logger.info(f"提取 Ticket ID: {ticket_id}")
-
-        # 步驟 6: 檢查驗收狀態
+        # 步驟 3: 檢查驗收狀態
         import os
         project_dir = Path(os.getenv("CLAUDE_PROJECT_DIR", Path.cwd()))
-
         result = check_acceptance_status(ticket_id, project_dir, logger)
         logger.info(
-            f"驗收狀態檢查: "
-            f"should_block={result.should_block}, "
-            f"has_acceptance={result.has_acceptance}, "
-            f"has_new_error_patterns={result.has_new_error_patterns}"
-        )
-
-        # 步驟 7: 決定是否追加下一步提醒
-        # 場景 #1（complete 前）：驗收方式確認
-        # 場景 #2（complete 後的邏輯）：complete 後下一步選擇
-        # 場景 #9（Handoff 方向選擇）：同 Wave 中有 2+ pending sibling tickets
-        # 此時仍處於 PreToolUse，complete 尚未執行，故追加完整 complete 流程提醒
-        logger.info(
-            f"驗收結果摘要: "
-            f"should_block={result.should_block}, "
+            f"驗收結果: should_block={result.should_block}, "
             f"has_acceptance={result.has_acceptance}, "
             f"has_new_error_patterns={result.has_new_error_patterns}, "
             f"pending_siblings={len(result.pending_sibling_tickets)}"
         )
 
-        # 步驟 8: 生成 Hook 輸出
-        output = generate_hook_output(
-            ticket_id,
-            result,
-            project_dir,
-            logger
-        )
+        # 步驟 4: 生成輸出並儲存日誌
+        output = generate_hook_output(ticket_id, result, project_dir, logger)
         print(json.dumps(output, ensure_ascii=False, indent=2))
-
-        # 步驟 9: 儲存日誌
         save_check_log(ticket_id, result.should_block, project_dir, logger)
 
-        # 步驟 10: 決定 exit code
+        # 步驟 5: 決定 exit code
         if result.should_block:
             logger.warning("Acceptance Gate Hook：子任務未完成，阻止執行")
             return EXIT_BLOCK
-
         logger.info("Acceptance Gate Hook 檢查完成：允許執行")
         return EXIT_SUCCESS
 
     except Exception as e:
         logger.critical(f"Hook 執行錯誤: {e}", exc_info=True)
-        error_output = {
+        print(json.dumps({
             "hookSpecificOutput": {
                 "hookEventName": "PreToolUse",
                 "permissionDecision": "allow",
                 "additionalContext": "Hook 執行錯誤，詳見日誌: .claude/hook-logs/acceptance-gate/"
             },
-            "error": {
-                "type": type(e).__name__,
-                "message": str(e)
-            }
-        }
-        print(json.dumps(error_output, ensure_ascii=False, indent=2))
+            "error": {"type": type(e).__name__, "message": str(e)}
+        }, ensure_ascii=False, indent=2))
         return EXIT_ERROR
 
 
