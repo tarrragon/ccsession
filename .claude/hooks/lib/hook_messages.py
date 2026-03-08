@@ -596,6 +596,38 @@ complete 後必須使用 AskUserQuestion 選擇下一步。
 詳見: .claude/rules/core/decision-tree.md
 ============================================================"""
 
+    COMPLETE_NEXT_STEP_REMINDER = """============================================================
+[AskUserQuestion 強制提醒] 完成後下一步（場景 #2）
+============================================================
+
+Ticket 完成後的下一步決策（完成驗收後執行）。
+
+選項指南（必須使用 AskUserQuestion）：
+1. 繼續執行下一個 Ticket
+   - 條件：當前 Wave 有其他 pending Ticket
+   - 操作：/ticket track list --wave {n} → 選擇下一個 Ticket
+
+2. Wave 收尾確認
+   - 條件：當前 Wave 無其他 pending Ticket
+   - 操作：確認版本進展，準備關閉 Wave
+
+3. 版本發布檢查
+   - 條件：所有 Wave 完成，版本目標達成
+   - 操作：/version-release check → 準備新版本發布
+
+4. 清空 Session 結束
+   - 條件：任何時候都可選
+   - 操作：/clear（保護 context 資源）
+
+規則（來源: askuserquestion-rules.md 場景 #2）：
+- 禁止用純文字提問（如「要繼續嗎？」）
+- 必須使用 AskUserQuestion tool 呈現選項
+- 選項應基於當前 Wave/版本的實際狀態
+
+提示: ToolSearch("select:AskUserQuestion") 載入後使用。
+詳見: .claude/rules/core/askuserquestion-rules.md（場景 #2）
+============================================================"""
+
     WAVE_WRAP_UP_REMINDER = """============================================================
 [AskUserQuestion 強制提醒] Wave 收尾
 ============================================================

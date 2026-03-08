@@ -5,16 +5,19 @@
 # ///
 
 """
-Acceptance Gate Hook - 驗收狀態驗證
+Acceptance Gate Hook - 驗收流程完整引導
 
-在 `ticket track complete` 執行前檢查驗收狀態。
+在 `ticket track complete` 執行前檢查並引導驗收流程。
 
 功能：
 - 監控 Bash 工具中的 ticket track complete 命令
-- 檢查子任務是否全部完成
-- 檢查是否有驗收記錄（除了 DOC 類型）
-- 子任務未完成時阻擋（exit 2）
-- 未驗收時輸出警告（exit 0，允許但提醒）
+- 檢查子任務是否全部完成（阻塊）
+- 檢查是否有驗收記錄（警告）
+- 在檢查完成後輸出 AskUserQuestion 場景提醒：
+  * 場景 #1（complete 前）：驗收方式確認（標準/簡化/先完成後補）
+  * 場景 #2（complete 後的邏輯）：complete 後下一步選擇（下個 Ticket/Wave 收尾/版本發布）
+  * 補充說明：此時仍在 PreToolUse，complete 尚未執行，故提醒涵蓋整個 complete 流程
+- 使用 hook_utils 統一日誌系統
 
 Exit Code：
 - 0 (EXIT_SUCCESS): 命令允許執行
@@ -22,7 +25,11 @@ Exit Code：
 - 1 (EXIT_ERROR): Hook 執行錯誤
 
 Hook 類型: PreToolUse
-觸發時機: Bash 工具執行前
+觸發時機: Bash 工具執行前，命令含 "ticket track complete" 或 "ticket track batch-complete"
+
+Matcher 條件（settings.json）:
+  matcher: "Bash"
+  command 須含 "ticket track complete" 或 "ticket track batch-complete"
 
 使用方式:
     echo '{"tool_name":"Bash","tool_input":{"command":"ticket track complete 0.31.0-W4-036"}}' | python3 acceptance-gate-hook.py
@@ -494,7 +501,8 @@ def check_acceptance_status(ticket_id: str, project_dir: Path, logger) -> Tuple[
 def generate_hook_output(
     should_block: bool,
     message: Optional[str],
-    ask_user_reminder: bool = False
+    ask_user_reminder: bool = False,
+    next_step_reminder: bool = False
 ) -> Dict[str, Any]:
     """
     生成 Hook 輸出
@@ -502,7 +510,8 @@ def generate_hook_output(
     Args:
         should_block: 是否應該阻擋執行
         message: 錯誤或警告訊息
-        ask_user_reminder: 是否追加 AskUserQuestion 提醒
+        ask_user_reminder: 是否追加 complete 流程提醒（驗收方式）
+        next_step_reminder: 是否追加 complete 後下一步提醒（場景 #2）
 
     Returns:
         dict - Hook 輸出 JSON
@@ -514,13 +523,22 @@ def generate_hook_output(
         }
     }
 
+    context_parts = []
+
+    # 第一優先級：錯誤或警告訊息
     if message:
-        context = message
-        if ask_user_reminder:
-            context += "\n\n" + AskUserQuestionMessages.COMPLETE_REMINDER
-        output["hookSpecificOutput"]["additionalContext"] = context
-    elif ask_user_reminder:
-        output["hookSpecificOutput"]["additionalContext"] = AskUserQuestionMessages.COMPLETE_REMINDER
+        context_parts.append(message)
+
+    # 第二優先級：complete 流程提醒（驗收方式，場景 #1）
+    if ask_user_reminder:
+        context_parts.append(AskUserQuestionMessages.COMPLETE_REMINDER)
+
+    # 第三優先級：complete 後下一步提醒（路由選擇，場景 #2，僅在無訊息時追加）
+    if next_step_reminder and not message:
+        context_parts.append(AskUserQuestionMessages.COMPLETE_NEXT_STEP_REMINDER)
+
+    if context_parts:
+        output["hookSpecificOutput"]["additionalContext"] = "\n\n".join(context_parts)
 
     output["check_result"] = {
         "should_block": should_block,
@@ -574,9 +592,10 @@ def main() -> int:
     4. 識別是否為 ticket track complete 命令
     5. 提取 Ticket ID
     6. 檢查驗收狀態（子任務 + 驗收記錄）
-    7. 生成 Hook 輸出
-    8. 儲存日誌
-    9. 決定 exit code
+    7. 決定是否追加下一步提醒（場景 #1 complete 流程 + 場景 #2 complete 後下一步）
+    8. 生成 Hook 輸出
+    9. 儲存日誌
+    10. 決定 exit code
 
     Returns:
         int - Exit code (EXIT_SUCCESS, EXIT_BLOCK, 或 EXIT_ERROR)
@@ -638,14 +657,26 @@ def main() -> int:
         should_block, has_acceptance, message = check_acceptance_status(ticket_id, project_dir, logger)
         logger.info(f"驗收狀態檢查: should_block={should_block}, has_acceptance={has_acceptance}")
 
-        # 步驟 7: 生成 Hook 輸出
-        output = generate_hook_output(should_block, message, ask_user_reminder=True)
+        # 步驟 7: 決定是否追加下一步提醒
+        # 場景 #1（complete 前）：驗收方式確認
+        # 場景 #2（complete 後的邏輯）：complete 後下一步選擇
+        # 此時仍處於 PreToolUse，complete 尚未執行，故追加完整 complete 流程提醒
+        next_step_prompt = not should_block and not message
+        logger.info(f"是否追加下一步提醒: {next_step_prompt}")
+
+        # 步驟 8: 生成 Hook 輸出
+        output = generate_hook_output(
+            should_block,
+            message,
+            ask_user_reminder=True,
+            next_step_reminder=next_step_prompt
+        )
         print(json.dumps(output, ensure_ascii=False, indent=2))
 
-        # 步驟 8: 儲存日誌
+        # 步驟 9: 儲存日誌
         save_check_log(ticket_id, should_block, project_dir, logger)
 
-        # 步驟 9: 決定 exit code
+        # 步驟 10: 決定 exit code
         if should_block:
             logger.warning("Acceptance Gate Hook：子任務未完成，阻止執行")
             return EXIT_BLOCK
