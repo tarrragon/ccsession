@@ -49,7 +49,20 @@ from lib.hook_messages import GateMessages, CoreMessages, AskUserQuestionMessage
 
 import re
 from datetime import datetime
-from typing import Dict, Any, Optional, Tuple, List
+from typing import Dict, Any, Optional, Tuple, List, NamedTuple
+
+
+# ============================================================================
+# 資料結構定義
+# ============================================================================
+
+class AcceptanceCheckResult(NamedTuple):
+    """驗收狀態檢查結果"""
+    should_block: bool
+    has_acceptance: bool
+    message: Optional[str]
+    has_new_error_patterns: bool
+    new_error_pattern_files: List[str]
 
 
 # ============================================================================
@@ -410,6 +423,62 @@ def is_doc_type(ticket_type: Optional[str]) -> bool:
 # Error Pattern 檢查
 # ============================================================================
 
+def _parse_ticket_date(value: any, logger) -> Optional[datetime]:
+    """
+    支援多格式的日期解析。
+
+    格式優先級：
+    1. datetime.date 物件（YAML 直接解析）
+    2. ISO 8601 / RFC 3339 字串（fromisoformat）
+    3. 簡單日期字串 YYYY-MM-DD
+
+    Args:
+        value: 日期值（可能是 datetime、date 或字串）
+        logger: 日誌物件
+
+    Returns:
+        datetime 物件或 None（無法解析時）
+    """
+    from datetime import date
+
+    # 已經是 datetime 物件
+    if isinstance(value, datetime):
+        return value
+
+    # 是 date 物件，轉為 datetime
+    if isinstance(value, date):
+        return datetime.combine(value, datetime.min.time())
+
+    # 字串解析
+    if not isinstance(value, str):
+        logger.warning(f"無法解析日期類型: {type(value)}")
+        return None
+
+    value = value.strip()
+    if not value:
+        return None
+
+    # 優先級 1: ISO 8601 / RFC 3339（使用 fromisoformat）
+    try:
+        dt = datetime.fromisoformat(value)
+        logger.debug(f"日期解析成功（ISO 8601）: {dt.isoformat()}")
+        return dt
+    except ValueError:
+        pass
+
+    # 優先級 2: 簡單日期 YYYY-MM-DD（strptime）
+    try:
+        dt = datetime.strptime(value, "%Y-%m-%d")
+        logger.debug(f"日期解析成功（YYYY-MM-DD）: {dt.isoformat()}")
+        return dt
+    except ValueError:
+        pass
+
+    # 所有格式都失敗
+    logger.warning(f"無法解析日期字串: {value}")
+    return None
+
+
 def get_ticket_created_time(ticket_file: Path, logger) -> Optional[datetime]:
     """
     從 Ticket frontmatter 讀取 created 欄位並解析為 datetime
@@ -426,50 +495,16 @@ def get_ticket_created_time(ticket_file: Path, logger) -> Optional[datetime]:
         frontmatter = parse_ticket_frontmatter(content)
 
         # 取得 created 欄位值
-        created_str = frontmatter.get("created", "").strip()
-        if not created_str:
-            logger.warning(f"Ticket frontmatter 缺少 created 欄位")
+        created_value = frontmatter.get("created")
+        if not created_value:
+            logger.warning("Ticket frontmatter 缺少 created 欄位")
             return None
 
-        # 嘗試多種格式解析日期
-        # 優先級 1: ISO 8601 (datetime.fromisoformat)
-        try:
-            dt = datetime.fromisoformat(created_str)
+        # 使用通用日期解析函式
+        dt = _parse_ticket_date(created_value, logger)
+        if dt:
             logger.info(f"Ticket created at: {dt.isoformat()}")
-            return dt
-        except ValueError:
-            pass
-
-        # 優先級 2: 簡單日期 YYYY-MM-DD (strptime)
-        try:
-            dt = datetime.strptime(created_str, "%Y-%m-%d")
-            logger.info(f"Ticket created at: {dt.isoformat()}")
-            return dt
-        except ValueError:
-            pass
-
-        # 優先級 3: RFC 3339 變體 (時間 + Z 或時區)
-        try:
-            # 移除時區後進行解析
-            if "+" in created_str or "Z" in created_str.upper():
-                # 移除時區資訊
-                dt_str = created_str.replace("Z", "").split("+")[0].split("-")
-                if len(dt_str) > 1:
-                    dt_str = "-".join(dt_str[:3])  # 保留日期和時間部分
-                else:
-                    dt_str = created_str.replace("Z", "")
-                dt = datetime.fromisoformat(dt_str)
-            else:
-                # 直接解析
-                dt = datetime.fromisoformat(created_str)
-            logger.info(f"Ticket created at: {dt.isoformat()}")
-            return dt
-        except (ValueError, TypeError):
-            pass
-
-        # 所有格式都失敗
-        logger.warning(f"無法解析 created 欄位: {created_str}")
-        return None
+        return dt
 
     except Exception as e:
         logger.warning(f"讀取 ticket created 時間失敗: {e}")
@@ -534,9 +569,135 @@ def check_error_patterns_changed(
 # 檢查邏輯
 # ============================================================================
 
-def check_acceptance_status(ticket_id: str, project_dir: Path, logger) -> Tuple[bool, bool, Optional[str], bool, List[str]]:
+def _check_children_completed(ticket_file: Path, frontmatter: Dict[str, str], project_dir: Path, ticket_id: str, logger) -> Tuple[bool, Optional[str]]:
     """
-    檢查 Ticket 的驗收狀態
+    子任務完成度檢查。
+
+    Args:
+        ticket_file: Ticket 檔案路徑
+        frontmatter: Ticket frontmatter 鍵值對
+        project_dir: 專案根目錄
+        ticket_id: Ticket ID
+        logger: 日誌物件
+
+    Returns:
+        tuple - (should_block, error_message)
+            - should_block: 是否應阻擋執行
+            - error_message: 錯誤訊息或 None
+    """
+    children = extract_children_from_frontmatter(frontmatter, logger)
+
+    if not children:
+        return False, None
+
+    logger.info(f"Ticket {ticket_id} 有 {len(children)} 個子任務")
+    all_completed, incomplete_children = check_children_completed(children, project_dir, logger)
+
+    if not all_completed:
+        # 子任務未完成 → 阻擋
+        title = frontmatter.get("title", "未知")
+        incomplete_list = "\n".join(
+            f"  - {child_id}: {child_title} (status: {status})"
+            for child_id, child_title, status in incomplete_children
+        )
+        error_msg = format_message(
+            GateMessages.CHILDREN_INCOMPLETE_ERROR,
+            ticket_id=ticket_id,
+            title=title,
+            incomplete_list=incomplete_list
+        )
+        logger.error(f"Ticket {ticket_id} 有未完成的子任務 - 阻擋執行")
+        return True, error_msg
+
+    logger.info(f"Ticket {ticket_id} 所有子任務已完成")
+    return False, None
+
+
+def _verify_acceptance_record(ticket_content: str, frontmatter: Dict[str, str], ticket_id: str, logger) -> Tuple[bool, Optional[str], bool]:
+    """
+    驗收記錄驗證。
+
+    Args:
+        ticket_content: Ticket 檔案內容
+        frontmatter: Ticket frontmatter 鍵值對
+        ticket_id: Ticket ID
+        logger: 日誌物件
+
+    Returns:
+        tuple - (should_block, warning_message, should_check_acceptance)
+            - should_block: 是否應阻擋執行
+            - warning_message: 警告訊息或 None
+            - should_check_acceptance: 是否應檢查 error-pattern
+    """
+    ticket_type = frontmatter.get("type")
+    title = frontmatter.get("title", "未知")
+
+    # 決定是否需要檢查驗收
+    should_check_acceptance = True
+    children = extract_children_from_frontmatter(frontmatter, logger)
+
+    if is_doc_type(ticket_type) and not children:
+        logger.info(f"Ticket {ticket_id} 為 DOC 類型且無子任務，豁免驗收檢查")
+        should_check_acceptance = False
+
+    has_acceptance = has_acceptance_record(ticket_content, logger)
+
+    if should_check_acceptance and not has_acceptance:
+        # 未驗收 → 警告
+        warning_msg = format_message(
+            GateMessages.ACCEPTANCE_RECORD_MISSING_WARNING,
+            ticket_id=ticket_id,
+            ticket_type=ticket_type,
+            title=title
+        )
+        logger.warning(f"Ticket {ticket_id} 未找到驗收記錄 - 輸出警告")
+        return False, warning_msg, should_check_acceptance
+
+    logger.info(f"Ticket {ticket_id} 驗收檢查通過")
+    return False, None, should_check_acceptance
+
+
+def _check_error_patterns(ticket_file: Path, project_dir: Path, logger) -> Tuple[bool, List[str]]:
+    """
+    Error-pattern 新增檢查。
+
+    Args:
+        ticket_file: Ticket 檔案路徑
+        project_dir: 專案根目錄
+        logger: 日誌物件
+
+    Returns:
+        tuple - (has_new_error_patterns, files)
+            - has_new_error_patterns: 是否有新增/修改的 error-pattern
+            - files: 新增/修改的檔案清單
+    """
+    ticket_created = get_ticket_created_time(ticket_file, logger)
+
+    if not ticket_created:
+        logger.warning(f"無法取得 ticket 的建立時間，跳過 error-pattern 檢查")
+        return False, []
+
+    # 檢查 error-patterns 目錄
+    has_new_error_patterns, new_error_pattern_files = check_error_patterns_changed(
+        project_dir,
+        ticket_created,
+        logger
+    )
+
+    if has_new_error_patterns:
+        logger.info(f"發現 {len(new_error_pattern_files)} 個新增/修改的 error-pattern")
+
+    return has_new_error_patterns, new_error_pattern_files
+
+
+def check_acceptance_status(ticket_id: str, project_dir: Path, logger) -> AcceptanceCheckResult:
+    """
+    檢查 Ticket 的驗收狀態（主協調函式）
+
+    此函式協調三個子檢查函式：
+    1. 子任務完成度檢查
+    2. 驗收記錄驗證
+    3. Error-pattern 新增檢查
 
     Args:
         ticket_id: Ticket ID
@@ -544,7 +705,7 @@ def check_acceptance_status(ticket_id: str, project_dir: Path, logger) -> Tuple[
         logger: 日誌物件
 
     Returns:
-        tuple - (should_block, has_acceptance, message, has_new_error_patterns, new_error_pattern_files)
+        AcceptanceCheckResult 物件，包含：
             - should_block: 是否應該阻擋執行（子任務未完成）
             - has_acceptance: 是否有驗收記錄
             - message: 錯誤或警告訊息
@@ -556,91 +717,37 @@ def check_acceptance_status(ticket_id: str, project_dir: Path, logger) -> Tuple[
 
     if not ticket_file:
         logger.error(f"找不到 Ticket 檔案: {ticket_id}")
-        return False, False, None, False, []
+        return AcceptanceCheckResult(False, False, None, False, [])
 
     try:
         content = ticket_file.read_text(encoding="utf-8")
         frontmatter = parse_ticket_frontmatter(content)
 
-        # 提取欄位
-        ticket_type = frontmatter.get("type")
-        title = frontmatter.get("title", "未知")
+        # 步驟 1：檢查子任務完成度
+        should_block, error_msg = _check_children_completed(ticket_file, frontmatter, project_dir, ticket_id, logger)
+        if should_block:
+            return AcceptanceCheckResult(True, False, error_msg, False, [])
 
-        # 檢查子任務
-        children = extract_children_from_frontmatter(frontmatter, logger)
-
-        if children:
-            logger.info(f"Ticket {ticket_id} 有 {len(children)} 個子任務")
-            all_completed, incomplete_children = check_children_completed(children, project_dir, logger)
-
-            if not all_completed:
-                # 子任務未完成 → 阻擋
-                incomplete_list = "\n".join(
-                    f"  - {child_id}: {child_title} (status: {status})"
-                    for child_id, child_title, status in incomplete_children
-                )
-                error_msg = format_message(
-                    GateMessages.CHILDREN_INCOMPLETE_ERROR,
-                    ticket_id=ticket_id,
-                    title=title,
-                    incomplete_list=incomplete_list
-                )
-
-                logger.error(f"Ticket {ticket_id} 有未完成的子任務 - 阻擋執行")
-                return True, False, error_msg, False, []
-
-            logger.info(f"Ticket {ticket_id} 所有子任務已完成")
-
-        # 檢查驗收記錄（除非是 DOC 類型且沒有子任務）
-        should_check_acceptance = True
-
-        if is_doc_type(ticket_type) and not children:
-            logger.info(f"Ticket {ticket_id} 為 DOC 類型且無子任務，豁免驗收檢查")
-            should_check_acceptance = False
+        # 步驟 2：驗證驗收記錄
+        should_block, warning_msg, should_check_acceptance = _verify_acceptance_record(content, frontmatter, ticket_id, logger)
+        if warning_msg:
+            return AcceptanceCheckResult(False, False, warning_msg, False, [])
 
         has_acceptance = has_acceptance_record(content, logger)
-
-        if should_check_acceptance and not has_acceptance:
-            # 未驗收 → 警告（exit 0）
-            warning_msg = format_message(
-                GateMessages.ACCEPTANCE_RECORD_MISSING_WARNING,
-                ticket_id=ticket_id,
-                ticket_type=ticket_type,
-                title=title
-            )
-
-            logger.warning(f"Ticket {ticket_id} 未找到驗收記錄 - 輸出警告")
-            return False, False, warning_msg, False, []
-
         logger.info(f"Ticket {ticket_id} 驗收檢查通過")
 
-        # [新增步驟 6.5] 檢查是否有新增 error-pattern
+        # 步驟 3：檢查 error-pattern 新增
         has_new_error_patterns = False
         new_error_pattern_files = []
 
-        # 僅在不阻擋且需要檢查的情況下執行
-        if not False and should_check_acceptance:  # should_block 為 False（驗收已通過）
-            # 取得 ticket 建立時間
-            ticket_created = get_ticket_created_time(ticket_file, logger)
+        if should_check_acceptance:
+            has_new_error_patterns, new_error_pattern_files = _check_error_patterns(ticket_file, project_dir, logger)
 
-            if ticket_created:
-                # 檢查 error-patterns 目錄
-                has_new_error_patterns, new_error_pattern_files = check_error_patterns_changed(
-                    project_dir,
-                    ticket_created,
-                    logger
-                )
-
-                if has_new_error_patterns:
-                    logger.info(f"發現 {len(new_error_pattern_files)} 個新增/修改的 error-pattern")
-            else:
-                logger.warning(f"無法取得 ticket {ticket_id} 的建立時間，跳過 error-pattern 檢查")
-
-        return False, has_acceptance, None, has_new_error_patterns, new_error_pattern_files
+        return AcceptanceCheckResult(False, has_acceptance, None, has_new_error_patterns, new_error_pattern_files)
 
     except Exception as e:
         logger.error(f"檢查驗收狀態失敗: {e}", exc_info=True)
-        return False, False, None, False, []
+        return AcceptanceCheckResult(False, False, None, False, [])
 
 
 # ============================================================================
@@ -815,37 +922,37 @@ def main() -> int:
         import os
         project_dir = Path(os.getenv("CLAUDE_PROJECT_DIR", Path.cwd()))
 
-        should_block, has_acceptance, message, has_new_error_patterns, new_error_pattern_files = check_acceptance_status(ticket_id, project_dir, logger)
+        result = check_acceptance_status(ticket_id, project_dir, logger)
         logger.info(
             f"驗收狀態檢查: "
-            f"should_block={should_block}, "
-            f"has_acceptance={has_acceptance}, "
-            f"has_new_error_patterns={has_new_error_patterns}"
+            f"should_block={result.should_block}, "
+            f"has_acceptance={result.has_acceptance}, "
+            f"has_new_error_patterns={result.has_new_error_patterns}"
         )
 
         # 步驟 7: 決定是否追加下一步提醒
         # 場景 #1（complete 前）：驗收方式確認
         # 場景 #2（complete 後的邏輯）：complete 後下一步選擇
         # 此時仍處於 PreToolUse，complete 尚未執行，故追加完整 complete 流程提醒
-        next_step_prompt = not should_block and not message
+        next_step_prompt = not result.should_block and not result.message
         logger.info(f"是否追加下一步提醒: {next_step_prompt}")
 
         # 步驟 8: 生成 Hook 輸出
         output = generate_hook_output(
-            should_block,
-            message,
+            result.should_block,
+            result.message,
             ask_user_reminder=True,
             next_step_reminder=next_step_prompt,
-            has_new_error_patterns=has_new_error_patterns,
-            new_error_pattern_files=new_error_pattern_files
+            has_new_error_patterns=result.has_new_error_patterns,
+            new_error_pattern_files=result.new_error_pattern_files
         )
         print(json.dumps(output, ensure_ascii=False, indent=2))
 
         # 步驟 9: 儲存日誌
-        save_check_log(ticket_id, should_block, project_dir, logger)
+        save_check_log(ticket_id, result.should_block, project_dir, logger)
 
         # 步驟 10: 決定 exit code
-        if should_block:
+        if result.should_block:
             logger.warning("Acceptance Gate Hook：子任務未完成，阻止執行")
             return EXIT_BLOCK
 
