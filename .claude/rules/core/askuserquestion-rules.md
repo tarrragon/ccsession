@@ -66,7 +66,7 @@ PM 需要用戶做任何決策時（包含多選路由和二元 yes/no 確認）
 |---|------|---------|--------|-----------|
 | 1 | 驗收方式確認 | ticket track complete 前 | ticket-lifecycle 驗收階段 | acceptance-gate-hook |
 | 2 | Complete 後下一步 | ticket track complete 後 | ticket-lifecycle 完成階段 | acceptance-gate-hook |
-| 3 | Wave/任務收尾確認 | Wave 無 pending Ticket | ticket-lifecycle 收尾 | parallel-suggestion-hook |
+| 3 | Wave/任務收尾確認 | 當前 Wave 無 pending Ticket（情境 C1：版本仍有其他 Wave pending） | ticket-lifecycle 收尾 | parallel-suggestion-hook |
 | 4 | 方案選擇 | 多個技術方案 | 決策樹第負一層 | prompt-submit-hook |
 | 5 | 優先級確認 | 多任務排序 | 決策樹第負一層 | prompt-submit-hook |
 | 6 | 任務拆分確認 | 認知負擔 > 10 | 決策樹第負一層 | prompt-submit-hook |
@@ -74,7 +74,7 @@ PM 需要用戶做任何決策時（包含多選路由和二元 yes/no 確認）
 | 8 | 執行方向確認 | 並行/序列、先後順序 | 決策樹第負一層 | - |
 | 9 | Handoff 方向選擇 | 多個兄弟/子任務可選 | ticket-lifecycle 完成階段 | - |
 | 10 | 開始/收尾確認 | 確認是否開始執行 | 決策樹第負一層 | - |
-| 11 | Commit 後情境感知 Handoff | git commit 後依情境路由（11a/11b，或轉 #3） | 決策樹第八層 | commit-handoff-hook |
+| 11 | Commit 後情境感知 Handoff | git commit 後依情境路由（情境 A→11a；情境 B→11b；情境 C1→跳至 #3；情境 C2→跳至 #13，均不經 #11） | 決策樹第八層 | commit-handoff-hook |
 | 12 | 流程省略確認 | 省略意圖偵測 | 決策樹第八層 | process-skip-guard-hook |
 | 13 | 後續任務路由確認 | 任務完成後 | 決策樹第八層 | phase-completion-gate（擴充） |
 | 14 | parallel-evaluation 觸發確認 | 階段完成後 | 決策樹第八層 | phase-completion-gate（擴充） |
@@ -132,6 +132,6 @@ PM 需要用戶做任何決策時（包含多選路由和二元 yes/no 確認）
 ---
 
 **Last Updated**: 2026-03-08
-**Version**: 2.6.0 - 通用觸發原則改寫為三準則（含二元確認）；規則 1/3 語義精確化（0.1.0-W15-009）
+**Version**: 2.7.0 - 場景 #3 觸發條件精確化（C1 only）；場景 #11 描述明確區分 C1→#3、C2→#13 路由（0.1.0-W22-006）
 **Purpose**: AskUserQuestion 規則唯一 Source of Truth
 **Purpose**: AskUserQuestion 規則唯一 Source of Truth

@@ -104,7 +104,8 @@
 |------|------|------|
 | A：Context 刷新 | ticket 仍 in_progress | #11a |
 | B：任務切換 | ticket 已 completed + 有關聯待處理任務 | #11b |
-| C：Wave 收尾 | ticket 已 completed + 無關聯待處理任務 | 跳至 #3，不使用 #11 |
+| C1：Wave 收尾（有下一 Wave） | ticket 已 completed + 無關聯待處理任務 + 版本仍有其他 Wave pending | 跳至 #3，不使用 #11 |
+| C2：版本完成 | ticket 已 completed + 無關聯待處理任務 + 版本無任何待處理任務 | 跳至 #13（強制 /version-release check），不使用 #11 |
 
 **#16 → #11 執行順序**
 
@@ -365,4 +366,4 @@ ticket handoff <id>
 ---
 
 **Last Updated**: 2026-03-08
-**Version**: 1.0.0 - 從 askuserquestion-rules.md 場景詳細說明章節移出（0.1.0-W13-004）
+**Version**: 1.1.0 - 場景 11 路由表 C 行拆分為 C1/C2，明確 C2→#13 不走 #11（0.1.0-W22-006）
