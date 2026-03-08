@@ -75,6 +75,8 @@ class AcceptanceCheckResult(NamedTuple):
     has_new_error_patterns: bool
     new_error_pattern_files: List[str]
     pending_sibling_tickets: List[str] = []
+    task_type: str = ""
+    priority: str = ""
 
 
 # ============================================================================
@@ -725,13 +727,18 @@ def check_acceptance_status(ticket_id: str, project_dir: Path, logger) -> Accept
         pending_siblings = find_pending_sibling_tickets(ticket_id, project_dir, logger)
         logger.info(f"發現 {len(pending_siblings)} 個 pending sibling tickets")
 
+        task_type = frontmatter.get("type", "")
+        priority = frontmatter.get("priority", "")
+
         return AcceptanceCheckResult(
             False,
             has_acceptance,
             None,
             has_new_error_patterns,
             new_error_pattern_files,
-            pending_siblings
+            pending_siblings,
+            task_type,
+            priority,
         )
 
     except Exception as e:
@@ -808,14 +815,26 @@ def generate_hook_output(
         logger.info(f"新增場景 #9 (Handoff 方向) 提醒，sibling 數量: {len(check_result.pending_sibling_tickets)}")
 
     # 優先級 4：complete 流程提醒（驗收方式，場景 #1）
+    # 觸發條件：P0 且非 DOC/ANA 類型 → 需人工確認驗收方式
+    # 豁免條件：DOC/ANA 類型 或 非 P0（P1/P2/...） → 自動採用簡化驗收，不觸發
     # 注意：即使有 error-pattern（#17 已觸發），仍需提醒驗收方式確認
     # 修復：原本 has_new_error_patterns 會壓制 #1，導致 PM 錯過驗收確認（W22-012）
     if (
         not check_result.message
         and len(check_result.pending_sibling_tickets) < 2
     ):
-        context_parts.append(AskUserQuestionMessages.COMPLETE_REMINDER)
-        logger.info("新增場景 #1 (complete 流程) 提醒")
+        ticket_type_upper = (check_result.task_type or "").upper()
+        priority_upper = (check_result.priority or "").upper()
+        is_auto_accept_type = ticket_type_upper in ("DOC", "ANA")
+        needs_manual_confirmation = priority_upper == "P0" and not is_auto_accept_type
+
+        if needs_manual_confirmation:
+            context_parts.append(AskUserQuestionMessages.COMPLETE_REMINDER)
+            logger.info(f"新增場景 #1 (complete 流程) 提醒（P0 Ticket，type={ticket_type_upper}）")
+        else:
+            logger.info(
+                f"跳過場景 #1（自動簡化驗收，priority={priority_upper}, type={ticket_type_upper}）"
+            )
 
         # 優先級 5：complete 後下一步提醒（路由選擇，場景 #2）
         context_parts.append(AskUserQuestionMessages.COMPLETE_NEXT_STEP_REMINDER)
