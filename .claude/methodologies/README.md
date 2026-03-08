@@ -218,9 +218,16 @@ Phase 3b: 程式碼實作（parsley-flutter-developer）
 └─ 使用：BDD測試方法論
    └─ Mock策略和驗證標準
 
-Phase 4: 重構優化（cinnamon-refactor-owl）
+Phase 4a: 多視角重構分析（/parallel-evaluation B）
+├─ 使用：Behavior-First TDD方法論
+└─ 測試穩定性檢查（測試不應破裂）
+
+Phase 4b: 重構執行（cinnamon-refactor-owl，依 4a 報告）
 └─ 使用：Behavior-First TDD方法論
-   └─ 測試穩定性檢查（測試不應破裂）
+
+Phase 4c: 多視角再審核（/parallel-evaluation A）
+└─ 使用：Behavior-First TDD方法論
+   └─ 重構品質最終驗證
 ```
 
 ---
