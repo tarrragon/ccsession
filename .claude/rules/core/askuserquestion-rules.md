@@ -82,7 +82,7 @@ PM 需要用戶做任何決策時（包含多選路由和二元 yes/no 確認）
 | 16 | 錯誤學習經驗確認 | commit 完成後（#11 之前） | 決策樹第八層 Checkpoint 1.5 | commit-handoff-hook（擴充） |
 | 17 | 錯誤經驗改進追蹤 | ticket complete 時有新增 error-pattern | ticket-lifecycle 完成階段 | acceptance-gate-hook（擴充） |
 
-**Hook 覆蓋狀態**：12/17 場景有 Hook 自動提醒（從 10/15 提升到 12/17 = 71%）。
+**Hook 覆蓋狀態**：12/17 場景有 Hook 自動提醒（12/17 = 71%）。其中 #13/#14 為條件式觸發（僅當 TDD Phase 完成且 worklog 更新時），未計入 12/17 計數，列於下方 Hook 提醒機制表僅供參考。
 
 ### 場景執行順序約束
 
@@ -128,7 +128,7 @@ PM 需要用戶做任何決策時（包含多選路由和二元 yes/no 確認）
 | askuserquestion-reminder-hook | Task 派發含多個 Ticket ID | #7 派發方式 |
 | commit-handoff-hook | git commit 成功後 | #11 Commit Handoff + #16 錯誤學習 |
 | process-skip-guard-hook | 用戶輸入含省略關鍵字 | #12 流程省略 |
-| phase-completion-gate-hook | Phase 完成偵測後 | #13 後續路由 + #14 parallel-evaluation |
+| phase-completion-gate-hook | Phase 完成時 worklog 寫入後（條件式，未計入 12 計數） | #13 後續路由 + #14 parallel-evaluation |
 | acceptance-gate-hook | ticket track complete 命令 | #1 驗收方式 + #2 下一步 + #17 錯誤經驗改進 |
 
 ---
@@ -144,5 +144,5 @@ PM 需要用戶做任何決策時（包含多選路由和二元 yes/no 確認）
 ---
 
 **Last Updated**: 2026-03-09
-**Version**: 2.8.0 - 新增「場景執行順序約束」章節，明確 #16 必須先於 #11 的強制執行順序（0.1.0-W22-010）
+**Version**: 2.9.0 - 澄清 Hook 覆蓋率聲明：#13/#14 為條件式觸發未計入 12/17；修復 #17 說明（與 #1 並存而非互斥）（0.1.0-W22-012）
 **Purpose**: AskUserQuestion 規則唯一 Source of Truth

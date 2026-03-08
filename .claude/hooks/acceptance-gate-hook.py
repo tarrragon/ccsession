@@ -18,8 +18,9 @@ Acceptance Gate Hook - 驗收流程完整引導
   * 場景 #1（complete 前）：驗收方式確認（標準/簡化/先完成後補）
   * 場景 #2（complete 後的邏輯）：complete 後下一步選擇（下個 Ticket/Wave 收尾/版本發布）
   * 場景 #9（Handoff 方向選擇）：同 Wave 中有 2+ pending sibling tickets 時觸發
-  * 場景 #17（錯誤學習確認）：執行期間新增 error-pattern 時觸發
+  * 場景 #17（錯誤學習確認）：執行期間新增 error-pattern 時觸發（與 #1/#9 並存，不互斥）
   * 補充說明：此時仍在 PreToolUse，complete 尚未執行，故提醒涵蓋整個 complete 流程
+  * 修復 W22-012：#17 原本會壓制 #1/#9，現已改為並存觸發
 - 使用 hook_utils 統一日誌系統
 
 Exit Code：
@@ -953,10 +954,10 @@ def generate_hook_output(
         context_parts.append(reminder_msg)
         logger.info(f"新增場景 #17 (error-pattern) 提醒")
 
-    # 優先級 3：Handoff 方向選擇 場景 #9（僅在無訊息且無 error-pattern 時，sibling >= 2）
+    # 優先級 3：Handoff 方向選擇 場景 #9（無訊息時，sibling >= 2）
+    # 注意：即使有 error-pattern（#17 已觸發），仍需提醒 Handoff 方向
     if (
         not check_result.message
-        and not check_result.has_new_error_patterns
         and len(check_result.pending_sibling_tickets) >= 2
     ):
         sibling_list_formatted = "\n".join(
@@ -971,9 +972,10 @@ def generate_hook_output(
         logger.info(f"新增場景 #9 (Handoff 方向) 提醒，sibling 數量: {len(check_result.pending_sibling_tickets)}")
 
     # 優先級 4：complete 流程提醒（驗收方式，場景 #1）
+    # 注意：即使有 error-pattern（#17 已觸發），仍需提醒驗收方式確認
+    # 修復：原本 has_new_error_patterns 會壓制 #1，導致 PM 錯過驗收確認（W22-012）
     if (
         not check_result.message
-        and not check_result.has_new_error_patterns
         and len(check_result.pending_sibling_tickets) < 2
     ):
         context_parts.append(AskUserQuestionMessages.COMPLETE_REMINDER)
