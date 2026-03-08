@@ -257,7 +257,7 @@ def read_current_version_from_todolist(project_root: Path, logger) -> Optional[s
 
 def main() -> int:
     """Main hook function."""
-    logger = setup_hook_logging("version-consistency-guard")
+    logger = setup_hook_logging("version-consistency-guard-hook")
 
     # Find project root using hook_utils
     project_root = get_project_root()
