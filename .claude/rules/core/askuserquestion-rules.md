@@ -40,6 +40,35 @@ ToolSearch("select:AskUserQuestion")
 
 ---
 
+## 使用對象限制（Subagent 行為規範）
+
+**AskUserQuestion 僅限 PM（rosemary-project-manager）使用，所有 subagent 禁止直接使用此工具。**
+
+| 角色 | 可使用 AskUserQuestion | 遇到路由/選擇場景時的行為 |
+|------|---------------------|--------------------------|
+| rosemary-project-manager（PM） | 允許（場景 1-17） | 直接使用 AskUserQuestion |
+| 所有 subagent（代理人） | 禁止 | 停止決策，回報 PM 中轉 |
+
+### Subagent 路由決策強制行為
+
+當 subagent 執行任務時遇到多方案選擇、路由決策或需用戶確認的場景，**必須**：
+
+1. 停止決策，不自行選擇路徑
+2. 在產出物（Ticket 執行日誌或分析報告）中標記「需 PM 決策：[描述問題和選項]」
+3. 回報主線程，由 PM 使用 AskUserQuestion 中轉決策
+
+**禁止行為**：
+
+| 禁止 | 說明 |
+|------|------|
+| Subagent 使用 AskUserQuestion | 繞過 PM 決策授權，違反職責邊界 |
+| Subagent 假設用戶偏好自行選擇路徑 | 缺少確認，可能走錯方向 |
+| Subagent 向用戶直接輸出選擇問句 | 用戶回答可能被 Hook 誤判為開發命令 |
+
+**原因**：PM 掌握全局視角，決策集中由 PM 管理可確保紀錄完整、避免並行 subagent 各自詢問用戶造成混亂。
+
+---
+
 ## 強制規則
 
 ### 規則 1：所有選擇型決策必須使用 AskUserQuestion
@@ -144,5 +173,5 @@ PM 需要用戶做任何決策時（包含多選路由和二元 yes/no 確認）
 ---
 
 **Last Updated**: 2026-03-09
-**Version**: 3.0.0 - 修正場景 #13 觸發條件過寬（「任務完成後」→限定為 Phase 3b/4b豁免/4c 完成、版本完成等，排除 Phase 1/2/3a 全自動情境）（0.1.0-W22-013）
+**Version**: 3.1.0 - 新增「使用對象限制」章節：明確 AskUserQuestion 僅限 PM 使用，subagent 遇路由決策必須回報 PM 中轉（0.1.0-W22-014）
 **Purpose**: AskUserQuestion 規則唯一 Source of Truth

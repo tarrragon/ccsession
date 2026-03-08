@@ -81,6 +81,8 @@ Skill 是預建的專用工具，優先於代理人派發。
 
 **主線程允許親自處理**：用戶溝通、任務拆分設計、Ticket 建立和指派、閱讀報告和最終決策、驗收結果。其餘一律派發代理人。
 
+**Subagent 禁止事項**：Subagent 遇到多方案選擇或路由決策時，**禁止**直接向用戶呈現選擇（禁止使用 AskUserQuestion），必須在產出物中標記「需 PM 決策」後回報主線程，由 PM 中轉。詳見：.claude/rules/core/askuserquestion-rules.md（使用對象限制章節）
+
 **派發方式判斷**：「Agent A 的發現會改變 Agent B 正在進行的工作嗎？」
 
 | 判斷結果 | 路由 |
@@ -422,5 +424,5 @@ Level 5: TDD 階段代理人 + thyme-python-developer
 
 ---
 
-**Last Updated**: 2026-03-08
-**Version**: 7.15.0 - D3b 補充豁免路徑（→ /tech-debt-capture）+ Checkpoint 3 增加 Phase 4b 豁免路由 + 更新 Checkpoint 2 評估規則（0.1.0-W22-004）
+**Last Updated**: 2026-03-09
+**Version**: 7.16.0 - 第負一層新增 Subagent 禁止事項：遇路由決策禁止直接向用戶呈現選擇，必須回報 PM 中轉（0.1.0-W22-014）
