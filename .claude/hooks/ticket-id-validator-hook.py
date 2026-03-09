@@ -83,7 +83,7 @@ def validate_input(input_data: Dict[str, Any], logger) -> bool:
         logger.debug("缺少 tool_input 欄位，跳過檢查")
         return False
 
-    tool_input = input_data.get("tool_input", {})
+    tool_input = input_data.get("tool_input") or {}
     if "file_path" not in tool_input:
         logger.debug("缺少 file_path 欄位，跳過檢查")
         return False
@@ -423,7 +423,7 @@ def main() -> int:
             }, ensure_ascii=False, indent=2))
             return EXIT_SUCCESS
 
-        tool_input = input_data.get("tool_input", {})
+        tool_input = input_data.get("tool_input") or {}
         file_path = tool_input.get("file_path", "")
 
         logger.info(f"檢查檔案: {file_path}")

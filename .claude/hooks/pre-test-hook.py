@@ -95,7 +95,7 @@ def main():
     logger = setup_hook_logging("pre-test-hook")
     input_data = json.load(sys.stdin)
     tool_name = input_data.get("tool_name", "")
-    tool_input = input_data.get("tool_input", {})
+    tool_input = input_data.get("tool_input") or {}
 
     if not is_test_command(tool_name, tool_input):
         return 0

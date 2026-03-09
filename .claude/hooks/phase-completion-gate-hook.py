@@ -493,7 +493,7 @@ def main() -> int:
             return EXIT_SUCCESS
 
         tool_name = input_data.get("tool_name", "")
-        tool_input = input_data.get("tool_input", {})
+        tool_input = input_data.get("tool_input") or {}
 
         # 步驟 4: 識別是否為 worklog 寫入操作
         is_worklog_op = is_worklog_write_operation(tool_name, tool_input, logger)

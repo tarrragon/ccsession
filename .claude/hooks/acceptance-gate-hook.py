@@ -920,7 +920,7 @@ def _parse_and_validate_input(input_data: Dict[str, Any], logger) -> Optional[Tu
         return None
 
     tool_name = input_data.get("tool_name", "")
-    tool_input = input_data.get("tool_input", {})
+    tool_input = input_data.get("tool_input") or {}
     command = tool_input.get("command", "")
 
     return tool_name, command

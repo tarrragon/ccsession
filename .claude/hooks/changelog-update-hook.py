@@ -118,7 +118,7 @@ def main():
     logger = setup_hook_logging("changelog-update-hook")
     input_data = json.load(sys.stdin)
     tool_name = input_data.get("tool_name", "")
-    tool_input = input_data.get("tool_input", {})
+    tool_input = input_data.get("tool_input") or {}
     tool_result = input_data.get("tool_result", {})
 
     # 只處理 Bash git commit

@@ -113,7 +113,7 @@ def validate_input(input_data: Dict[str, Any], logger) -> bool:
             logger.error(f"缺少必要欄位: {field}")
             return False
 
-    tool_input = input_data.get("tool_input", {})
+    tool_input = input_data.get("tool_input") or {}
     if "file_path" not in tool_input or "content" not in tool_input:
         logger.error("tool_input 缺少 file_path 或 content")
         return False

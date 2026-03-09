@@ -214,7 +214,7 @@ def main() -> None:
         sys.exit(1)
 
     tool_name = input_data.get("tool_name", "")
-    tool_input = input_data.get("tool_input", {})
+    tool_input = input_data.get("tool_input") or {}
 
     # 只處理 Task 工具
     if tool_name != "Task":

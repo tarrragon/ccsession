@@ -89,7 +89,7 @@ def validate_input(input_data: Dict[str, Any], logger) -> bool:
         logger.error("缺少必要欄位: tool_input")
         return False
 
-    tool_input = input_data.get("tool_input", {})
+    tool_input = input_data.get("tool_input") or {}
     if "prompt" not in tool_input:
         logger.error("缺少必要欄位: tool_input.prompt")
         return False
@@ -459,7 +459,7 @@ def main() -> int:
             }, ensure_ascii=False, indent=2))
             return EXIT_SUCCESS
 
-        tool_input = input_data.get("tool_input", {})
+        tool_input = input_data.get("tool_input") or {}
 
         # 步驟 4: 驗證 Task 派發有效性
         is_valid, error_message = validate_task_dispatch(tool_input, logger)

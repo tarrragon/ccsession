@@ -348,7 +348,7 @@ def main() -> int:
         logger.debug(f"輸入 JSON: {json.dumps(input_data, ensure_ascii=False)[:200]}...")
 
         tool_name = input_data.get("tool_name", "")
-        tool_input = input_data.get("tool_input", {})
+        tool_input = input_data.get("tool_input") or {}
 
         # 只檢查 Read, Edit, Write 工具
         if tool_name not in ["Read", "Edit", "Write"]:

@@ -39,7 +39,7 @@ def main():
     # 檢查是否為測試命令
     is_test_command = False
     if tool_name == "Bash":
-        command = input_data.get("tool_input", {}).get("command", "")
+        command = (input_data.get("tool_input") or {}).get("command", "")
         is_test_command = "flutter test" in command or "dart test" in command
     elif tool_name == "mcp__dart__run_tests":
         is_test_command = True
