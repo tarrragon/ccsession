@@ -52,10 +52,13 @@ from hook_utils import (
     setup_hook_logging,
     run_hook_safely,
     read_json_from_stdin,
+    extract_tool_input,
     parse_ticket_frontmatter,
     parse_ticket_date,
     check_error_patterns_changed,
     get_project_root,
+    scan_ticket_files_by_version,
+    find_ticket_file,
 )
 from lib.hook_messages import GateMessages, CoreMessages, AskUserQuestionMessages, format_message
 
@@ -79,6 +82,7 @@ class TicketFrontmatter(TypedDict, total=False):
     status: str
     children: str
     created: str
+    started_at: str
     priority: str
 
 
@@ -174,42 +178,6 @@ def is_complete_command(command: str) -> bool:
     return "ticket track complete" in command or "ticket track batch-complete" in command
 
 
-# ============================================================================
-# Ticket 檔案操作
-# ============================================================================
-
-def find_ticket_file(ticket_id: str, project_dir: Path, logger) -> Optional[Path]:
-    """
-    搜尋 Ticket 檔案
-
-    Args:
-        ticket_id: Ticket ID
-        project_dir: 專案根目錄
-        logger: 日誌物件
-
-    Returns:
-        Path - Ticket 檔案路徑或 None
-    """
-    # 搜尋位置 1: docs/work-logs/*/tickets/
-    work_logs_dir = project_dir / "docs" / "work-logs"
-    if work_logs_dir.exists():
-        for version_dir in work_logs_dir.iterdir():
-            if version_dir.is_dir():
-                tickets_dir = version_dir / "tickets"
-                ticket_file = tickets_dir / f"{ticket_id}.md"
-                if ticket_file.is_file():
-                    logger.info(f"找到 Ticket 檔案: {ticket_file}")
-                    return ticket_file
-
-    # 搜尋位置 2: .claude/tickets/
-    claude_tickets_dir = project_dir / ".claude" / "tickets"
-    ticket_file = claude_tickets_dir / f"{ticket_id}.md"
-    if ticket_file.is_file():
-        logger.info(f"找到 Ticket 檔案: {ticket_file}")
-        return ticket_file
-
-    logger.debug(f"未找到 Ticket 檔案: {ticket_id}")
-    return None
 
 
 
@@ -480,8 +448,9 @@ def find_pending_sibling_tickets(
     sibling_tickets = []
 
     try:
-        # 步驟 3-5: 掃描並過濾 tickets
-        for ticket_file in sorted(tickets_dir.glob("*.md")):
+        # 步驟 3-5: 掃描並過濾 tickets（使用共用函式）
+        ticket_files = scan_ticket_files_by_version(project_dir, version, logger)
+        for ticket_file in sorted(ticket_files):
             try:
                 file_ticket_id = ticket_file.stem  # 移除 .md 副檔名
 
@@ -524,9 +493,57 @@ def find_pending_sibling_tickets(
 # Error Pattern 檢查
 # ============================================================================
 
+def _get_ticket_start_time(frontmatter: TicketFrontmatter, logger) -> Optional[datetime]:
+    """取得 Ticket 開始執行的時間，用於 error-pattern 偵測基準。
+
+    優先使用 started_at（認領時間，有精確時間戳），
+    fallback 到 created（建立時間，僅日期精度）。
+
+    Args:
+        frontmatter: Ticket frontmatter 結構
+        logger: 日誌物件
+
+    Returns:
+        datetime 物件或 None（無法解析時）
+
+    說明：
+        started_at 格式為 ISO 8601 字串，如 '2026-03-10T04:48:01'，精度為秒級。
+        created 格式為簡單日期字串，如 '2026-03-10'，精度為日期級。
+        場景 #17 檢查的是「Ticket 執行期間新增的 error-pattern」，起點應是
+        started_at（認領時間），而非 created（建立時間）。
+    """
+    try:
+        # 優先使用 started_at（精確時間戳）
+        started_at = frontmatter.get("started_at")
+        if started_at:
+            dt = parse_ticket_date(started_at, logger)
+            if dt:
+                logger.info(f"使用 started_at 作為 error-pattern 偵測基準: {dt.isoformat()}")
+                return dt
+
+        # Fallback 到 created（僅日期精度）
+        logger.info("started_at 不可用，fallback 到 created")
+        created_value = frontmatter.get("created")
+        if not created_value:
+            logger.warning("Ticket frontmatter 缺少 created 欄位")
+            return None
+
+        dt = parse_ticket_date(created_value, logger)
+        if dt:
+            logger.info(f"使用 created 作為 error-pattern 偵測基準: {dt.isoformat()}")
+        return dt
+
+    except Exception as e:
+        logger.warning(f"解析 ticket 開始時間失敗: {e}")
+        sys.stderr.write(f"WARNING: 解析 ticket 開始時間失敗: {e}\n")
+        return None
+
+
 def get_ticket_created_time(frontmatter: TicketFrontmatter, logger) -> Optional[datetime]:
     """
     從 Ticket frontmatter 讀取 created 欄位並解析為 datetime
+
+    [已棄用] 改用 _get_ticket_start_time，可自動使用 started_at（精確時間）。
 
     Args:
         frontmatter: Ticket frontmatter 結構
@@ -702,18 +719,19 @@ def check_acceptance_status(ticket_id: str, project_dir: Path, logger) -> Accept
         new_error_pattern_files = []
 
         if should_check_acceptance:
-            ticket_created = get_ticket_created_time(frontmatter, logger)
-            if ticket_created:
+            # 使用 started_at（精確時間戳）做為基準，避免日期精度不足的誤報
+            ticket_start_time = _get_ticket_start_time(frontmatter, logger)
+            if ticket_start_time:
                 # 檢查 error-patterns 目錄
                 has_new_error_patterns, new_error_pattern_files = check_error_patterns_changed(
                     project_dir,
-                    ticket_created,
+                    ticket_start_time,
                     logger
                 )
                 if has_new_error_patterns:
                     logger.info(f"發現 {len(new_error_pattern_files)} 個新增/修改的 error-pattern")
             else:
-                logger.warning(f"無法取得 ticket 的建立時間，跳過 error-pattern 檢查")
+                logger.warning(f"無法取得 ticket 的開始時間，跳過 error-pattern 檢查")
 
         # 步驟 4：檢查 pending sibling tickets（場景 #9）
         pending_siblings = find_pending_sibling_tickets(ticket_id, project_dir, logger)
@@ -920,7 +938,7 @@ def _parse_and_validate_input(input_data: Dict[str, Any], logger) -> Optional[Tu
         return None
 
     tool_name = input_data.get("tool_name", "")
-    tool_input = input_data.get("tool_input") or {}
+    tool_input = extract_tool_input(input_data, logger)
     command = tool_input.get("command", "")
 
     return tool_name, command

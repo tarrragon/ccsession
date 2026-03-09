@@ -48,7 +48,14 @@ from typing import Dict, Any, Optional, List, Tuple, Set
 sys.path.insert(0, str(Path(__file__).parent))
 
 try:
-    from hook_utils import setup_hook_logging, parse_ticket_frontmatter, read_json_from_stdin, run_hook_safely, get_project_root
+    from hook_utils import (
+        setup_hook_logging,
+        parse_ticket_frontmatter,
+        read_json_from_stdin,
+        run_hook_safely,
+        get_project_root,
+        find_ticket_files,
+    )
     from lib.hook_messages import AskUserQuestionMessages
 except ImportError as e:
     # 輸出合法 JSON 到 stdout（遵守 Hook 協定）
@@ -148,32 +155,6 @@ def is_continuation_request(prompt: str, logger) -> bool:
 # ============================================================================
 # Ticket 掃描和分析
 # ============================================================================
-
-def find_ticket_files(logger) -> List[Path]:
-    """
-    尋找所有 Ticket 檔案
-
-    Args:
-        logger: 日誌物件
-
-    Returns:
-        list - Ticket 檔案路徑清單
-    """
-    project_dir = get_project_root()
-
-    # 搜尋位置：docs/work-logs/*/tickets/
-    all_tickets = []
-
-    # 搜尋 docs/work-logs/*/tickets/
-    for version_dir in project_dir.glob("docs/work-logs/v*"):
-        tickets_dir = version_dir / "tickets"
-        if tickets_dir.exists():
-            all_tickets.extend(tickets_dir.glob("*.md"))
-
-    logger.debug(f"找到 {len(all_tickets)} 個 Ticket 檔案")
-    return all_tickets
-
-
 
 
 def extract_ticket_info(file_path: Path, logger) -> Optional[Dict[str, Any]]:
@@ -695,7 +676,8 @@ def main() -> int:
         # 步驟 4: 掃描 Ticket 並分析
         logger.info("開始掃描並行任務...")
 
-        all_tickets = find_ticket_files(logger)
+        project_root = get_project_root()
+        all_tickets = find_ticket_files(project_root, logger=logger)
         tickets_info = []
 
         for ticket_file in all_tickets:
