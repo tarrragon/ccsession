@@ -51,6 +51,9 @@ try:
     from hook_utils import setup_hook_logging, parse_ticket_frontmatter, read_json_from_stdin, run_hook_safely, get_project_root
     from lib.hook_messages import AskUserQuestionMessages
 except ImportError as e:
+    # 輸出合法 JSON 到 stdout（遵守 Hook 協定）
+    print(json.dumps({"result": "continue"}))
+    # 同時輸出錯誤到 stderr（雙通道要求）
     print(f"[Hook Import Error] {Path(__file__).name}: {e}", file=sys.stderr)
     sys.exit(1)
 
