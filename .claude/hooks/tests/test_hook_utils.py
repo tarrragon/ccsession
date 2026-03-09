@@ -131,7 +131,7 @@ class TestSetupHookLogging:
         assert "test debug message" in log_content
 
     def test_scenario_1_stream_handler(self, project_root, mock_env_var, reset_loggers, capsys):
-        """StreamHandler 輸出到 stdout，WARNING 級別及以上"""
+        """StreamHandler 輸出到 stderr，WARNING 級別及以上"""
         mock_env_var("CLAUDE_PROJECT_DIR", str(project_root))
 
         logger = setup_hook_logging("test-hook")
@@ -144,15 +144,15 @@ class TestSetupHookLogging:
 
         captured = capsys.readouterr()
 
-        # 驗證輸出（DEBUG 和 INFO 寫入檔案但不輸出到 stdout）
-        assert "debug msg" not in captured.out
-        assert "info msg" not in captured.out
-        # WARNING 和 ERROR 輸出到 stdout（StreamHandler）
-        assert "warning msg" in captured.out
-        assert "error msg" in captured.out
+        # 驗證輸出（DEBUG 和 INFO 寫入檔案但不輸出到 stderr）
+        assert "debug msg" not in captured.err
+        assert "info msg" not in captured.err
+        # WARNING 和 ERROR 輸出到 stderr（StreamHandler）
+        assert "warning msg" in captured.err
+        assert "error msg" in captured.err
 
-        # 驗證無 stderr 輸出
-        assert captured.err == ""
+        # 驗證無 stdout 輸出
+        assert captured.out == ""
 
     def test_scenario_1_log_levels(self, project_root, mock_env_var, reset_loggers):
         """Logger 級別設為 DEBUG"""
@@ -176,8 +176,8 @@ class TestSetupHookLogging:
 
         captured = capsys.readouterr()
 
-        # 驗證 debug 訊息輸出到 stdout
-        assert "debug msg" in captured.out
+        # 驗證 debug 訊息輸出到 stderr
+        assert "debug msg" in captured.err
 
         # 驗證 StreamHandler 級別（排除 FileHandler，因為 FileHandler 也是 StreamHandler 的子類）
         stream_handlers = [h for h in logger.handlers
@@ -196,7 +196,7 @@ class TestSetupHookLogging:
         captured = capsys.readouterr()
 
         # 驗證 debug 訊息不輸出
-        assert "debug msg" not in captured.out
+        assert "debug msg" not in captured.err
 
         # 驗證 StreamHandler 級別（排除 FileHandler）
         stream_handlers = [h for h in logger.handlers
@@ -214,7 +214,7 @@ class TestSetupHookLogging:
         captured = capsys.readouterr()
 
         # 驗證 debug 訊息輸出
-        assert "debug msg" in captured.out
+        assert "debug msg" in captured.err
 
     # ========================================================================
     # Scenario 3: 根目錄 Fallback

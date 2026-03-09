@@ -141,7 +141,7 @@ def _clear_logger_handlers(logger: logging.Logger) -> None:
 
 
 def _create_stream_handler(is_debug: bool = False) -> logging.StreamHandler:
-    """建立 StreamHandler（stdout）
+    """建立 StreamHandler（stderr）
 
     Args:
         is_debug: 是否為 DEBUG 模式
@@ -149,7 +149,7 @@ def _create_stream_handler(is_debug: bool = False) -> logging.StreamHandler:
     Returns:
         logging.StreamHandler: 配置完成的 handler
     """
-    handler = logging.StreamHandler(sys.stdout)
+    handler = logging.StreamHandler(sys.stderr)
     level = STREAM_HANDLER_LEVEL_DEBUG if is_debug else STREAM_HANDLER_LEVEL_NORMAL
     handler.setLevel(level)
     handler.setFormatter(logging.Formatter(STREAM_FORMAT))
