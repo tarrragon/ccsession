@@ -233,18 +233,17 @@ def extract_children_from_frontmatter(frontmatter: Dict[str, str], logger) -> Li
     return children
 
 
-def get_ticket_status(content: str, logger) -> Optional[str]:
+def get_ticket_status(frontmatter: Dict[str, str], logger) -> Optional[str]:
     """
-    從 Ticket 內容提取狀態
+    從 Ticket frontmatter 提取狀態
 
     Args:
-        content: Ticket 檔案內容
+        frontmatter: Ticket frontmatter 鍵值對（已解析）
         logger: 日誌物件
 
     Returns:
         str - Ticket 狀態或 None
     """
-    frontmatter = parse_ticket_frontmatter(content)
     status = frontmatter.get("status")
 
     if status:
@@ -253,18 +252,17 @@ def get_ticket_status(content: str, logger) -> Optional[str]:
     return status
 
 
-def get_ticket_type(content: str, logger) -> Optional[str]:
+def get_ticket_type(frontmatter: Dict[str, str], logger) -> Optional[str]:
     """
-    從 Ticket 內容提取型別
+    從 Ticket frontmatter 提取型別
 
     Args:
-        content: Ticket 檔案內容
+        frontmatter: Ticket frontmatter 鍵值對（已解析）
         logger: 日誌物件
 
     Returns:
         str - Ticket 型別或 None
     """
-    frontmatter = parse_ticket_frontmatter(content)
     ticket_type = frontmatter.get("type")
 
     if ticket_type:
@@ -511,21 +509,18 @@ def find_pending_sibling_tickets(
 # Error Pattern 檢查
 # ============================================================================
 
-def get_ticket_created_time(ticket_file: Path, logger) -> Optional[datetime]:
+def get_ticket_created_time(frontmatter: Dict[str, str], logger) -> Optional[datetime]:
     """
     從 Ticket frontmatter 讀取 created 欄位並解析為 datetime
 
     Args:
-        ticket_file: Ticket MD 檔案路徑
+        frontmatter: Ticket frontmatter 鍵值對（已解析）
         logger: 日誌物件
 
     Returns:
         datetime 物件或 None（無法解析時）
     """
     try:
-        content = ticket_file.read_text(encoding="utf-8")
-        frontmatter = parse_ticket_frontmatter(content)
-
         # 取得 created 欄位值
         created_value = frontmatter.get("created")
         if not created_value:
@@ -539,7 +534,8 @@ def get_ticket_created_time(ticket_file: Path, logger) -> Optional[datetime]:
         return dt
 
     except Exception as e:
-        logger.warning(f"讀取 ticket created 時間失敗: {e}")
+        logger.warning(f"解析 ticket created 時間失敗: {e}")
+        sys.stderr.write(f"WARNING: 解析 ticket created 時間失敗: {e}\n")
         return None
 
 
@@ -635,12 +631,12 @@ def _verify_acceptance_record(ticket_content: str, frontmatter: Dict[str, str], 
     return False, None, should_check_acceptance
 
 
-def _check_error_patterns(ticket_file: Path, project_dir: Path, logger) -> Tuple[bool, List[str]]:
+def _check_error_patterns(frontmatter: Dict[str, str], project_dir: Path, logger) -> Tuple[bool, List[str]]:
     """
     Error-pattern 新增檢查。
 
     Args:
-        ticket_file: Ticket 檔案路徑
+        frontmatter: Ticket frontmatter 鍵值對（已解析）
         project_dir: 專案根目錄
         logger: 日誌物件
 
@@ -649,7 +645,7 @@ def _check_error_patterns(ticket_file: Path, project_dir: Path, logger) -> Tuple
             - has_new_error_patterns: 是否有新增/修改的 error-pattern
             - files: 新增/修改的檔案清單
     """
-    ticket_created = get_ticket_created_time(ticket_file, logger)
+    ticket_created = get_ticket_created_time(frontmatter, logger)
 
     if not ticket_created:
         logger.warning(f"無法取得 ticket 的建立時間，跳過 error-pattern 檢查")
@@ -700,6 +696,7 @@ def check_acceptance_status(ticket_id: str, project_dir: Path, logger) -> Accept
         return AcceptanceCheckResult(False, False, None, False, [])
 
     try:
+        # 一次讀取檔案及解析 frontmatter，避免重複讀取（問題 3 修復）
         content = ticket_file.read_text(encoding="utf-8")
         frontmatter = parse_ticket_frontmatter(content)
 
@@ -710,18 +707,18 @@ def check_acceptance_status(ticket_id: str, project_dir: Path, logger) -> Accept
 
         # 步驟 2：驗證驗收記錄
         should_block, warning_msg, should_check_acceptance = _verify_acceptance_record(content, frontmatter, ticket_id, logger)
-        if warning_msg:
-            return AcceptanceCheckResult(False, False, warning_msg, False, [])
 
+        # 問題 1 修復：不提前 return，繼續執行步驟 3 和 4，將 warning_msg 帶入最終結果
         has_acceptance = has_acceptance_record(content, logger)
-        logger.info(f"Ticket {ticket_id} 驗收檢查通過")
+        if not warning_msg:
+            logger.info(f"Ticket {ticket_id} 驗收檢查通過")
 
         # 步驟 3：檢查 error-pattern 新增
         has_new_error_patterns = False
         new_error_pattern_files = []
 
         if should_check_acceptance:
-            has_new_error_patterns, new_error_pattern_files = _check_error_patterns(ticket_file, project_dir, logger)
+            has_new_error_patterns, new_error_pattern_files = _check_error_patterns(frontmatter, project_dir, logger)
 
         # 步驟 4：檢查 pending sibling tickets（場景 #9）
         pending_siblings = find_pending_sibling_tickets(ticket_id, project_dir, logger)
@@ -733,7 +730,7 @@ def check_acceptance_status(ticket_id: str, project_dir: Path, logger) -> Accept
         return AcceptanceCheckResult(
             False,
             has_acceptance,
-            None,
+            warning_msg,  # 將 warning_msg 帶入最終結果（不提前 return）
             has_new_error_patterns,
             new_error_pattern_files,
             pending_siblings,
@@ -743,6 +740,7 @@ def check_acceptance_status(ticket_id: str, project_dir: Path, logger) -> Accept
 
     except Exception as e:
         logger.error(f"檢查驗收狀態失敗: {e}", exc_info=True)
+        sys.stderr.write(f"ERROR: 檢查驗收狀態失敗: {e}\n")
         return AcceptanceCheckResult(False, False, None, False, [])
 
 
@@ -836,7 +834,10 @@ def generate_hook_output(
                 f"跳過場景 #1（自動簡化驗收，priority={priority_upper}, type={ticket_type_upper}）"
             )
 
-        # 優先級 5：complete 後下一步提醒（路由選擇，場景 #2）
+    # 優先級 5：complete 後下一步提醒（路由選擇，場景 #2）
+    # 問題 2 修復：場景 #2 不應只在 sibling < 2 時觸發，即使有 2+ sibling（場景 #9），
+    # 也需要在完成當前 ticket 後附加場景 #2 的下一步提醒
+    if not check_result.message:
         context_parts.append(AskUserQuestionMessages.COMPLETE_NEXT_STEP_REMINDER)
         logger.info("新增場景 #2 (complete 後下一步) 提醒")
 

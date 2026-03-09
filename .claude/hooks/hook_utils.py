@@ -416,7 +416,7 @@ def read_json_from_stdin(logger: logging.Logger) -> Optional[dict]:
 def parse_ticket_frontmatter(
     content_or_path: "str | Path",
     logger: "logging.Logger | None" = None
-) -> Optional[dict]:
+) -> dict:
     """統一的 YAML frontmatter 解析（支援 str 和 Path 輸入）
 
     支援以下 YAML 特性：
@@ -432,8 +432,8 @@ def parse_ticket_frontmatter(
         logger: 可選 Logger 實例，用於記錄錯誤
 
     Returns:
-        dict: 解析出的 frontmatter key-value（始終返回 dict，無 frontmatter 時返回空 dict）；
-              若解析失敗，返回空 dict 並記錄警告（如提供 logger）
+        dict: 解析出的 frontmatter key-value（始終返回 dict，無 frontmatter 時返回空 dict、
+              或解析失敗時也返回空 dict 並記錄警告）
     """
     try:
         # 步驟 1：取得文件內容

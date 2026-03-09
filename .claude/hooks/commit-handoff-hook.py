@@ -26,7 +26,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from hook_utils import setup_hook_logging, run_hook_safely
+from hook_utils import setup_hook_logging, run_hook_safely, read_json_from_stdin
 from lib.hook_messages import AskUserQuestionMessages, CoreMessages
 from lib.ask_user_question_reminders import AskUserQuestionReminders
 
@@ -154,12 +154,10 @@ def main() -> int:
     """
     logger = setup_hook_logging("commit-handoff")
 
-    try:
-        # 讀取 PostToolUse JSON
-        input_data = json.load(sys.stdin)
-    except json.JSONDecodeError as e:
-        logger.error("JSON 解析錯誤: %s", e)
-        # JSON 解析失敗：輸出預設允許訊息
+    # 讀取 PostToolUse JSON（使用統一的 stdin 讀取方法）
+    input_data = read_json_from_stdin(logger)
+    if input_data is None:
+        # 空輸入或 JSON 解析失敗：輸出預設允許訊息
         print(json.dumps(DEFAULT_OUTPUT, ensure_ascii=False))
         return EXIT_SUCCESS
 
