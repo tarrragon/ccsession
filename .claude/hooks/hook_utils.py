@@ -22,7 +22,7 @@ import time
 import traceback
 from datetime import date, datetime, timedelta
 from pathlib import Path
-from typing import Callable, List, Optional, Tuple
+from typing import Any, Callable, List, Optional, Tuple
 
 # ============================================================================
 # 常數定義
@@ -534,7 +534,7 @@ def parse_ticket_frontmatter(
         return {}
 
 
-def parse_ticket_date(value: "any", logger: "logging.Logger | None" = None) -> Optional[datetime]:
+def parse_ticket_date(value: "Any", logger: "logging.Logger | None" = None) -> Optional[datetime]:
     """支援多格式的 Ticket 日期解析。
 
     格式優先級：
