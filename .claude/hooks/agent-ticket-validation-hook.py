@@ -43,7 +43,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from hook_utils import (
     setup_hook_logging, run_hook_safely, read_json_from_stdin, get_project_root,
-    find_ticket_files, find_ticket_file
+    find_ticket_files, find_ticket_file, validate_ticket_has_decision_tree
 )
 
 # ============================================================================
@@ -55,14 +55,6 @@ TICKET_ID_PATTERNS = [
     r"Ticket:\s*(\d+\.\d+\.\d+-W\d+-\d+(?:\.\d+)*)",
     r"#Ticket-(\d+\.\d+\.\d+-W\d+-\d+(?:\.\d+)*)",
     r"\[Ticket\s+(\d+\.\d+\.\d+-W\d+-\d+(?:\.\d+)*)\]"
-]
-
-# 決策樹欄位識別
-DECISION_TREE_MARKERS = [
-    "decision_tree_path:",
-    "## 決策樹路徑",
-    "decision_nodes:",
-    "## 決策樹"
 ]
 
 # 豁免 Ticket 驗證的代理人類型
@@ -155,34 +147,6 @@ def load_ticket_content(ticket_path: Path, logger) -> Optional[str]:
     except Exception as e:
         logger.error(f"無法讀取 Ticket 檔案 {ticket_path}: {e}")
         return None
-
-def validate_ticket_has_decision_tree(content: str, logger) -> bool:
-    """
-    驗證 Ticket 是否包含決策樹欄位
-
-    Args:
-        content: Ticket 檔案內容
-        logger: 日誌物件
-
-    Returns:
-        bool - 是否包含決策樹欄位
-
-    檢查項目：
-    - YAML frontmatter 中的 decision_tree_path 欄位
-    - 內容中的決策樹相關標記
-    """
-    if not content:
-        logger.warning("Ticket 內容為空")
-        return False
-
-    # 檢查任何決策樹欄位
-    for marker in DECISION_TREE_MARKERS:
-        if marker in content:
-            logger.info(f"Ticket 包含決策樹欄位: {marker}")
-            return True
-
-    logger.warning("Ticket 缺少決策樹欄位")
-    return False
 
 def validate_ticket(ticket_id: str, logger) -> Tuple[bool, str]:
     """

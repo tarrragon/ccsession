@@ -77,6 +77,7 @@ from hook_utils import (
     run_hook_safely,
     read_json_from_stdin,
     get_project_root,
+    validate_ticket_has_decision_tree,
     find_ticket_files,
     get_current_version_from_todolist,
 )
@@ -410,45 +411,6 @@ def extract_ticket_status(file_path: Path, logger) -> Tuple[Optional[str], Optio
     except Exception as e:
         logger.debug(f"無法提取 Ticket 狀態 {file_path}: {e}")
         return None, None, ""
-
-def validate_ticket_has_decision_tree(ticket_content: str, logger) -> bool:
-    """
-    驗證 Ticket 是否包含決策樹欄位
-
-    檢查 Ticket 是否在 YAML frontmatter 中包含 decision_tree_path 欄位，
-    或在內容中包含「## 決策樹」區段。
-
-    Args:
-        ticket_content: Ticket 檔案內容
-        logger: 日誌物件
-
-    Returns:
-        bool - 是否包含決策樹欄位
-    """
-    if not ticket_content:
-        logger.debug("Ticket 內容為空")
-        return False
-
-    # 檢查 YAML frontmatter 中的 decision_tree_path 欄位
-    if "decision_tree_path:" in ticket_content:
-        logger.debug("在 YAML frontmatter 中找到 decision_tree_path 欄位")
-        return True
-
-    # 檢查內容中的「## 決策樹」區段（多個變體）
-    decision_tree_markers = [
-        "## 決策樹",
-        "## Decision Tree",
-        "## 決策樹路徑",
-        "## 決策流程",
-    ]
-
-    for marker in decision_tree_markers:
-        if marker in ticket_content:
-            logger.debug(f"在內容中找到決策樹標記: {marker}")
-            return True
-
-    logger.debug("未在 Ticket 中找到決策樹欄位")
-    return False
 
 def split_kebab_case(word: str) -> List[str]:
     """

@@ -63,6 +63,16 @@ LOG_RETENTION_DAYS = 7
 # 日誌清理觸發間隔（秒數，預設 5 分鐘）
 CLEANUP_INTERVAL_SECONDS = 300
 
+# 決策樹欄位識別標記（統一版本，合併 command-entrance-gate-hook 和 agent-ticket-validation-hook）
+DECISION_TREE_MARKERS = [
+    "decision_tree_path:",
+    "## 決策樹路徑",
+    "decision_nodes:",
+    "## 決策樹",
+    "## Decision Tree",
+    "## 決策流程",
+]
+
 
 # ============================================================================
 # 內部輔助函式
@@ -962,6 +972,33 @@ def find_ticket_file(
     if logger:
         logger.warning("未找到 Ticket 檔案: {}".format(ticket_id))
     return None
+
+
+def validate_ticket_has_decision_tree(ticket_content: str, logger: "logging.Logger") -> bool:
+    """驗證 Ticket 是否包含決策樹欄位
+
+    檢查 Ticket 是否在 YAML frontmatter 或內容中包含決策樹相關欄位。
+    支援多個決策樹標記變體（YAML 欄位、中文標題、英文標題）。
+
+    Args:
+        ticket_content: Ticket 檔案內容
+        logger: Logger 物件
+
+    Returns:
+        bool: 是否包含決策樹欄位
+    """
+    if not ticket_content:
+        logger.debug("Ticket 內容為空")
+        return False
+
+    # 檢查任何決策樹欄位（包含 YAML frontmatter 和標題區段）
+    for marker in DECISION_TREE_MARKERS:
+        if marker in ticket_content:
+            logger.debug("在 Ticket 中找到決策樹標記: {}".format(marker))
+            return True
+
+    logger.debug("未在 Ticket 中找到決策樹欄位")
+    return False
 
 
 def run_hook_safely(main_func: Callable[[], int], hook_name: str) -> int:
