@@ -170,7 +170,8 @@ def _create_file_handler(log_file_path: Path) -> Optional[logging.FileHandler]:
         handler.setLevel(FILE_HANDLER_LEVEL)
         handler.setFormatter(logging.Formatter(FILE_FORMAT, datefmt=DATE_FORMAT))
         return handler
-    except OSError:
+    except OSError as e:
+        sys.stderr.write("Failed to create file handler for {}: {}\n".format(log_file_path, e))
         return None
 
 
