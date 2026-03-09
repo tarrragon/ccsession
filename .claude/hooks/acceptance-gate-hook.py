@@ -61,12 +61,26 @@ from lib.hook_messages import GateMessages, CoreMessages, AskUserQuestionMessage
 
 import re
 from datetime import datetime
-from typing import Dict, Any, Optional, Tuple, List, NamedTuple
+from typing import Dict, Any, Optional, Tuple, List, NamedTuple, TypedDict
 
 
 # ============================================================================
 # 資料結構定義
 # ============================================================================
+
+class TicketFrontmatter(TypedDict, total=False):
+    """Ticket Frontmatter 結構
+
+    提供型別檢查和文件化，欄位皆可選（因為不是所有 Ticket 都有所有欄位）。
+    """
+    id: str
+    title: str
+    type: str
+    status: str
+    children: str
+    created: str
+    priority: str
+
 
 class AcceptanceCheckResult(NamedTuple):
     """驗收狀態檢查結果"""
@@ -204,12 +218,12 @@ def find_ticket_file(ticket_id: str, project_dir: Path, logger) -> Optional[Path
 # 子任務檢查
 # ============================================================================
 
-def extract_children_from_frontmatter(frontmatter: Dict[str, str], logger) -> List[str]:
+def extract_children_from_frontmatter(frontmatter: TicketFrontmatter, logger) -> List[str]:
     """
     從 frontmatter 提取 children 欄位
 
     Args:
-        frontmatter: frontmatter 鍵值對
+        frontmatter: Ticket frontmatter 結構
         logger: 日誌物件
 
     Returns:
@@ -234,12 +248,12 @@ def extract_children_from_frontmatter(frontmatter: Dict[str, str], logger) -> Li
     return children
 
 
-def get_ticket_status(frontmatter: Dict[str, str], logger) -> Optional[str]:
+def get_ticket_status(frontmatter: TicketFrontmatter, logger) -> Optional[str]:
     """
     從 Ticket frontmatter 提取狀態
 
     Args:
-        frontmatter: Ticket frontmatter 鍵值對（已解析）
+        frontmatter: Ticket frontmatter 結構
         logger: 日誌物件
 
     Returns:
@@ -253,12 +267,12 @@ def get_ticket_status(frontmatter: Dict[str, str], logger) -> Optional[str]:
     return status
 
 
-def get_ticket_type(frontmatter: Dict[str, str], logger) -> Optional[str]:
+def get_ticket_type(frontmatter: TicketFrontmatter, logger) -> Optional[str]:
     """
     從 Ticket frontmatter 提取型別
 
     Args:
-        frontmatter: Ticket frontmatter 鍵值對（已解析）
+        frontmatter: Ticket frontmatter 結構
         logger: 日誌物件
 
     Returns:
@@ -510,12 +524,12 @@ def find_pending_sibling_tickets(
 # Error Pattern 檢查
 # ============================================================================
 
-def get_ticket_created_time(frontmatter: Dict[str, str], logger) -> Optional[datetime]:
+def get_ticket_created_time(frontmatter: TicketFrontmatter, logger) -> Optional[datetime]:
     """
     從 Ticket frontmatter 讀取 created 欄位並解析為 datetime
 
     Args:
-        frontmatter: Ticket frontmatter 鍵值對（已解析）
+        frontmatter: Ticket frontmatter 結構
         logger: 日誌物件
 
     Returns:
@@ -544,13 +558,13 @@ def get_ticket_created_time(frontmatter: Dict[str, str], logger) -> Optional[dat
 # 檢查邏輯
 # ============================================================================
 
-def _check_children_completed(ticket_file: Path, frontmatter: Dict[str, str], project_dir: Path, ticket_id: str, logger) -> Tuple[bool, Optional[str]]:
+def _check_children_completed(ticket_file: Path, frontmatter: TicketFrontmatter, project_dir: Path, ticket_id: str, logger) -> Tuple[bool, Optional[str]]:
     """
     子任務完成度檢查。
 
     Args:
         ticket_file: Ticket 檔案路徑
-        frontmatter: Ticket frontmatter 鍵值對
+        frontmatter: Ticket frontmatter 結構
         project_dir: 專案根目錄
         ticket_id: Ticket ID
         logger: 日誌物件
@@ -588,13 +602,13 @@ def _check_children_completed(ticket_file: Path, frontmatter: Dict[str, str], pr
     return False, None
 
 
-def _verify_acceptance_record(ticket_content: str, frontmatter: Dict[str, str], ticket_id: str, logger) -> Tuple[bool, Optional[str], bool, bool]:
+def _verify_acceptance_record(ticket_content: str, frontmatter: TicketFrontmatter, ticket_id: str, logger) -> Tuple[bool, Optional[str], bool, bool]:
     """
     驗收記錄驗證。
 
     Args:
         ticket_content: Ticket 檔案內容
-        frontmatter: Ticket frontmatter 鍵值對
+        frontmatter: Ticket frontmatter 結構
         ticket_id: Ticket ID
         logger: 日誌物件
 
