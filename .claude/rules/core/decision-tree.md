@@ -293,7 +293,7 @@ Skill 是預建的專用工具，優先於代理人派發。
     v
 [Checkpoint 2] Commit 後情境評估（強制先查詢再路由）
     |
-    +-- [強制查詢] ticket track list --wave W{n} --status pending in_progress
+    +-- [強制查詢] ticket track list --wave {n} --status pending in_progress
     |
     +-- [情境 D] TDD Phase 完成（優先，識別：ticket 含 tdd_phase 欄位）
     |   +-- D1：Phase 1/2/3a 完成 → [全自動] 直接派發下一 Phase

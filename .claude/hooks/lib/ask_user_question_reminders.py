@@ -392,7 +392,7 @@ ticket track complete 已成功。下一步強制流程：
   |
   v
 [Checkpoint 2] 直接執行（commit-handoff-hook 不會自動觸發）
-  → 執行: ticket track list --wave W{n} --status pending in_progress
+  → 執行: ticket track list --wave {n} --status pending in_progress
   → 有 pending/in_progress → 評估情境，執行對應流程
   → 無任何待處理 → AskUserQuestion #13（後續任務路由）
 

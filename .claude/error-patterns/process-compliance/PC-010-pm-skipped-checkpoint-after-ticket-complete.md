@@ -48,7 +48,7 @@ ticket track complete <id>
 [Checkpoint 1.5] AskUserQuestion #16（錯誤學習確認）
     |
     v
-[Checkpoint 2] ticket track list --wave W{n} --status pending in_progress
+[Checkpoint 2] ticket track list --wave {n} --status pending in_progress
               → 情境 B（有 pending）→ AskUserQuestion #11b
               → 情境 C（無 pending）→ 查全版本 → AskUserQuestion #3a 或 #13
 ```

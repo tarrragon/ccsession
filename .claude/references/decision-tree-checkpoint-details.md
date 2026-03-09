@@ -55,7 +55,7 @@
 
 **觸發時機**：每次 git commit 成功後
 
-**強制前置動作**：`ticket track list --wave W{n} --status pending in_progress`（取得數據後再評估，禁止依賴記憶判斷）
+**強制前置動作**：`ticket track list --wave {n} --status pending in_progress`（取得數據後再評估，禁止依賴記憶判斷）
 
 **前置分流**：當前 commit 是否屬於 TDD Phase 完成？識別依據：已完成 ticket 含 `tdd_phase` 欄位。
 
