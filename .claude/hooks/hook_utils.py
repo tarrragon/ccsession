@@ -277,7 +277,7 @@ def get_project_root() -> Path:
 
 
 def run_git(
-    args: list,
+    args: List[str],
     cwd: "str | Path | None" = None,
     timeout: int = 5,
     logger: "logging.Logger | None" = None,
