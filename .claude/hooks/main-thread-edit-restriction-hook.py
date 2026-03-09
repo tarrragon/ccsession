@@ -64,7 +64,7 @@ from typing import Dict, Any, Optional, Tuple
 # 設置 sys.path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from hook_utils import setup_hook_logging, run_hook_safely
+from hook_utils import setup_hook_logging, run_hook_safely, get_project_root
 from lib.hook_messages import GateMessages, CoreMessages, format_message
 
 
@@ -311,7 +311,7 @@ def save_check_log(
         logger: 日誌物件
     """
     try:
-        project_dir = Path(os.getenv("CLAUDE_PROJECT_DIR", Path.cwd()))
+        project_dir = get_project_root()
         log_dir = project_dir / ".claude" / "hook-logs" / "main-thread-edit-restriction"
         log_dir.mkdir(parents=True, exist_ok=True)
 

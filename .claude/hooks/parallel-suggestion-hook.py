@@ -48,7 +48,7 @@ from typing import Dict, Any, Optional, List, Tuple, Set
 sys.path.insert(0, str(Path(__file__).parent))
 
 try:
-    from hook_utils import setup_hook_logging, parse_ticket_frontmatter, read_json_from_stdin, run_hook_safely
+    from hook_utils import setup_hook_logging, parse_ticket_frontmatter, read_json_from_stdin, run_hook_safely, get_project_root
     from lib.hook_messages import AskUserQuestionMessages
 except ImportError as e:
     print(f"[Hook Import Error] {Path(__file__).name}: {e}", file=sys.stderr)
@@ -156,9 +156,7 @@ def find_ticket_files(logger) -> List[Path]:
     Returns:
         list - Ticket 檔案路徑清單
     """
-    import os
-
-    project_dir = Path(os.getenv("CLAUDE_PROJECT_DIR", Path.cwd()))
+    project_dir = get_project_root()
 
     # 搜尋位置：docs/work-logs/*/tickets/
     all_tickets = []
@@ -623,9 +621,7 @@ def save_analysis_log(
         parallel_count: 並行任務數
         logger: 日誌物件
     """
-    import os
-
-    project_dir = Path(os.getenv("CLAUDE_PROJECT_DIR", Path.cwd()))
+    project_dir = get_project_root()
     log_dir = project_dir / ".claude" / "hook-logs" / "parallel-suggestion"
     log_dir.mkdir(parents=True, exist_ok=True)
 

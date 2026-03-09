@@ -41,7 +41,7 @@ from typing import Dict, Any, Optional, Tuple
 # 加入 hook_utils 路徑（相同目錄）
 sys.path.insert(0, str(Path(__file__).parent))
 
-from hook_utils import setup_hook_logging, run_hook_safely, read_json_from_stdin
+from hook_utils import setup_hook_logging, run_hook_safely, read_json_from_stdin, get_project_root
 
 # ============================================================================
 # 常數定義
@@ -145,9 +145,7 @@ def find_ticket_file(ticket_id: str, logger) -> Optional[Path]:
     Returns:
         Path - Ticket 檔案路徑，或 None 如未找到
     """
-    import os
-
-    project_dir = Path(os.getenv("CLAUDE_PROJECT_DIR", Path.cwd()))
+    project_dir = get_project_root()
 
     # 搜尋位置：.claude/tickets/ 和 docs/work-logs/*/tickets/
     search_locations = [
@@ -271,9 +269,7 @@ def is_handoff_recovery_mode(logger) -> bool:
     Args:
         logger: 日誌物件
     """
-    import os
-
-    project_dir = Path(os.getenv("CLAUDE_PROJECT_DIR", Path.cwd()))
+    project_dir = get_project_root()
     handoff_pending_dir = project_dir / ".claude" / "handoff" / "pending"
 
     # 檢查是否存在 pending Handoff 任務
@@ -407,9 +403,7 @@ def save_check_log(
         error_message: 錯誤訊息（如有）
         logger: 日誌物件
     """
-    import os
-
-    project_dir = Path(os.getenv("CLAUDE_PROJECT_DIR", Path.cwd()))
+    project_dir = get_project_root()
     log_dir = project_dir / ".claude" / "hook-logs" / "agent-ticket-validation"
     log_dir.mkdir(parents=True, exist_ok=True)
 

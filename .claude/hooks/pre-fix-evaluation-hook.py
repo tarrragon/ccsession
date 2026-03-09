@@ -194,14 +194,16 @@ def classify_errors(output: str, logger) -> Tuple[ErrorType, List[Dict[str, str]
     return error_type, errors
 
 
-def get_project_root(logger) -> Path:
-    """取得專案根目錄"""
-    return Path(os.getenv("CLAUDE_PROJECT_DIR", Path.cwd()))
+def _get_project_root_internal(logger) -> Path:
+    """取得專案根目錄（來自 hook_utils）"""
+    # 使用 hook_utils 的標準函式
+    from hook_utils import get_project_root as hook_get_project_root
+    return hook_get_project_root()
 
 
 def log_evaluation(error_type: ErrorType, errors: List[Dict[str, str]], logger) -> None:
     """記錄評估結果到日誌"""
-    project_root = get_project_root(logger)
+    project_root = _get_project_root_internal(logger)
     log_dir = project_root / ".claude" / "hook-logs"
     log_dir.mkdir(parents=True, exist_ok=True)
 

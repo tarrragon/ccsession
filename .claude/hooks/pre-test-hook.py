@@ -36,7 +36,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from hook_utils import setup_hook_logging, run_hook_safely
+from hook_utils import setup_hook_logging, run_hook_safely, get_project_root
 from lib.hook_messages import ValidationMessages
 
 
@@ -100,7 +100,7 @@ def main():
     if not is_test_command(tool_name, tool_input):
         return 0
 
-    project_dir = Path(os.getenv("CLAUDE_PROJECT_DIR", Path.cwd()))
+    project_dir = get_project_root()
     issues = []
 
     # 1. 檢查 Flutter SDK

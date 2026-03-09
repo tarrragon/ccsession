@@ -72,7 +72,7 @@ from typing import Dict, Any, Optional, Tuple, List
 # 加入 hook_utils 路徑（相同目錄）
 sys.path.insert(0, str(Path(__file__).parent))
 
-from hook_utils import setup_hook_logging, run_hook_safely, read_json_from_stdin
+from hook_utils import setup_hook_logging, run_hook_safely, read_json_from_stdin, get_project_root
 from lib.hook_messages import GateMessages, CoreMessages, format_message
 
 # ============================================================================
@@ -419,9 +419,7 @@ def find_ticket_files(logger) -> List[Path]:
     Returns:
         list - Ticket 檔案路徑清單
     """
-    import os
-
-    project_dir = Path(os.getenv("CLAUDE_PROJECT_DIR", Path.cwd()))
+    project_dir = get_project_root()
 
     # 搜尋位置：.claude/tickets/ 和 docs/work-logs/*/tickets/
     ticket_locations = [
@@ -874,9 +872,7 @@ def save_check_log(
         has_relevance_warning: 是否有關聯性警告
         logger: 日誌物件
     """
-    import os
-
-    project_dir = Path(os.getenv("CLAUDE_PROJECT_DIR", Path.cwd()))
+    project_dir = get_project_root()
     log_dir = project_dir / ".claude" / "hook-logs" / "command-entrance-gate"
     log_dir.mkdir(parents=True, exist_ok=True)
 

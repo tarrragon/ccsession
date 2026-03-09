@@ -18,7 +18,7 @@ from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from hook_utils import setup_hook_logging, run_hook_safely
+from hook_utils import setup_hook_logging, run_hook_safely, get_project_root
 
 
 def main():
@@ -40,7 +40,7 @@ def main():
         return 0
 
     # 記錄測試開始時間
-    project_dir = Path(os.getenv("CLAUDE_PROJECT_DIR", Path.cwd()))
+    project_dir = get_project_root()
     monitor_file = project_dir / ".claude" / "hook-logs" / "test-monitor.json"
     monitor_file.parent.mkdir(parents=True, exist_ok=True)
 

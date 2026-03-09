@@ -37,7 +37,7 @@ from typing import Dict, Any, Optional, Tuple
 # 加入 hook_utils 路徑（相同目錄）
 sys.path.insert(0, str(Path(__file__).parent))
 
-from hook_utils import setup_hook_logging, run_hook_safely, read_json_from_stdin
+from hook_utils import setup_hook_logging, run_hook_safely, read_json_from_stdin, get_project_root
 
 # ============================================================================
 # 常數定義
@@ -366,9 +366,7 @@ def save_check_log(
         warning_message: 警告訊息（如有）
         logger: Logger 實例
     """
-    import os
-
-    project_dir = Path(os.getenv("CLAUDE_PROJECT_DIR", Path.cwd()))
+    project_dir = get_project_root()
     log_dir = project_dir / ".claude" / "hook-logs" / "ticket-id-validator"
     log_dir.mkdir(parents=True, exist_ok=True)
 

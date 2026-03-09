@@ -23,7 +23,7 @@ from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from hook_utils import setup_hook_logging, run_hook_safely
+from hook_utils import setup_hook_logging, run_hook_safely, get_project_root
 
 # 閾值設定（秒）
 WARNING_THRESHOLD = 300    # 5 分鐘
@@ -48,7 +48,7 @@ def main():
         return 0
 
     # 讀取監控檔案
-    project_dir = Path(os.getenv("CLAUDE_PROJECT_DIR", Path.cwd()))
+    project_dir = get_project_root()
     monitor_file = project_dir / ".claude" / "hook-logs" / "test-monitor.json"
 
     if not monitor_file.exists():

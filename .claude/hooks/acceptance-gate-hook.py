@@ -55,6 +55,7 @@ from hook_utils import (
     parse_ticket_frontmatter,
     parse_ticket_date,
     check_error_patterns_changed,
+    get_project_root,
 )
 from lib.hook_messages import GateMessages, CoreMessages, AskUserQuestionMessages, format_message
 
@@ -1001,8 +1002,7 @@ def main() -> int:
             return EXIT_SUCCESS
 
         # 步驟 3: 檢查驗收狀態
-        import os
-        project_dir = Path(os.getenv("CLAUDE_PROJECT_DIR", Path.cwd()))
+        project_dir = get_project_root()
         result = check_acceptance_status(ticket_id, project_dir, logger)
         logger.info(
             f"驗收結果: should_block={result.should_block}, "
