@@ -28,7 +28,6 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from hook_utils import setup_hook_logging, run_hook_safely, read_json_from_stdin
 from lib.hook_messages import AskUserQuestionMessages, CoreMessages
-from lib.ask_user_question_reminders import AskUserQuestionReminders
 
 # ============================================================================
 # 常數定義
