@@ -28,7 +28,13 @@ from typing import Optional, Dict, List, Tuple
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from hook_utils import setup_hook_logging, run_hook_safely, read_json_from_stdin, get_project_root
+from hook_utils import (
+    setup_hook_logging,
+    run_hook_safely,
+    read_json_from_stdin,
+    get_project_root,
+    get_current_version_from_todolist,
+)
 from lib.hook_messages import AskUserQuestionMessages, CoreMessages
 from lib.ask_user_question_reminders import AskUserQuestionReminders
 
@@ -146,41 +152,6 @@ def extract_commit_type(command: str) -> str:
 # Wave 完成偵測邏輯
 # ============================================================================
 
-def read_current_version(project_dir: Path, logger) -> Optional[str]:
-    """
-    從 docs/todolist.yaml 讀取 current_version 欄位
-
-    格式: current_version: 0.1.0
-
-    Args:
-        project_dir: 專案根目錄
-        logger: 日誌物件
-
-    Returns:
-        str - 版本號（如 "0.1.0"），或 None（若讀取失敗）
-    """
-    todolist_file = project_dir / "docs" / "todolist.yaml"
-
-    if not todolist_file.exists():
-        logger.debug(f"todolist.yaml 不存在: {todolist_file}")
-        return None
-
-    try:
-        content = todolist_file.read_text(encoding="utf-8")
-
-        # 簡單正則提取 current_version: 欄位值
-        match = re.search(r"current_version:\s*(\S+)", content)
-        if match:
-            version = match.group(1).strip()
-            logger.debug(f"從 todolist.yaml 讀取 current_version: {version}")
-            return version
-        else:
-            logger.debug("todolist.yaml 中未找到 current_version 欄位")
-            return None
-    except Exception as e:
-        logger.warning(f"讀取 todolist.yaml 失敗: {e}")
-        return None
-
 
 def scan_wave_tickets(
     project_dir: Path,
@@ -267,7 +238,7 @@ def detect_wave_completion(logger) -> bool:
         project_dir = get_project_root()
 
         # Step 1: 讀取當前版本
-        current_version = read_current_version(project_dir, logger)
+        current_version = get_current_version_from_todolist(project_dir, logger)
         if not current_version:
             logger.debug("無法讀取 current_version，無法判斷 Wave 完成狀態")
             return False

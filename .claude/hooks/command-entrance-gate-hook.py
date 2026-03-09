@@ -72,7 +72,14 @@ from typing import Dict, Any, Optional, Tuple, List
 # 加入 hook_utils 路徑（相同目錄）
 sys.path.insert(0, str(Path(__file__).parent))
 
-from hook_utils import setup_hook_logging, run_hook_safely, read_json_from_stdin, get_project_root
+from hook_utils import (
+    setup_hook_logging,
+    run_hook_safely,
+    read_json_from_stdin,
+    get_project_root,
+    find_ticket_files,
+    get_current_version_from_todolist,
+)
 from lib.hook_messages import GateMessages, CoreMessages, format_message
 
 # ============================================================================
@@ -371,105 +378,6 @@ def is_development_command(prompt: str, logger) -> bool:
 # Ticket 檢查
 # ============================================================================
 
-def read_current_version(project_dir: Path, logger) -> Optional[str]:
-    """
-    從 docs/todolist.yaml 讀取 current_version 欄位
-
-    格式: current_version: 0.1.0
-
-    Args:
-        project_dir: 專案根目錄
-        logger: 日誌物件
-
-    Returns:
-        str - 版本號（如 "0.1.0"），或 None（若讀取失敗）
-    """
-    todolist_file = project_dir / "docs" / "todolist.yaml"
-
-    if not todolist_file.exists():
-        logger.debug(f"todolist.yaml 不存在: {todolist_file}")
-        return None
-
-    try:
-        content = todolist_file.read_text(encoding="utf-8")
-
-        # 簡單正則提取 current_version: 欄位值
-        match = re.search(r"current_version:\s*(\S+)", content)
-        if match:
-            version = match.group(1).strip()
-            logger.info(f"從 todolist.yaml 讀取 current_version: {version}")
-            return version
-        else:
-            logger.debug("todolist.yaml 中未找到 current_version 欄位")
-            return None
-    except Exception as e:
-        logger.warning(f"讀取 todolist.yaml 失敗: {e}")
-        return None
-
-def find_ticket_files(logger) -> List[Path]:
-    """
-    尋找所有 Ticket 檔案
-
-    優先掃描當前活躍版本（從 docs/todolist.yaml 的 current_version 讀取）。
-    若讀取失敗或目錄不存在，fallback 到掃描所有版本目錄。
-
-    Args:
-        logger: 日誌物件
-
-    Returns:
-        list - Ticket 檔案路徑清單
-    """
-    project_dir = get_project_root()
-
-    # 搜尋位置：.claude/tickets/ 和 docs/work-logs/*/tickets/
-    ticket_locations = [
-        project_dir / ".claude" / "tickets",
-        project_dir / "docs" / "work-logs"
-    ]
-
-    all_tickets = []
-
-    # 搜尋 .claude/tickets/
-    if ticket_locations[0].exists():
-        all_tickets.extend(ticket_locations[0].glob("*.md"))
-        logger.debug(f"從 .claude/tickets/ 找到 {len(all_tickets)} 個 Ticket 檔案")
-
-    # 嘗試讀取當前版本，優先掃描當前版本目錄
-    current_version = read_current_version(project_dir, logger)
-
-    if current_version:
-        # 優先掃描當前版本
-        current_version_dir = ticket_locations[1] / f"v{current_version}"
-        current_tickets_dir = current_version_dir / "tickets"
-
-        if current_tickets_dir.exists():
-            current_tickets = list(current_tickets_dir.glob("*.md"))
-            all_tickets.extend(current_tickets)
-            logger.info(f"從當前版本 v{current_version} 找到 {len(current_tickets)} 個 Ticket 檔案")
-        else:
-            logger.warning(f"當前版本目錄不存在: {current_tickets_dir}")
-
-        # Fallback: 掃描其他版本目錄（非當前版本）
-        for version_dir in ticket_locations[1].glob("v*"):
-            if version_dir.name != f"v{current_version}":
-                tickets_dir = version_dir / "tickets"
-                if tickets_dir.exists():
-                    other_tickets = list(tickets_dir.glob("*.md"))
-                    all_tickets.extend(other_tickets)
-                    logger.debug(f"從其他版本 {version_dir.name} 找到 {len(other_tickets)} 個 Ticket 檔案")
-    else:
-        # Fallback: 讀取失敗時，掃描所有版本目錄
-        logger.info("current_version 讀取失敗，fallback 到掃描所有版本目錄")
-        for version_dir in ticket_locations[1].glob("v*"):
-            tickets_dir = version_dir / "tickets"
-            if tickets_dir.exists():
-                version_tickets = list(tickets_dir.glob("*.md"))
-                all_tickets.extend(version_tickets)
-                logger.debug(f"從版本 {version_dir.name} 找到 {len(version_tickets)} 個 Ticket 檔案")
-
-    logger.debug(f"總計找到 {len(all_tickets)} 個 Ticket 檔案")
-    return all_tickets
-
 def extract_ticket_status(file_path: Path, logger) -> Tuple[Optional[str], Optional[str], str]:
     """
     從 Ticket 檔案提取 ID、狀態和完整內容
@@ -718,7 +626,8 @@ def get_latest_pending_ticket(logger) -> Optional[Tuple[str, str, str]]:
     Returns:
         tuple - (ticket_id, status, content) 或 None
     """
-    tickets = find_ticket_files(logger)
+    project_root = get_project_root()
+    tickets = find_ticket_files(project_root, logger=logger)
 
     # 按修改時間排序（最新優先）
     sorted_tickets = sorted(tickets, key=lambda p: p.stat().st_mtime, reverse=True)

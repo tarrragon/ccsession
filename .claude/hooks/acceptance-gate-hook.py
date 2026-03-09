@@ -56,6 +56,7 @@ from hook_utils import (
     parse_ticket_date,
     check_error_patterns_changed,
     get_project_root,
+    scan_ticket_files_by_version,
 )
 from lib.hook_messages import GateMessages, CoreMessages, AskUserQuestionMessages, format_message
 
@@ -480,8 +481,9 @@ def find_pending_sibling_tickets(
     sibling_tickets = []
 
     try:
-        # 步驟 3-5: 掃描並過濾 tickets
-        for ticket_file in sorted(tickets_dir.glob("*.md")):
+        # 步驟 3-5: 掃描並過濾 tickets（使用共用函式）
+        ticket_files = scan_ticket_files_by_version(project_dir, version, logger)
+        for ticket_file in sorted(ticket_files):
             try:
                 file_ticket_id = ticket_file.stem  # 移除 .md 副檔名
 

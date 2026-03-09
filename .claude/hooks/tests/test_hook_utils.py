@@ -21,7 +21,14 @@ import pytest
 
 # 動態導入 hook_utils（可能不存在）
 try:
-    from hook_utils import setup_hook_logging, run_hook_safely, _log_exception
+    from hook_utils import (
+        setup_hook_logging,
+        run_hook_safely,
+        _log_exception,
+        get_current_version_from_todolist,
+        scan_ticket_files_by_version,
+        find_ticket_files,
+    )
 except ImportError:
     # 如果模組還不存在，定義虛擬函式以便測試可以 import
     def setup_hook_logging(hook_name: str) -> logging.Logger:
@@ -31,6 +38,15 @@ except ImportError:
         raise NotImplementedError()
 
     def _log_exception(logger: logging.Logger, hook_name: str, tb_str: str) -> None:
+        raise NotImplementedError()
+
+    def get_current_version_from_todolist(project_root, logger=None):
+        raise NotImplementedError()
+
+    def scan_ticket_files_by_version(project_root, version, logger=None):
+        raise NotImplementedError()
+
+    def find_ticket_files(project_root, version=None, logger=None):
         raise NotImplementedError()
 
 
@@ -596,3 +612,176 @@ class TestLogException:
 
         # 驗證 stderr 有 Hook 失敗訊息
         assert "[Hook Error] stderr-test-hook failed unexpectedly" in captured.err
+
+
+# ============================================================================
+# Ticket 檔案掃描函式測試
+# ============================================================================
+
+
+class TestGetCurrentVersionFromTodolist:
+    """get_current_version_from_todolist() 功能測試"""
+
+    def test_read_valid_todolist(self, project_root):
+        """成功讀取 todolist.yaml 中的 current_version"""
+        # 建立 todolist.yaml
+        todolist_file = project_root / "docs" / "todolist.yaml"
+        todolist_file.write_text("current_version: 0.1.0\nstatus: active\n")
+
+        version = get_current_version_from_todolist(project_root)
+
+        assert version == "0.1.0"
+
+    def test_todolist_missing(self, project_root):
+        """todolist.yaml 不存在時返回 None"""
+        version = get_current_version_from_todolist(project_root)
+
+        assert version is None
+
+    def test_todolist_no_version_field(self, project_root):
+        """todolist.yaml 中無 current_version 欄位時返回 None"""
+        todolist_file = project_root / "docs" / "todolist.yaml"
+        todolist_file.write_text("status: active\n")
+
+        version = get_current_version_from_todolist(project_root)
+
+        assert version is None
+
+    def test_logger_optional(self, project_root, reset_loggers):
+        """logger 參數可選（不傳遞時仍可正常執行）"""
+        todolist_file = project_root / "docs" / "todolist.yaml"
+        todolist_file.write_text("current_version: 0.2.0\n")
+
+        # 不傳遞 logger
+        version = get_current_version_from_todolist(project_root)
+
+        assert version == "0.2.0"
+
+    def test_with_logger(self, project_root, reset_loggers):
+        """傳遞 logger 參數時正常記錄"""
+        logger = logging.getLogger("test-logger")
+        todolist_file = project_root / "docs" / "todolist.yaml"
+        todolist_file.write_text("current_version: 0.3.0\n")
+
+        version = get_current_version_from_todolist(project_root, logger)
+
+        assert version == "0.3.0"
+
+
+class TestScanTicketFilesByVersion:
+    """scan_ticket_files_by_version() 功能測試"""
+
+    def test_scan_single_version(self, project_root):
+        """掃描特定版本的 Ticket 檔案"""
+        # 建立版本目錄和 Ticket 檔案
+        tickets_dir = project_root / "docs" / "work-logs" / "v0.1.0" / "tickets"
+        tickets_dir.mkdir(parents=True, exist_ok=True)
+
+        (tickets_dir / "0.1.0-W1-001.md").write_text("# Ticket 1\n")
+        (tickets_dir / "0.1.0-W1-002.md").write_text("# Ticket 2\n")
+
+        files = scan_ticket_files_by_version(project_root, "0.1.0")
+
+        assert len(files) == 2
+        assert all(f.suffix == ".md" for f in files)
+
+    def test_nonexistent_version(self, project_root):
+        """版本目錄不存在時返回空清單"""
+        files = scan_ticket_files_by_version(project_root, "0.9.0")
+
+        assert files == []
+
+    def test_empty_version_directory(self, project_root):
+        """版本目錄存在但無 Ticket 時返回空清單"""
+        tickets_dir = project_root / "docs" / "work-logs" / "v0.1.0" / "tickets"
+        tickets_dir.mkdir(parents=True, exist_ok=True)
+
+        files = scan_ticket_files_by_version(project_root, "0.1.0")
+
+        assert files == []
+
+    def test_with_logger(self, project_root, reset_loggers):
+        """傳遞 logger 參數時正常記錄"""
+        logger = logging.getLogger("test-logger")
+        tickets_dir = project_root / "docs" / "work-logs" / "v0.1.0" / "tickets"
+        tickets_dir.mkdir(parents=True, exist_ok=True)
+        (tickets_dir / "0.1.0-W1-001.md").write_text("# Ticket 1\n")
+
+        files = scan_ticket_files_by_version(project_root, "0.1.0", logger)
+
+        assert len(files) == 1
+
+
+class TestFindTicketFiles:
+    """find_ticket_files() 功能測試"""
+
+    def test_find_all_versions(self, project_root):
+        """掃描所有版本的 Ticket 檔案"""
+        # 建立多個版本目錄
+        for version in ["0.1.0", "0.2.0"]:
+            tickets_dir = (
+                project_root / "docs" / "work-logs" / f"v{version}" / "tickets"
+            )
+            tickets_dir.mkdir(parents=True, exist_ok=True)
+            (tickets_dir / f"{version}-W1-001.md").write_text("# Ticket\n")
+
+        files = find_ticket_files(project_root)
+
+        assert len(files) == 2
+
+    def test_specific_version(self, project_root):
+        """指定 version 參數時只掃描該版本"""
+        # 建立多個版本
+        for version in ["0.1.0", "0.2.0"]:
+            tickets_dir = (
+                project_root / "docs" / "work-logs" / f"v{version}" / "tickets"
+            )
+            tickets_dir.mkdir(parents=True, exist_ok=True)
+            (tickets_dir / f"{version}-W1-001.md").write_text("# Ticket\n")
+
+        files = find_ticket_files(project_root, version="0.1.0")
+
+        assert len(files) == 1
+        assert "0.1.0" in str(files[0])
+
+    def test_backward_compatibility_old_location(self, project_root):
+        """支援舊位置 .claude/tickets/"""
+        # 建立舊位置 Ticket
+        old_dir = project_root / ".claude" / "tickets"
+        old_dir.mkdir(parents=True, exist_ok=True)
+        (old_dir / "old-ticket.md").write_text("# Old Ticket\n")
+
+        files = find_ticket_files(project_root)
+
+        assert len(files) == 1
+        assert "old-ticket.md" in str(files[0])
+
+    def test_priority_current_version(self, project_root):
+        """優先掃描當前活躍版本（從 todolist.yaml）"""
+        # 建立多個版本
+        for version in ["0.1.0", "0.2.0"]:
+            tickets_dir = (
+                project_root / "docs" / "work-logs" / f"v{version}" / "tickets"
+            )
+            tickets_dir.mkdir(parents=True, exist_ok=True)
+            (tickets_dir / f"{version}-W1-001.md").write_text("# Ticket\n")
+
+        # 設置 current_version
+        todolist_file = project_root / "docs" / "todolist.yaml"
+        todolist_file.write_text("current_version: 0.2.0\n")
+
+        files = find_ticket_files(project_root)
+
+        # 應該包含兩個版本的檔案，但當前版本應優先
+        assert len(files) == 2
+
+    def test_fallback_when_no_version(self, project_root):
+        """current_version 讀取失敗時 fallback 掃描所有版本"""
+        # 建立版本目錄但不建立 todolist.yaml
+        tickets_dir = project_root / "docs" / "work-logs" / "v0.1.0" / "tickets"
+        tickets_dir.mkdir(parents=True, exist_ok=True)
+        (tickets_dir / "0.1.0-W1-001.md").write_text("# Ticket\n")
+
+        files = find_ticket_files(project_root)
+
+        assert len(files) == 1

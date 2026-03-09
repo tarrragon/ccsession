@@ -17,6 +17,7 @@ Python 版本：3.9 相容（禁用 PEP 604、634、613）
 import json
 import logging
 import os
+import re
 import subprocess
 import sys
 import time
@@ -768,6 +769,163 @@ def check_error_patterns_changed(
         logger.info("掃描 error-patterns 目錄完成：發現 {} 個新增/修改檔案".format(len(changed_files)))
     has_changed = len(changed_files) > 0
     return has_changed, changed_files
+
+
+# ============================================================================
+# Ticket 檔案掃描函式（共用）
+# ============================================================================
+
+
+def get_current_version_from_todolist(
+    project_root: Path, logger: "Optional[logging.Logger]" = None
+) -> "Optional[str]":
+    """從 docs/todolist.yaml 讀取 current_version 欄位
+
+    Args:
+        project_root: 專案根目錄
+        logger: 可選日誌物件
+
+    Returns:
+        版本號字串（如 "0.1.0"）或 None（若讀取失敗）
+    """
+    todolist_file = project_root / "docs" / "todolist.yaml"
+
+    if not todolist_file.exists():
+        if logger:
+            logger.debug("todolist.yaml 不存在: {}".format(todolist_file))
+        return None
+
+    try:
+        content = todolist_file.read_text(encoding="utf-8")
+
+        # 簡單正則提取 current_version: 欄位值
+        match = re.search(r"current_version:\s*(\S+)", content)
+        if match:
+            version = match.group(1).strip()
+            if logger:
+                logger.info("從 todolist.yaml 讀取 current_version: {}".format(version))
+            return version
+        else:
+            if logger:
+                logger.debug("todolist.yaml 中未找到 current_version 欄位")
+            return None
+    except Exception as e:
+        if logger:
+            logger.warning("讀取 todolist.yaml 失敗: {}".format(e))
+        return None
+
+
+def scan_ticket_files_by_version(
+    project_root: Path, version: str, logger: "Optional[logging.Logger]" = None
+) -> List[Path]:
+    """掃描特定版本的 Ticket 檔案
+
+    Args:
+        project_root: 專案根目錄
+        version: 版本號（如 "0.1.0"）
+        logger: 可選日誌物件
+
+    Returns:
+        Ticket 檔案路徑清單
+    """
+    tickets_dir = project_root / "docs" / "work-logs" / "v{}".format(version) / "tickets"
+
+    if not tickets_dir.exists():
+        if logger:
+            logger.debug("Ticket 目錄不存在: {}".format(tickets_dir))
+        return []
+
+    try:
+        ticket_files = list(tickets_dir.glob("*.md"))
+        if logger:
+            logger.debug("從版本 v{} 找到 {} 個 Ticket 檔案".format(version, len(ticket_files)))
+        return ticket_files
+    except (OSError, PermissionError) as e:
+        if logger:
+            logger.warning("掃描 Ticket 目錄失敗 (v{}): {}".format(version, e))
+        return []
+
+
+def find_ticket_files(
+    project_root: Path, version: "Optional[str]" = None, logger: "Optional[logging.Logger]" = None
+) -> List[Path]:
+    """尋找所有 Ticket 檔案（支援版本優先和後向相容）
+
+    功能：
+    - 如指定 version，只掃描該版本目錄
+    - 如未指定 version，優先掃描當前活躍版本（從 todolist.yaml 讀取）
+    - 若讀取失敗或目錄不存在，掃描所有版本目錄
+    - 支援後向相容：檢查舊位置 .claude/tickets/
+
+    Args:
+        project_root: 專案根目錄
+        version: 版本號（可選，如 "0.1.0"）；若不指定則自動讀取
+        logger: 可選日誌物件
+
+    Returns:
+        Ticket 檔案路徑清單
+    """
+    all_tickets = []
+
+    # 檢查舊位置 .claude/tickets/（後向相容）
+    old_tickets_dir = project_root / ".claude" / "tickets"
+    if old_tickets_dir.exists():
+        try:
+            old_tickets = list(old_tickets_dir.glob("*.md"))
+            all_tickets.extend(old_tickets)
+            if logger:
+                logger.debug("從 .claude/tickets/ 找到 {} 個 Ticket 檔案".format(len(old_tickets)))
+        except (OSError, PermissionError) as e:
+            if logger:
+                logger.warning("掃描舊 Ticket 位置失敗: {}".format(e))
+
+    # 如指定 version，只掃描該版本
+    if version:
+        version_tickets = scan_ticket_files_by_version(project_root, version, logger)
+        all_tickets.extend(version_tickets)
+        return all_tickets
+
+    # 未指定 version：優先掃描當前活躍版本
+    current_version = get_current_version_from_todolist(project_root, logger)
+
+    if current_version:
+        # 優先掃描當前版本
+        current_tickets = scan_ticket_files_by_version(project_root, current_version, logger)
+        all_tickets.extend(current_tickets)
+
+        # Fallback：掃描其他版本（非當前版本）
+        work_logs_dir = project_root / "docs" / "work-logs"
+        if work_logs_dir.exists():
+            try:
+                for version_dir in work_logs_dir.glob("v*"):
+                    if version_dir.name != "v{}".format(current_version):
+                        other_tickets = scan_ticket_files_by_version(
+                            project_root, version_dir.name[1:], logger
+                        )
+                        all_tickets.extend(other_tickets)
+            except (OSError, PermissionError) as e:
+                if logger:
+                    logger.warning("掃描其他版本目錄失敗: {}".format(e))
+    else:
+        # Fallback：讀取失敗時，掃描所有版本目錄
+        if logger:
+            logger.info("current_version 讀取失敗，fallback 到掃描所有版本目錄")
+
+        work_logs_dir = project_root / "docs" / "work-logs"
+        if work_logs_dir.exists():
+            try:
+                for version_dir in work_logs_dir.glob("v*"):
+                    version_tickets = scan_ticket_files_by_version(
+                        project_root, version_dir.name[1:], logger
+                    )
+                    all_tickets.extend(version_tickets)
+            except (OSError, PermissionError) as e:
+                if logger:
+                    logger.warning("掃描版本目錄失敗: {}".format(e))
+
+    if logger:
+        logger.debug("總計找到 {} 個 Ticket 檔案".format(len(all_tickets)))
+    return all_tickets
 
 
 def run_hook_safely(main_func: Callable[[], int], hook_name: str) -> int:
