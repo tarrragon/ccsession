@@ -9,7 +9,7 @@ from pathlib import Path
 def test_hook_module_exists():
     """Verify hook file exists"""
     hook_dir = Path(__file__).parent.parent
-    hook_file = hook_dir / "test_package_version_sync.py"
+    hook_file = hook_dir / "package-version-sync-hook.py"
     assert hook_file.exists(), f"Hook file not found: {hook_file}"
 
 
