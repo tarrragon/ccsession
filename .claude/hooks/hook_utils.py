@@ -945,11 +945,15 @@ def find_ticket_file(
 ) -> Optional[Path]:
     """尋找特定 ID 的 Ticket 檔案
 
-    內部呼叫 find_ticket_files() 掃描所有 Ticket 位置，
-    然後根據檔名篩選出符合的檔案（{ticket_id}.md）。
+    優化策略（O(1) early return）：
+    1. 從 ticket_id 解析版本號（格式：{version}-W{wave}-{seq}）
+    2. 直接構建路徑：docs/work-logs/v{version}/tickets/{ticket_id}.md
+    3. 如果直接路徑存在 → 立即返回（early return）
+    4. 檢查舊位置 .claude/tickets/{ticket_id}.md（向後相容）
+    5. 如果上述路徑都不存在 → fallback 到 find_ticket_files() 全量掃描
 
     Args:
-        ticket_id: Ticket ID（如 "0.1.0-W1-001"）
+        ticket_id: Ticket ID（如 "0.1.0-W1-001" 或非標準格式）
         project_root: 專案根目錄（可選，若為 None 則自動取得）
         logger: 日誌物件（可選）
 
@@ -959,6 +963,34 @@ def find_ticket_file(
     if project_root is None:
         project_root = get_project_root()
 
+    # 嘗試解析 ticket_id 中的版本號（格式：{version}-W{wave}-{seq}）
+    # 範例：0.1.0-W31-003 → version="0.1.0"
+    version = _parse_version_from_ticket_id(ticket_id)
+
+    # Strategy 1: 直接構建路徑（如果能解析出版本號）
+    if version:
+        direct_path = (
+            project_root / "docs" / "work-logs" / f"v{version}" / "tickets" / f"{ticket_id}.md"
+        )
+        if direct_path.exists():
+            if logger:
+                logger.info("找到 Ticket: {} 於 {} (direct path)".format(ticket_id, direct_path))
+            return direct_path
+        else:
+            if logger:
+                logger.debug("直接路徑不存在，嘗試舊位置: {}".format(ticket_id))
+
+    # Strategy 2: 檢查舊位置 .claude/tickets/{ticket_id}.md（向後相容）
+    old_path = project_root / ".claude" / "tickets" / f"{ticket_id}.md"
+    if old_path.exists():
+        if logger:
+            logger.info("找到 Ticket: {} 於 {} (old location)".format(ticket_id, old_path))
+        return old_path
+
+    # Strategy 3: Fallback 到全量掃描（版本號解析失敗或直接路徑不存在）
+    if logger:
+        logger.debug("全部直接路徑未找到，執行全量掃描: {}".format(ticket_id))
+
     all_tickets = find_ticket_files(project_root, logger=logger)
 
     # 根據檔名篩選符合的 ticket_id
@@ -966,11 +998,44 @@ def find_ticket_file(
     for ticket_file in all_tickets:
         if ticket_file.name == expected_name:
             if logger:
-                logger.info("找到 Ticket: {} 於 {}".format(ticket_id, ticket_file))
+                logger.info("找到 Ticket: {} 於 {} (fallback scan)".format(ticket_id, ticket_file))
             return ticket_file
 
     if logger:
         logger.warning("未找到 Ticket 檔案: {}".format(ticket_id))
+    return None
+
+
+def _parse_version_from_ticket_id(ticket_id: str) -> Optional[str]:
+    """從 Ticket ID 解析版本號
+
+    Ticket ID 標準格式：{version}-W{wave}-{seq}
+    範例：0.1.0-W31-003 → "0.1.0"
+
+    Args:
+        ticket_id: Ticket ID 字串
+
+    Returns:
+        版本號字串，或 None 如無法解析
+    """
+    if not ticket_id:
+        return None
+
+    # 尋找第一個 '-W' 分隔符
+    wave_marker = "-W"
+    wave_index = ticket_id.find(wave_marker)
+
+    if wave_index <= 0:
+        # 未找到 '-W' 或位置不合法
+        return None
+
+    # 版本號是 '-W' 之前的部分
+    version = ticket_id[:wave_index]
+
+    # 驗證版本號不為空，且形如 "x.y.z" 或類似格式
+    if version and "." in version:
+        return version
+
     return None
 
 
