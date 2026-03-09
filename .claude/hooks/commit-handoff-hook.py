@@ -22,6 +22,7 @@ Commit Handoff Hook - PostToolUse Hook
 
 import sys
 import json
+import re
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
@@ -128,7 +129,6 @@ def extract_commit_type(command: str) -> str:
     Returns:
         str - commit 類型（如 "docs", "chore"），無法提取時回傳 ""
     """
-    import re
     # 匹配 -m "type: ..." 或 -m "type(scope): ..."
     match = re.search(r'-m\s+["\']([a-z]+)(?:\([^)]*\))?:', command)
     if match:

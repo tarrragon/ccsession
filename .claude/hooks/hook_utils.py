@@ -17,6 +17,7 @@ Python 版本：3.9 相容（禁用 PEP 604、634、613）
 import json
 import logging
 import os
+import subprocess
 import sys
 import time
 import traceback
@@ -171,6 +172,8 @@ def _create_file_handler(log_file_path: Path) -> Optional[logging.FileHandler]:
         handler.setFormatter(logging.Formatter(FILE_FORMAT, datefmt=DATE_FORMAT))
         return handler
     except OSError as e:
+        # 檔案操作失敗（如無權限、磁碟滿）時輸出到 stderr 並回傳 None，
+        # 由上層呼叫者決定是否使用 fallback logger（如 _setup_logger_handlers）
         sys.stderr.write("Failed to create file handler for {}: {}\n".format(log_file_path, e))
         return None
 
@@ -294,8 +297,6 @@ def run_git(
     Returns:
         stdout 輸出（stripped），或 None 若執行失敗
     """
-    import subprocess
-
     try:
         result = subprocess.run(
             args,

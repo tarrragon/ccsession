@@ -908,6 +908,12 @@ def _parse_and_validate_input(input_data: Dict[str, Any], logger) -> Optional[Tu
     Returns:
         Tuple[str, str] - (tool_name, command) 或 None（無效時）
     """
+    # 防護：input_data 可能為 None（read_json_from_stdin 返回）
+    if input_data is None:
+        logger.debug("輸入資料為 None，跳過驗證")
+        _output_allow_json()
+        return None
+
     if not validate_input(input_data, logger):
         logger.error("輸入格式錯誤")
         _output_allow_json()
