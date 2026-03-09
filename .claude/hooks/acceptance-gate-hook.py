@@ -885,6 +885,21 @@ def save_check_log(ticket_id: str, should_block: bool, project_dir: Path, logger
 # 主入口點輔助函式
 # ============================================================================
 
+def _output_allow_json() -> None:
+    """
+    輸出允許執行的 Hook 應答 JSON。
+
+    此函式用於 PreToolUse Hook 的快速通行路徑，輸出標準的
+    允許執行決策 JSON，無需進行深入檢查。
+
+    輸出格式：
+        {"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "allow"}}
+    """
+    print(json.dumps({
+        "hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "allow"}
+    }, ensure_ascii=False, indent=2))
+
+
 def _parse_and_validate_input(input_data: Dict[str, Any], logger) -> Optional[Tuple[str, str]]:
     """
     解析並驗證輸入資料。
@@ -900,9 +915,7 @@ def _parse_and_validate_input(input_data: Dict[str, Any], logger) -> Optional[Tu
     """
     if not validate_input(input_data, logger):
         logger.error("輸入格式錯誤")
-        print(json.dumps({
-            "hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "allow"}
-        }, ensure_ascii=False, indent=2))
+        _output_allow_json()
         return None
 
     tool_name = input_data.get("tool_name", "")
@@ -930,17 +943,13 @@ def _extract_ticket_or_skip(tool_name: str, command: str, logger) -> Optional[st
     # 不是 Bash 工具
     if tool_name != "Bash":
         logger.debug(f"非 Bash 工具: {tool_name}，直接放行")
-        print(json.dumps({
-            "hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "allow"}
-        }, ensure_ascii=False, indent=2))
+        _output_allow_json()
         return None
 
     # 不是 complete 命令
     if not is_complete_command(command):
         logger.debug(f"非 ticket track complete 命令: {command}")
-        print(json.dumps({
-            "hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "allow"}
-        }, ensure_ascii=False, indent=2))
+        _output_allow_json()
         return None
 
     logger.info(f"識別到 ticket track complete 命令: {command}")
@@ -949,9 +958,7 @@ def _extract_ticket_or_skip(tool_name: str, command: str, logger) -> Optional[st
     ticket_id = extract_ticket_id_from_command(command, logger)
     if not ticket_id:
         logger.error("無法從命令中提取 Ticket ID")
-        print(json.dumps({
-            "hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "allow"}
-        }, ensure_ascii=False, indent=2))
+        _output_allow_json()
         return None
 
     logger.info(f"提取 Ticket ID: {ticket_id}")
