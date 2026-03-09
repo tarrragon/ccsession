@@ -58,6 +58,7 @@ from hook_utils import (
     check_error_patterns_changed,
     get_project_root,
     scan_ticket_files_by_version,
+    find_ticket_file,
 )
 from lib.hook_messages import GateMessages, CoreMessages, AskUserQuestionMessages, format_message
 
@@ -176,42 +177,6 @@ def is_complete_command(command: str) -> bool:
     return "ticket track complete" in command or "ticket track batch-complete" in command
 
 
-# ============================================================================
-# Ticket 檔案操作
-# ============================================================================
-
-def find_ticket_file(ticket_id: str, project_dir: Path, logger) -> Optional[Path]:
-    """
-    搜尋 Ticket 檔案
-
-    Args:
-        ticket_id: Ticket ID
-        project_dir: 專案根目錄
-        logger: 日誌物件
-
-    Returns:
-        Path - Ticket 檔案路徑或 None
-    """
-    # 搜尋位置 1: docs/work-logs/*/tickets/
-    work_logs_dir = project_dir / "docs" / "work-logs"
-    if work_logs_dir.exists():
-        for version_dir in work_logs_dir.iterdir():
-            if version_dir.is_dir():
-                tickets_dir = version_dir / "tickets"
-                ticket_file = tickets_dir / f"{ticket_id}.md"
-                if ticket_file.is_file():
-                    logger.info(f"找到 Ticket 檔案: {ticket_file}")
-                    return ticket_file
-
-    # 搜尋位置 2: .claude/tickets/
-    claude_tickets_dir = project_dir / ".claude" / "tickets"
-    ticket_file = claude_tickets_dir / f"{ticket_id}.md"
-    if ticket_file.is_file():
-        logger.info(f"找到 Ticket 檔案: {ticket_file}")
-        return ticket_file
-
-    logger.debug(f"未找到 Ticket 檔案: {ticket_id}")
-    return None
 
 
 
