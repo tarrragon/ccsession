@@ -48,8 +48,7 @@ from typing import Dict, Any, Optional, List, Tuple, Set
 sys.path.insert(0, str(Path(__file__).parent))
 
 try:
-    from hook_utils import setup_hook_logging, parse_ticket_frontmatter
-    from lib.common_functions import hook_output, read_hook_input
+    from hook_utils import setup_hook_logging, parse_ticket_frontmatter, read_json_from_stdin
     from lib.hook_messages import AskUserQuestionMessages
 except ImportError as e:
     print(f"[Hook Import Error] {Path(__file__).name}: {e}", file=sys.stderr)
@@ -444,14 +443,18 @@ def find_parallelizable_tickets(pending_tickets: List[Dict[str, Any]], logger) -
         group = [ticket1]
         files1 = extract_ticket_files(ticket1, logger)
 
+        # 將 ticket1 的 blockedBy 分割為 set，用於精確比對
+        blocked_ids_1 = set(filter(None, re.split(r'[,\s]+', ticket1.get("blockedBy", ""))))
+
         for ticket2 in unblocked[i + 1:]:
             files2 = extract_ticket_files(ticket2, logger)
 
             # 檢查是否有重疊和依賴
             if not check_files_overlap(files1, files2):
-                # 檢查 blockedBy 關係
-                if (ticket2["id"] not in ticket1.get("blockedBy", "") and
-                    ticket1["id"] not in ticket2.get("blockedBy", "")):
+                # 檢查 blockedBy 關係（使用 set 精確比對，避免子字串誤判）
+                blocked_ids_2 = set(filter(None, re.split(r'[,\s]+', ticket2.get("blockedBy", ""))))
+
+                if ticket2["id"] not in blocked_ids_1 and ticket1["id"] not in blocked_ids_2:
                     group.append(ticket2)
                     files1.update(files2)
 
@@ -675,7 +678,7 @@ def main() -> int:
         logger.info("Parallel Suggestion Hook 啟動")
 
         # 步驟 1: 讀取 JSON 輸入
-        input_data = read_hook_input()
+        input_data = read_json_from_stdin(logger)
         if not input_data:
             input_data = {}
 
@@ -695,6 +698,7 @@ def main() -> int:
 
         parallel_suggestion = None
         parallel_count = 0
+        root_id = None
 
         if is_continuation:
             # 步驟 4: 掃描 Ticket 並分析
@@ -751,11 +755,7 @@ def main() -> int:
         hook_output = generate_hook_output(is_continuation, parallel_suggestion)
         print(json.dumps(hook_output, ensure_ascii=False, indent=2))
 
-        # 儲存分析日誌
-        root_id = find_latest_completed_ticket_root(
-            [extract_ticket_info(f, logger) for f in find_ticket_files(logger)],
-            logger
-        ) if is_continuation else None
+        # 儲存分析日誌（直接使用已有的 root_id，避免重複掃描）
         save_analysis_log(is_continuation, root_id, parallel_count, logger)
 
         logger.info("Parallel Suggestion Hook 執行完成")
