@@ -633,37 +633,6 @@ def _verify_acceptance_record(ticket_content: str, frontmatter: Dict[str, str], 
     return False, None, should_check_acceptance, has_acceptance
 
 
-def _check_error_patterns(frontmatter: Dict[str, str], project_dir: Path, logger) -> Tuple[bool, List[str]]:
-    """
-    Error-pattern 新增檢查。
-
-    Args:
-        frontmatter: Ticket frontmatter 鍵值對（已解析）
-        project_dir: 專案根目錄
-        logger: 日誌物件
-
-    Returns:
-        tuple - (has_new_error_patterns, files)
-            - has_new_error_patterns: 是否有新增/修改的 error-pattern
-            - files: 新增/修改的檔案清單
-    """
-    ticket_created = get_ticket_created_time(frontmatter, logger)
-
-    if not ticket_created:
-        logger.warning(f"無法取得 ticket 的建立時間，跳過 error-pattern 檢查")
-        return False, []
-
-    # 檢查 error-patterns 目錄
-    has_new_error_patterns, new_error_pattern_files = check_error_patterns_changed(
-        project_dir,
-        ticket_created,
-        logger
-    )
-
-    if has_new_error_patterns:
-        logger.info(f"發現 {len(new_error_pattern_files)} 個新增/修改的 error-pattern")
-
-    return has_new_error_patterns, new_error_pattern_files
 
 
 def check_acceptance_status(ticket_id: str, project_dir: Path, logger) -> AcceptanceCheckResult:
@@ -719,7 +688,18 @@ def check_acceptance_status(ticket_id: str, project_dir: Path, logger) -> Accept
         new_error_pattern_files = []
 
         if should_check_acceptance:
-            has_new_error_patterns, new_error_pattern_files = _check_error_patterns(frontmatter, project_dir, logger)
+            ticket_created = get_ticket_created_time(frontmatter, logger)
+            if ticket_created:
+                # 檢查 error-patterns 目錄
+                has_new_error_patterns, new_error_pattern_files = check_error_patterns_changed(
+                    project_dir,
+                    ticket_created,
+                    logger
+                )
+                if has_new_error_patterns:
+                    logger.info(f"發現 {len(new_error_pattern_files)} 個新增/修改的 error-pattern")
+            else:
+                logger.warning(f"無法取得 ticket 的建立時間，跳過 error-pattern 檢查")
 
         # 步驟 4：檢查 pending sibling tickets（場景 #9）
         pending_siblings = find_pending_sibling_tickets(ticket_id, project_dir, logger)

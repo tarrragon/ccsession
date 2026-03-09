@@ -30,6 +30,7 @@ Hook 類型: PostToolUse
 import sys
 import json
 import re
+import os
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, Any, Optional, Tuple, List
@@ -276,7 +277,6 @@ def check_ticket_completion_status(project_dir: str, ticket_id: Optional[str]) -
 
 def get_project_root() -> str:
     """取得專案根目錄"""
-    import os
     project_root = os.getenv("CLAUDE_PROJECT_DIR", str(Path.cwd()))
     return project_root
 
