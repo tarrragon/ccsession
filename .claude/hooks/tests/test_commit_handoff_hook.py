@@ -53,10 +53,10 @@ class TestCommitHandoffHook:
         # 檢查必需的主題
         required_keywords = [
             "Wave 完成審查",
-            "情景 C",
+            "情境 C",
             "/parallel-evaluation",
-            "情景 C1",
-            "情景 C2",
+            "情境 C1",
+            "情境 C2",
             "/version-release check",
             "AskUserQuestion",
         ]
