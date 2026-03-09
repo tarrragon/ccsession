@@ -121,12 +121,14 @@ class TestSetupHookLogging:
         log_dir = project_root / ".claude" / "hook-logs" / "test-hook"
         assert log_dir.exists()
 
-        # 驗證日誌檔案建立
+        # 驗證 handlers 數量（FileHandler + StreamHandler）
+        # 注意：FileHandler 使用 delay=True，檔案只在首次寫入時建立，不是在 setup 時建立
+        assert len(logger.handlers) == 2
+
+        # 驗證日誌檔案在寫入後建立
+        logger.info("test message")
         log_files = list(log_dir.glob("*.log"))
         assert len(log_files) >= 1
-
-        # 驗證 handlers 數量（FileHandler + StreamHandler）
-        assert len(logger.handlers) == 2
 
     def test_scenario_1_file_handler(self, project_root, mock_env_var, reset_loggers, capsys):
         """FileHandler 將訊息寫入檔案"""
@@ -593,8 +595,12 @@ class TestLogException:
 
         captured = capsys.readouterr()
 
-        # 驗證格式：[Hook Error] {hook_name} failed unexpectedly. Check hook logs for details.
-        assert captured.err.strip() == "[Hook Error] format-test-hook failed unexpectedly. Check hook logs for details."
+        # 驗證 stderr 包含：
+        # 1. StreamHandler 輸出的 CRITICAL 訊息（因為 CRITICAL >= WARNING）
+        # 2. sys.stderr.write 輸出的 [Hook Error] 訊息
+        assert "[CRITICAL] Unhandled exception in format-test-hook" in captured.err
+        assert "[CRITICAL] Error traceback" in captured.err
+        assert "[Hook Error] format-test-hook failed unexpectedly. Check hook logs for details." in captured.err
 
     def test_run_hook_safely_outputs_stderr_on_exception(self, project_root, mock_env_var, reset_loggers, capsys):
         """run_hook_safely 在異常時輸出 stderr"""

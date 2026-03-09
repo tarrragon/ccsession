@@ -41,7 +41,10 @@ from typing import Dict, Any, Optional, Tuple
 # 加入 hook_utils 路徑（相同目錄）
 sys.path.insert(0, str(Path(__file__).parent))
 
-from hook_utils import setup_hook_logging, run_hook_safely, read_json_from_stdin, get_project_root
+from hook_utils import (
+    setup_hook_logging, run_hook_safely, read_json_from_stdin, get_project_root,
+    find_ticket_files
+)
 
 # ============================================================================
 # 常數定義
@@ -136,7 +139,10 @@ def extract_ticket_reference(prompt: str, logger) -> Optional[str]:
 
 def find_ticket_file(ticket_id: str, logger) -> Optional[Path]:
     """
-    尋找 Ticket 檔案
+    尋找特定的 Ticket 檔案
+
+    使用 hook_utils.find_ticket_files() 掃描所有 Ticket 位置，
+    然後根據 ticket_id 篩選出符合的檔案。
 
     Args:
         ticket_id: Ticket ID
@@ -146,28 +152,14 @@ def find_ticket_file(ticket_id: str, logger) -> Optional[Path]:
         Path - Ticket 檔案路徑，或 None 如未找到
     """
     project_dir = get_project_root()
+    all_tickets = find_ticket_files(project_dir, logger=logger)
 
-    # 搜尋位置：.claude/tickets/ 和 docs/work-logs/*/tickets/
-    search_locations = [
-        project_dir / ".claude" / "tickets",
-        project_dir / "docs" / "work-logs"
-    ]
-
-    # 搜尋 .claude/tickets/
-    if search_locations[0].exists():
-        ticket_file = search_locations[0] / f"{ticket_id}.md"
-        if ticket_file.exists():
-            logger.info(f"在 .claude/tickets/ 中找到 Ticket: {ticket_id}")
+    # 根據檔名篩選符合的 ticket_id
+    for ticket_file in all_tickets:
+        expected_name = f"{ticket_id}.md"
+        if ticket_file.name == expected_name:
+            logger.info(f"找到 Ticket: {ticket_id} 於 {ticket_file}")
             return ticket_file
-
-    # 搜尋 docs/work-logs/*/tickets/
-    for version_dir in search_locations[1].glob("v*"):
-        tickets_dir = version_dir / "tickets"
-        if tickets_dir.exists():
-            ticket_file = tickets_dir / f"{ticket_id}.md"
-            if ticket_file.exists():
-                logger.info(f"在 {tickets_dir} 中找到 Ticket: {ticket_id}")
-                return ticket_file
 
     logger.warning(f"未找到 Ticket 檔案: {ticket_id}")
     return None

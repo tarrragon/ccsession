@@ -52,6 +52,7 @@ from hook_utils import (
     setup_hook_logging,
     run_hook_safely,
     read_json_from_stdin,
+    extract_tool_input,
     parse_ticket_frontmatter,
     parse_ticket_date,
     check_error_patterns_changed,
@@ -922,7 +923,7 @@ def _parse_and_validate_input(input_data: Dict[str, Any], logger) -> Optional[Tu
         return None
 
     tool_name = input_data.get("tool_name", "")
-    tool_input = input_data.get("tool_input") or {}
+    tool_input = extract_tool_input(input_data, logger)
     command = tool_input.get("command", "")
 
     return tool_name, command
