@@ -58,8 +58,8 @@ EXIT_ERROR = 1
 # 日誌保留策略（天數）
 LOG_RETENTION_DAYS = 7
 
-# 日誌清理觸發頻率（每 N 次呼叫執行一次清理）
-LOG_CLEANUP_TRIGGER_FREQUENCY = 10
+# 日誌清理觸發間隔（秒數，預設 5 分鐘）
+CLEANUP_INTERVAL_SECONDS = 300
 
 
 # ============================================================================
@@ -221,19 +221,21 @@ def _setup_logger_handlers(logger: logging.Logger, log_base_dir: Path,
     採用 lazy file creation 策略：只在實際寫入日誌時才建立檔案，
     避免產生空日誌檔案（W3-004）。使用 FileHandler 的 delay=True 參數。
     """
-    # 觸發日誌清理（降低頻率，每 LOG_CLEANUP_TRIGGER_FREQUENCY 次呼叫執行一次）
+    # 觸發日誌清理（基於 mtime 時間間隔）
     cleanup_marker = log_base_dir / ".cleanup_trigger"
+    current_time = time.time()
+
     try:
         if cleanup_marker.exists():
-            count = int(cleanup_marker.read_text().strip() or "0")
-            if count >= LOG_CLEANUP_TRIGGER_FREQUENCY:
+            # 檢查檔案的 mtime
+            marker_mtime = cleanup_marker.stat().st_mtime
+            if current_time - marker_mtime >= CLEANUP_INTERVAL_SECONDS:
                 _cleanup_old_logs(log_base_dir)
-                cleanup_marker.write_text("0")
-            else:
-                cleanup_marker.write_text(str(count + 1))
+                cleanup_marker.touch()
         else:
-            cleanup_marker.write_text("1")
-    except (OSError, ValueError):
+            # 檔案不存在，建立它
+            cleanup_marker.touch()
+    except OSError:
         pass
 
     # 配置 FileHandler（使用 delay=True 實現 lazy file creation）
