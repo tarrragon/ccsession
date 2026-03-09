@@ -417,6 +417,122 @@ def read_json_from_stdin(logger: logging.Logger) -> Optional[dict]:
         return None
 
 
+def extract_tool_input(
+    input_data: "dict | None",
+    logger: "logging.Logger | None" = None
+) -> dict:
+    """安全提取 input_data 中的 tool_input 欄位
+
+    處理三種情況：
+    1. input_data 為 None 或空值 → 返回 {}
+    2. tool_input 欄位缺失或為 None → 返回 {}
+    3. tool_input 為有效的 dict → 返回該 dict
+
+    Args:
+        input_data: Hook 輸入資料（dict 或 None）
+        logger: 可選 Logger 實例，用於記錄詳細資訊
+
+    Returns:
+        dict: 提取出的 tool_input（始終返回 dict，無欄位時返回空 dict）
+
+    Examples:
+        >>> extract_tool_input({"tool_input": {"file_path": "test.py"}})
+        {'file_path': 'test.py'}
+
+        >>> extract_tool_input({"other": "value"})
+        {}
+
+        >>> extract_tool_input(None)
+        {}
+    """
+    if input_data is None:
+        if logger:
+            logger.debug("input_data 為 None，返回空 dict")
+        return {}
+
+    if not isinstance(input_data, dict):
+        if logger:
+            logger.warning("input_data 非 dict 類型，返回空 dict: {}".format(type(input_data)))
+        return {}
+
+    tool_input = input_data.get("tool_input")
+
+    # tool_input 為 None 或不存在時返回 {}
+    if tool_input is None:
+        if logger:
+            logger.debug("tool_input 欄位為 None 或不存在，返回空 dict")
+        return {}
+
+    # tool_input 應為 dict，但可能是其他型別
+    if not isinstance(tool_input, dict):
+        if logger:
+            logger.warning("tool_input 非 dict 類型，返回空 dict: {}".format(type(tool_input)))
+        return {}
+
+    if logger:
+        logger.debug("成功提取 tool_input，欄位數: {}".format(len(tool_input)))
+
+    return tool_input
+
+
+def extract_tool_response(
+    input_data: "dict | None",
+    logger: "logging.Logger | None" = None
+) -> dict:
+    """安全提取 input_data 中的 tool_response 欄位
+
+    處理三種情況：
+    1. input_data 為 None 或空值 → 返回 {}
+    2. tool_response 欄位缺失或為 None → 返回 {}
+    3. tool_response 為有效的 dict → 返回該 dict
+
+    Args:
+        input_data: Hook 輸入資料（dict 或 None）
+        logger: 可選 Logger 實例，用於記錄詳細資訊
+
+    Returns:
+        dict: 提取出的 tool_response（始終返回 dict，無欄位時返回空 dict）
+
+    Examples:
+        >>> extract_tool_response({"tool_response": {"stdout": "OK", "exit_code": 0}})
+        {'stdout': 'OK', 'exit_code': 0}
+
+        >>> extract_tool_response({"other": "value"})
+        {}
+
+        >>> extract_tool_response(None)
+        {}
+    """
+    if input_data is None:
+        if logger:
+            logger.debug("input_data 為 None，返回空 dict")
+        return {}
+
+    if not isinstance(input_data, dict):
+        if logger:
+            logger.warning("input_data 非 dict 類型，返回空 dict: {}".format(type(input_data)))
+        return {}
+
+    tool_response = input_data.get("tool_response")
+
+    # tool_response 為 None 或不存在時返回 {}
+    if tool_response is None:
+        if logger:
+            logger.debug("tool_response 欄位為 None 或不存在，返回空 dict")
+        return {}
+
+    # tool_response 應為 dict，但可能是其他型別
+    if not isinstance(tool_response, dict):
+        if logger:
+            logger.warning("tool_response 非 dict 類型，返回空 dict: {}".format(type(tool_response)))
+        return {}
+
+    if logger:
+        logger.debug("成功提取 tool_response，欄位數: {}".format(len(tool_response)))
+
+    return tool_response
+
+
 def parse_ticket_frontmatter(
     content_or_path: "str | Path",
     logger: "logging.Logger | None" = None
