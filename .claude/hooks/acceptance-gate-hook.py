@@ -587,7 +587,7 @@ def _check_children_completed(ticket_file: Path, frontmatter: Dict[str, str], pr
     return False, None
 
 
-def _verify_acceptance_record(ticket_content: str, frontmatter: Dict[str, str], ticket_id: str, logger) -> Tuple[bool, Optional[str], bool]:
+def _verify_acceptance_record(ticket_content: str, frontmatter: Dict[str, str], ticket_id: str, logger) -> Tuple[bool, Optional[str], bool, bool]:
     """
     驗收記錄驗證。
 
@@ -598,10 +598,11 @@ def _verify_acceptance_record(ticket_content: str, frontmatter: Dict[str, str], 
         logger: 日誌物件
 
     Returns:
-        tuple - (should_block, warning_message, should_check_acceptance)
+        tuple - (should_block, warning_message, should_check_acceptance, has_acceptance)
             - should_block: 是否應阻擋執行
             - warning_message: 警告訊息或 None
             - should_check_acceptance: 是否應檢查 error-pattern
+            - has_acceptance: 是否有驗收記錄
     """
     ticket_type = frontmatter.get("type")
     title = frontmatter.get("title", "未知")
@@ -625,10 +626,10 @@ def _verify_acceptance_record(ticket_content: str, frontmatter: Dict[str, str], 
             title=title
         )
         logger.warning(f"Ticket {ticket_id} 未找到驗收記錄 - 輸出警告")
-        return False, warning_msg, should_check_acceptance
+        return False, warning_msg, should_check_acceptance, has_acceptance
 
     logger.info(f"Ticket {ticket_id} 驗收檢查通過")
-    return False, None, should_check_acceptance
+    return False, None, should_check_acceptance, has_acceptance
 
 
 def _check_error_patterns(frontmatter: Dict[str, str], project_dir: Path, logger) -> Tuple[bool, List[str]]:
@@ -706,10 +707,9 @@ def check_acceptance_status(ticket_id: str, project_dir: Path, logger) -> Accept
             return AcceptanceCheckResult(True, False, error_msg, False, [])
 
         # 步驟 2：驗證驗收記錄
-        should_block, warning_msg, should_check_acceptance = _verify_acceptance_record(content, frontmatter, ticket_id, logger)
+        should_block, warning_msg, should_check_acceptance, has_acceptance = _verify_acceptance_record(content, frontmatter, ticket_id, logger)
 
         # 問題 1 修復：不提前 return，繼續執行步驟 3 和 4，將 warning_msg 帶入最終結果
-        has_acceptance = has_acceptance_record(content, logger)
         if not warning_msg:
             logger.info(f"Ticket {ticket_id} 驗收檢查通過")
 
@@ -786,8 +786,8 @@ def generate_hook_output(
     if check_result.message:
         context_parts.append(check_result.message)
 
-    # 優先級 2：error-pattern 場景 #17 提醒（僅在無訊息時）
-    if check_result.has_new_error_patterns and not check_result.message:
+    # 優先級 2：error-pattern 場景 #17 提醒（與 warning_msg 並存觸發）
+    if check_result.has_new_error_patterns:
         file_list_formatted = "\n".join(f"  - {f}" for f in (check_result.new_error_pattern_files or []))
         reminder_msg = AskUserQuestionMessages.ERROR_PATTERN_REMINDER.format(
             file_list=file_list_formatted
