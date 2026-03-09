@@ -139,13 +139,13 @@ if __name__ == "__main__":
     for method_name in methods:
         try:
             getattr(test, method_name)()
-            print(f"✓ {method_name}")
+            print(f"[V] {method_name}")
             passed += 1
         except AssertionError as e:
-            print(f"✗ {method_name}: {e}")
+            print(f"[X] {method_name}: {e}")
             failed += 1
         except Exception as e:
-            print(f"✗ {method_name}: 錯誤 - {e}")
+            print(f"[X] {method_name}: 錯誤 - {e}")
             failed += 1
 
     print(f"\n結果: {passed} 通過, {failed} 失敗")

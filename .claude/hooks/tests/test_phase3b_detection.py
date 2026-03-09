@@ -74,7 +74,7 @@ def test_phase3b_detection():
         }
     ]
 
-    print("🧪 Phase 3b 判斷邏輯測試\n")
+    print("[TEST] Phase 3b 判斷邏輯測試\n")
     print("=" * 80)
 
     passed = 0
@@ -87,7 +87,7 @@ def test_phase3b_detection():
 
         result = detect_task_type(prompt)
 
-        status = "✅ PASS" if result == expected else "❌ FAIL"
+        status = "[PASS] PASS" if result == expected else "[FAIL] FAIL"
 
         if result == expected:
             passed += 1
@@ -101,18 +101,18 @@ def test_phase3b_detection():
         print(f"狀態: {status}")
         print("-" * 80)
 
-    print(f"\n\n📊 測試結果總結")
+    print(f"\n\n[METRIC] 測試結果總結")
     print("=" * 80)
     print(f"總測試數: {len(test_cases)}")
-    print(f"✅ 通過: {passed}")
-    print(f"❌ 失敗: {failed}")
+    print(f"[PASS] 通過: {passed}")
+    print(f"[FAIL] 失敗: {failed}")
     print(f"通過率: {passed / len(test_cases) * 100:.1f}%")
 
     if failed == 0:
-        print("\n🎉 所有測試通過！Phase 3b 判斷邏輯修正成功")
+        print("\n[SUCCESS] 所有測試通過！Phase 3b 判斷邏輯修正成功")
         return 0
     else:
-        print("\n⚠️ 部分測試失敗，請檢查判斷邏輯")
+        print("\n[WARNING] 部分測試失敗，請檢查判斷邏輯")
         return 1
 
 

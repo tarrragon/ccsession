@@ -249,14 +249,14 @@ def run_tests():
         try:
             method = getattr(test_class, method_name)
             method()
-            print(f"✅ {method_name}")
+            print(f"[PASS] {method_name}")
             passed += 1
         except AssertionError as e:
-            print(f"❌ {method_name}")
+            print(f"[FAIL] {method_name}")
             print(f"   錯誤: {e}")
             failed += 1
         except Exception as e:
-            print(f"❌ {method_name}")
+            print(f"[FAIL] {method_name}")
             print(f"   例外: {e}")
             failed += 1
 
