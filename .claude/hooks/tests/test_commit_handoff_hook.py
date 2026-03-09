@@ -6,13 +6,17 @@ commit-handoff-hook 測試套件
 1. 情境 A（#11a）：Ticket 仍 in_progress → 輸出 Context 刷新提醒
 2. 情境 B（#11b）：Ticket completed + 同 Wave 有 pending → 輸出任務切換提醒
 3. 情境 C 提示訊息：WAVE_COMPLETION_REMINDER 常數存在且格式正確
-4. commit type 判斷邏輯（skip #16）
+4. 情境 C 偵測邏輯：detect_wave_completion() 函式
+5. commit type 判斷邏輯（skip #16）
 """
 
 import sys
 import json
+import logging
 from pathlib import Path
 from unittest.mock import patch, MagicMock
+from tempfile import TemporaryDirectory
+import importlib.util
 
 # 設定路徑
 hooks_path = Path(__file__).parent.parent
@@ -20,6 +24,12 @@ sys.path.insert(0, str(hooks_path))
 
 from lib.ask_user_question_reminders import AskUserQuestionReminders
 from lib.hook_messages import AskUserQuestionMessages
+
+# 動態導入 commit-handoff-hook（檔案名含 dash，需用 importlib）
+hook_file = hooks_path / "commit-handoff-hook.py"
+spec = importlib.util.spec_from_file_location("commit_handoff_hook", hook_file)
+commit_handoff_hook = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(commit_handoff_hook)
 
 
 class TestCommitHandoffHook:
@@ -98,6 +108,129 @@ class TestCommitHandoffHook:
         assert AskUserQuestionMessages.WAVE_COMPLETION_REMINDER == \
                AskUserQuestionReminders.WAVE_COMPLETION_REMINDER, \
             "別名指向的物件不一致"
+
+    def test_detect_wave_completion_true(self):
+        """驗證 detect_wave_completion() 在同 Wave 無 pending 時回傳 True"""
+        logger = logging.getLogger("test")
+
+        # 建立臨時目錄結構
+        with TemporaryDirectory() as tmpdir:
+            project_dir = Path(tmpdir)
+            docs_dir = project_dir / "docs"
+            tickets_dir = docs_dir / "work-logs" / "v0.1.0" / "tickets"
+            tickets_dir.mkdir(parents=True, exist_ok=True)
+
+            # 建立 todolist.yaml
+            todolist_file = docs_dir / "todolist.yaml"
+            todolist_file.write_text("current_version: 0.1.0\n", encoding="utf-8")
+
+            # 建立 in_progress ticket（Wave 1）
+            in_progress_ticket = tickets_dir / "0.1.0-W1-001.md"
+            in_progress_ticket.write_text(
+                "---\nid: 0.1.0-W1-001\nstatus: in_progress\nwave: 1\n---\nContent",
+                encoding="utf-8"
+            )
+
+            # 建立 completed ticket（同 Wave 1，已完成）
+            completed_ticket = tickets_dir / "0.1.0-W1-002.md"
+            completed_ticket.write_text(
+                "---\nid: 0.1.0-W1-002\nstatus: completed\nwave: 1\n---\nContent",
+                encoding="utf-8"
+            )
+
+            # 建立 pending ticket（不同 Wave，Wave 2）
+            pending_other_wave = tickets_dir / "0.1.0-W2-001.md"
+            pending_other_wave.write_text(
+                "---\nid: 0.1.0-W2-001\nstatus: pending\nwave: 2\n---\nContent",
+                encoding="utf-8"
+            )
+
+            # Mock get_project_root() 回傳臨時目錄
+            with patch.object(commit_handoff_hook, 'get_project_root', return_value=project_dir):
+                result = commit_handoff_hook.detect_wave_completion(logger)
+
+            # 驗證結果：同 Wave 1 無 pending（only in_progress + completed），應為 True
+            assert result is True, \
+                "detect_wave_completion() 應在同 Wave 無 pending 時回傳 True"
+
+    def test_detect_wave_completion_false(self):
+        """驗證 detect_wave_completion() 在同 Wave 有 pending 時回傳 False"""
+        logger = logging.getLogger("test")
+
+        # 建立臨時目錄結構
+        with TemporaryDirectory() as tmpdir:
+            project_dir = Path(tmpdir)
+            docs_dir = project_dir / "docs"
+            tickets_dir = docs_dir / "work-logs" / "v0.1.0" / "tickets"
+            tickets_dir.mkdir(parents=True, exist_ok=True)
+
+            # 建立 todolist.yaml
+            todolist_file = docs_dir / "todolist.yaml"
+            todolist_file.write_text("current_version: 0.1.0\n", encoding="utf-8")
+
+            # 建立 in_progress ticket（Wave 1）
+            in_progress_ticket = tickets_dir / "0.1.0-W1-001.md"
+            in_progress_ticket.write_text(
+                "---\nid: 0.1.0-W1-001\nstatus: in_progress\nwave: 1\n---\nContent",
+                encoding="utf-8"
+            )
+
+            # 建立 pending ticket（同 Wave 1）
+            pending_ticket = tickets_dir / "0.1.0-W1-002.md"
+            pending_ticket.write_text(
+                "---\nid: 0.1.0-W1-002\nstatus: pending\nwave: 1\n---\nContent",
+                encoding="utf-8"
+            )
+
+            # Mock get_project_root() 回傳臨時目錄
+            with patch.object(commit_handoff_hook, 'get_project_root', return_value=project_dir):
+                result = commit_handoff_hook.detect_wave_completion(logger)
+
+            # 驗證結果：同 Wave 1 有 pending，應為 False
+            assert result is False, \
+                "detect_wave_completion() 應在同 Wave 有 pending 時回傳 False"
+
+    def test_detect_wave_completion_no_in_progress(self):
+        """驗證 detect_wave_completion() 在無 in_progress ticket 時安全降級為 False"""
+        logger = logging.getLogger("test")
+
+        # 建立臨時目錄結構
+        with TemporaryDirectory() as tmpdir:
+            project_dir = Path(tmpdir)
+            docs_dir = project_dir / "docs"
+            tickets_dir = docs_dir / "work-logs" / "v0.1.0" / "tickets"
+            tickets_dir.mkdir(parents=True, exist_ok=True)
+
+            # 建立 todolist.yaml
+            todolist_file = docs_dir / "todolist.yaml"
+            todolist_file.write_text("current_version: 0.1.0\n", encoding="utf-8")
+
+            # 建立 pending ticket，但無 in_progress
+            pending_ticket = tickets_dir / "0.1.0-W1-001.md"
+            pending_ticket.write_text(
+                "---\nid: 0.1.0-W1-001\nstatus: pending\nwave: 1\n---\nContent",
+                encoding="utf-8"
+            )
+
+            # Mock get_project_root() 回傳臨時目錄
+            with patch.object(commit_handoff_hook, 'get_project_root', return_value=project_dir):
+                result = commit_handoff_hook.detect_wave_completion(logger)
+
+            # 驗證結果：無 in_progress，安全降級為 False
+            assert result is False, \
+                "detect_wave_completion() 應在無 in_progress ticket 時安全降級為 False"
+
+    def test_detect_wave_completion_file_error(self):
+        """驗證 detect_wave_completion() 在檔案讀取錯誤時安全降級為 False"""
+        logger = logging.getLogger("test")
+
+        # Mock get_project_root() 指向不存在的目錄
+        with patch.object(commit_handoff_hook, 'get_project_root', return_value=Path("/nonexistent")):
+            result = commit_handoff_hook.detect_wave_completion(logger)
+
+        # 驗證結果：錯誤時安全降級為 False
+        assert result is False, \
+            "detect_wave_completion() 應在檔案讀取失敗時安全降級為 False"
 
 
 def run_tests():
