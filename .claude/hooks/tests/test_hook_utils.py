@@ -28,6 +28,7 @@ try:
         get_current_version_from_todolist,
         scan_ticket_files_by_version,
         find_ticket_files,
+        find_ticket_file,
     )
 except ImportError:
     # 如果模組還不存在，定義虛擬函式以便測試可以 import
@@ -47,6 +48,9 @@ except ImportError:
         raise NotImplementedError()
 
     def find_ticket_files(project_root, version=None, logger=None):
+        raise NotImplementedError()
+
+    def find_ticket_file(ticket_id, project_root=None, logger=None):
         raise NotImplementedError()
 
 
@@ -791,3 +795,92 @@ class TestFindTicketFiles:
         files = find_ticket_files(project_root)
 
         assert len(files) == 1
+
+
+class TestFindTicketFile:
+    """find_ticket_file() 功能測試"""
+
+    def test_find_existing_ticket(self, project_root):
+        """找到存在的 Ticket 檔案"""
+        # 建立版本目錄和 Ticket 檔案
+        tickets_dir = project_root / "docs" / "work-logs" / "v0.1.0" / "tickets"
+        tickets_dir.mkdir(parents=True, exist_ok=True)
+        (tickets_dir / "0.1.0-W1-001.md").write_text("# Ticket 1\n")
+
+        result = find_ticket_file("0.1.0-W1-001", project_root=project_root)
+
+        assert result is not None
+        assert result.name == "0.1.0-W1-001.md"
+        assert result.parent.name == "tickets"
+
+    def test_find_nonexistent_ticket(self, project_root):
+        """找不到的 Ticket 返回 None"""
+        result = find_ticket_file("0.1.0-W9-999", project_root=project_root)
+
+        assert result is None
+
+    def test_find_ticket_auto_project_root(self, project_root, mock_env_var):
+        """不傳遞 project_root 時自動取得"""
+        mock_env_var("CLAUDE_PROJECT_DIR", str(project_root))
+
+        # 建立 Ticket
+        tickets_dir = project_root / "docs" / "work-logs" / "v0.1.0" / "tickets"
+        tickets_dir.mkdir(parents=True, exist_ok=True)
+        (tickets_dir / "0.1.0-W1-002.md").write_text("# Ticket 2\n")
+
+        # 不傳遞 project_root
+        result = find_ticket_file("0.1.0-W1-002")
+
+        assert result is not None
+        assert result.name == "0.1.0-W1-002.md"
+
+    def test_find_ticket_with_logger(self, project_root, reset_loggers):
+        """傳遞 logger 參數時正常記錄"""
+        logger = logging.getLogger("test-find-ticket")
+
+        # 建立 Ticket
+        tickets_dir = project_root / "docs" / "work-logs" / "v0.1.0" / "tickets"
+        tickets_dir.mkdir(parents=True, exist_ok=True)
+        (tickets_dir / "0.1.0-W1-003.md").write_text("# Ticket 3\n")
+
+        result = find_ticket_file("0.1.0-W1-003", project_root=project_root, logger=logger)
+
+        assert result is not None
+
+    def test_find_ticket_multiple_versions(self, project_root):
+        """在多個版本中查找 Ticket"""
+        # 建立多個版本的 Ticket
+        for version in ["0.1.0", "0.2.0"]:
+            tickets_dir = project_root / "docs" / "work-logs" / f"v{version}" / "tickets"
+            tickets_dir.mkdir(parents=True, exist_ok=True)
+            (tickets_dir / f"{version}-W1-001.md").write_text("# Ticket\n")
+
+        # 查找特定版本的 Ticket
+        result = find_ticket_file("0.2.0-W1-001", project_root=project_root)
+
+        assert result is not None
+        assert "0.2.0" in str(result)
+
+    def test_find_ticket_backward_compatibility(self, project_root):
+        """在舊位置 .claude/tickets/ 也能找到"""
+        # 建立舊位置 Ticket
+        old_dir = project_root / ".claude" / "tickets"
+        old_dir.mkdir(parents=True, exist_ok=True)
+        (old_dir / "old-ticket-001.md").write_text("# Old Ticket\n")
+
+        result = find_ticket_file("old-ticket-001", project_root=project_root)
+
+        assert result is not None
+        assert result.name == "old-ticket-001.md"
+
+    def test_find_ticket_subtask_format(self, project_root):
+        """支援子任務格式的 Ticket ID（如 0.1.0-W1-001.1）"""
+        # 建立子任務 Ticket
+        tickets_dir = project_root / "docs" / "work-logs" / "v0.1.0" / "tickets"
+        tickets_dir.mkdir(parents=True, exist_ok=True)
+        (tickets_dir / "0.1.0-W1-001.1.md").write_text("# Subtask\n")
+
+        result = find_ticket_file("0.1.0-W1-001.1", project_root=project_root)
+
+        assert result is not None
+        assert result.name == "0.1.0-W1-001.1.md"

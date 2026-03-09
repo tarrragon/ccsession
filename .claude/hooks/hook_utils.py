@@ -928,6 +928,42 @@ def find_ticket_files(
     return all_tickets
 
 
+def find_ticket_file(
+    ticket_id: str,
+    project_root: Optional[Path] = None,
+    logger: Optional[logging.Logger] = None
+) -> Optional[Path]:
+    """尋找特定 ID 的 Ticket 檔案
+
+    內部呼叫 find_ticket_files() 掃描所有 Ticket 位置，
+    然後根據檔名篩選出符合的檔案（{ticket_id}.md）。
+
+    Args:
+        ticket_id: Ticket ID（如 "0.1.0-W1-001"）
+        project_root: 專案根目錄（可選，若為 None 則自動取得）
+        logger: 日誌物件（可選）
+
+    Returns:
+        Path: Ticket 檔案路徑，或 None 如未找到
+    """
+    if project_root is None:
+        project_root = get_project_root()
+
+    all_tickets = find_ticket_files(project_root, logger=logger)
+
+    # 根據檔名篩選符合的 ticket_id
+    expected_name = "{}.md".format(ticket_id)
+    for ticket_file in all_tickets:
+        if ticket_file.name == expected_name:
+            if logger:
+                logger.info("找到 Ticket: {} 於 {}".format(ticket_id, ticket_file))
+            return ticket_file
+
+    if logger:
+        logger.warning("未找到 Ticket 檔案: {}".format(ticket_id))
+    return None
+
+
 def run_hook_safely(main_func: Callable[[], int], hook_name: str) -> int:
     """安全執行 Hook 函式，頂層例外處理
 

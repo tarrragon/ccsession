@@ -43,7 +43,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from hook_utils import (
     setup_hook_logging, run_hook_safely, read_json_from_stdin, get_project_root,
-    find_ticket_files
+    find_ticket_files, find_ticket_file
 )
 
 # ============================================================================
@@ -137,33 +137,6 @@ def extract_ticket_reference(prompt: str, logger) -> Optional[str]:
 # Ticket 檔案查找和驗證
 # ============================================================================
 
-def find_ticket_file(ticket_id: str, logger) -> Optional[Path]:
-    """
-    尋找特定的 Ticket 檔案
-
-    使用 hook_utils.find_ticket_files() 掃描所有 Ticket 位置，
-    然後根據 ticket_id 篩選出符合的檔案。
-
-    Args:
-        ticket_id: Ticket ID
-        logger: 日誌物件
-
-    Returns:
-        Path - Ticket 檔案路徑，或 None 如未找到
-    """
-    project_dir = get_project_root()
-    all_tickets = find_ticket_files(project_dir, logger=logger)
-
-    # 根據檔名篩選符合的 ticket_id
-    for ticket_file in all_tickets:
-        expected_name = f"{ticket_id}.md"
-        if ticket_file.name == expected_name:
-            logger.info(f"找到 Ticket: {ticket_id} 於 {ticket_file}")
-            return ticket_file
-
-    logger.warning(f"未找到 Ticket 檔案: {ticket_id}")
-    return None
-
 def load_ticket_content(ticket_path: Path, logger) -> Optional[str]:
     """
     讀取 Ticket 檔案內容
@@ -225,7 +198,7 @@ def validate_ticket(ticket_id: str, logger) -> Tuple[bool, str]:
             - error_message: 錯誤訊息（如有）
     """
     # 尋找 Ticket 檔案
-    ticket_path = find_ticket_file(ticket_id, logger)
+    ticket_path = find_ticket_file(ticket_id, logger=logger)
     if not ticket_path:
         msg = f"找不到 Ticket: {ticket_id}"
         logger.error(msg)
@@ -295,7 +268,7 @@ def is_exempt_agent_type(subagent_type: str, logger) -> bool:
         logger.info(f"代理人類型 '{subagent_type}' 豁免 Ticket 驗證（用於前置資訊蒐集）")
     return is_exempt
 
-def validate_task_dispatch(tool_input: Dict[str, Any], logger) -> Tuple[bool, str]:
+def validate_task_dispatch(tool_input: Dict[str, Any], logger) -> Tuple[bool, str, Optional[str]]:
     """
     驗證 Task 派發是否有效
 
@@ -304,9 +277,10 @@ def validate_task_dispatch(tool_input: Dict[str, Any], logger) -> Tuple[bool, st
         logger: 日誌物件
 
     Returns:
-        tuple - (is_valid, error_message)
+        tuple - (is_valid, error_message, ticket_id)
             - is_valid: 派發是否有效
             - error_message: 錯誤訊息（如有）
+            - ticket_id: 提取的 Ticket ID，或 None（豁免/handoff 模式或未找到）
 
     驗證流程：
     0. 檢查是否為 Handoff 恢復模式
@@ -320,22 +294,22 @@ def validate_task_dispatch(tool_input: Dict[str, Any], logger) -> Tuple[bool, st
     # 步驟 0: 檢查 Handoff 恢復模式
     if is_handoff_recovery_mode(logger):
         logger.info("Handoff 恢復模式: 略過 Ticket 驗證")
-        return True, ""
+        return True, "", None
 
     # 步驟 1: 檢查豁免代理人類型
     if is_exempt_agent_type(subagent_type, logger):
-        return True, ""
+        return True, "", None
 
     # 步驟 2: 提取 Ticket ID
     ticket_id = extract_ticket_reference(prompt, logger)
     if not ticket_id:
         msg = "派發任務必須引用有效的 Ticket ID（格式：Ticket: {id} 或 #Ticket-{id} 或 [Ticket {id}]）"
         logger.error(msg)
-        return False, msg
+        return False, msg, None
 
     # 步驟 3: 驗證 Ticket
     is_valid, error_msg = validate_ticket(ticket_id, logger)
-    return is_valid, error_msg
+    return is_valid, error_msg, ticket_id
 
 # ============================================================================
 # 輸出生成
@@ -454,8 +428,7 @@ def main() -> int:
         tool_input = input_data.get("tool_input") or {}
 
         # 步驟 4: 驗證 Task 派發有效性
-        is_valid, error_message = validate_task_dispatch(tool_input, logger)
-        ticket_id = extract_ticket_reference(tool_input.get("prompt", ""), logger)
+        is_valid, error_message, ticket_id = validate_task_dispatch(tool_input, logger)
 
         logger.info(f"Task 派發驗證: is_valid={is_valid}, ticket_id={ticket_id}")
 
