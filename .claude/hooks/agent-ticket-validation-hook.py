@@ -148,7 +148,7 @@ def load_ticket_content(ticket_path: Path, logger) -> Optional[str]:
         logger.error(f"無法讀取 Ticket 檔案 {ticket_path}: {e}")
         return None
 
-def validate_ticket(ticket_id: str, logger) -> Tuple[bool, str]:
+def validate_ticket(ticket_id: str, logger) -> Tuple[bool, Optional[str]]:
     """
     驗證 Ticket 的完整性
 
@@ -159,7 +159,7 @@ def validate_ticket(ticket_id: str, logger) -> Tuple[bool, str]:
     Returns:
         tuple - (is_valid, error_message)
             - is_valid: Ticket 是否有效
-            - error_message: 錯誤訊息（如有）
+            - error_message: 錯誤訊息（如有），成功時為 None
     """
     # 尋找 Ticket 檔案
     ticket_path = find_ticket_file(ticket_id, logger=logger)
@@ -182,7 +182,7 @@ def validate_ticket(ticket_id: str, logger) -> Tuple[bool, str]:
         return False, msg
 
     logger.info(f"Ticket {ticket_id} 驗證通過")
-    return True, ""
+    return True, None
 
 # ============================================================================
 # 派發驗證
@@ -232,7 +232,7 @@ def is_exempt_agent_type(subagent_type: str, logger) -> bool:
         logger.info(f"代理人類型 '{subagent_type}' 豁免 Ticket 驗證（用於前置資訊蒐集）")
     return is_exempt
 
-def validate_task_dispatch(tool_input: Dict[str, Any], logger) -> Tuple[bool, str, Optional[str]]:
+def validate_task_dispatch(tool_input: Dict[str, Any], logger) -> Tuple[bool, Optional[str], Optional[str]]:
     """
     驗證 Task 派發是否有效
 
@@ -243,7 +243,7 @@ def validate_task_dispatch(tool_input: Dict[str, Any], logger) -> Tuple[bool, st
     Returns:
         tuple - (is_valid, error_message, ticket_id)
             - is_valid: 派發是否有效
-            - error_message: 錯誤訊息（如有）
+            - error_message: 錯誤訊息（如有），成功時為 None
             - ticket_id: 提取的 Ticket ID，或 None（豁免/handoff 模式或未找到）
 
     驗證流程：
@@ -258,11 +258,11 @@ def validate_task_dispatch(tool_input: Dict[str, Any], logger) -> Tuple[bool, st
     # 步驟 0: 檢查 Handoff 恢復模式
     if is_handoff_recovery_mode(logger):
         logger.info("Handoff 恢復模式: 略過 Ticket 驗證")
-        return True, "", None
+        return True, None, None
 
     # 步驟 1: 檢查豁免代理人類型
     if is_exempt_agent_type(subagent_type, logger):
-        return True, "", None
+        return True, None, None
 
     # 步驟 2: 提取 Ticket ID
     ticket_id = extract_ticket_reference(prompt, logger)
