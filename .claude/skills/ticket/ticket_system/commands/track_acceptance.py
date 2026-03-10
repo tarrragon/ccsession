@@ -274,14 +274,28 @@ def execute_check_acceptance(args: argparse.Namespace, version: str) -> int:
     勾選或取消勾選驗收條件（在 frontmatter 中操作）
 
     支援命令格式：
-    - ticket track check-acceptance <id> <index>     # 1-based 整數或文字搜尋
-    - ticket track check-acceptance <id> <index> --uncheck
+    - ticket track check-acceptance <id> <index>               # 單一勾選（1-based 整數或文字搜尋）
+    - ticket track check-acceptance <id> <index> --uncheck     # 單一取消勾選
+    - ticket track check-acceptance <id> --all                 # 批量勾選全部
+    - ticket track check-acceptance <id> --all --uncheck       # 批量取消勾選全部
 
     支援三種 index 格式：
     - 1-based 整數："1", "2", "3"（現有功能）
     - 0-based 整數："0", "1", "2"（自動換算為 1-based）
     - 文字搜尋："任務實作完成"（模糊比對驗收條件文字）
     """
+    # 驗證參數互斥性
+    use_all = getattr(args, "all", False)
+    index_arg = getattr(args, "index", None)
+
+    if use_all and index_arg is not None:
+        print(format_error(ErrorMessages.CHECK_ACCEPTANCE_ALL_WITH_INDEX))
+        return 1
+
+    if not use_all and index_arg is None:
+        print(format_error(ErrorMessages.CHECK_ACCEPTANCE_MISSING_INDEX))
+        return 1
+
     # 載入 Ticket
     ticket, error = load_and_validate_ticket(version, args.ticket_id)
     if error:
@@ -293,15 +307,37 @@ def execute_check_acceptance(args: argparse.Namespace, version: str) -> int:
         print(format_error(ErrorMessages.ACCEPTANCE_CRITERIA_NOT_FOUND, ticket_id=args.ticket_id))
         return 1
 
+    uncheck = getattr(args, "uncheck", False)
+
+    if use_all:
+        # 批量操作
+        return _execute_batch_check_acceptance(
+            args, version, ticket, acceptance_list, uncheck
+        )
+    else:
+        # 單一操作
+        return _execute_single_check_acceptance(
+            args, version, ticket, acceptance_list, index_arg, uncheck
+        )
+
+
+def _execute_single_check_acceptance(
+    args: argparse.Namespace,
+    version: str,
+    ticket: dict,
+    acceptance_list: list,
+    index_arg: str,
+    uncheck: bool,
+) -> int:
+    """執行單一驗收條件勾選/取消勾選"""
     # 解析 index 參數（支援三種格式）
-    success, msg, index = _parse_acceptance_index(args.index, acceptance_list)
+    success, msg, index = _parse_acceptance_index(index_arg, acceptance_list)
     if not success:
         print(msg)
         return 1
 
     # 取得目標項目
     target_item = acceptance_list[index - 1]
-    uncheck = getattr(args, "uncheck", False)
 
     # 判斷當前狀態和新狀態
     if uncheck:
@@ -339,6 +375,82 @@ def execute_check_acceptance(args: argparse.Namespace, version: str) -> int:
     new_status = new_item.split(" ", 1)[0]  # 取前綴如 [x] 或 [ ]
     print(format_info(InfoMessages.ACCEPTANCE_CRITERIA_UPDATED, ticket_id=args.ticket_id, index=index, status_text=status_text))
     print(f"{TrackAcceptanceMessages.NEW_STATUS_PREFIX} {new_status}")
+
+    return 0
+
+
+def _execute_batch_check_acceptance(
+    args: argparse.Namespace,
+    version: str,
+    ticket: dict,
+    acceptance_list: list,
+    uncheck: bool,
+) -> int:
+    """執行批量驗收條件勾選/取消勾選"""
+    checked_count = 0
+    unchecked_count = 0
+
+    # 遍歷所有驗收條件
+    for i, item in enumerate(acceptance_list):
+        if uncheck:
+            # 取消勾選：[x] ... → [ ] ...
+            if item.startswith("[x]"):
+                acceptance_list[i] = item.replace("[x]", "[ ]", 1)
+                unchecked_count += 1
+            elif item.startswith("[ ]"):
+                # 已經未勾選，跳過
+                pass
+            else:
+                # 無前綴視為未勾選，跳過
+                pass
+        else:
+            # 勾選：[ ] ... → [x] ... 或無前綴 → [x]
+            if item.startswith("[x]"):
+                # 已經勾選，跳過
+                pass
+            elif item.startswith("[ ]"):
+                acceptance_list[i] = item.replace("[ ]", "[x]", 1)
+                checked_count += 1
+            else:
+                # 無前綴的項，加上 [x] 前綴
+                acceptance_list[i] = f"[x] {item}"
+                checked_count += 1
+
+    # 更新 acceptance 列表
+    ticket["acceptance"] = acceptance_list
+
+    # 保存
+    ticket_path = resolve_ticket_path(ticket, version, args.ticket_id)
+    save_ticket(ticket, ticket_path)
+
+    # 輸出結果
+    total_count = len(acceptance_list)
+    if uncheck:
+        print(format_info(
+            InfoMessages.ACCEPTANCE_CRITERIA_UPDATED,
+            ticket_id=args.ticket_id,
+            index=f"全部 ({unchecked_count}/{total_count})",
+            status_text=TrackAcceptanceMessages.STATUS_TEXT_UNCHECKED
+        ))
+        print(format_msg(
+            TrackAcceptanceMessages.BATCH_UNCHECK_SUMMARY_FORMAT,
+            ticket_id=args.ticket_id,
+            unchecked_count=unchecked_count,
+            total_count=total_count
+        ))
+    else:
+        print(format_info(
+            InfoMessages.ACCEPTANCE_CRITERIA_UPDATED,
+            ticket_id=args.ticket_id,
+            index=f"全部 ({checked_count}/{total_count})",
+            status_text=TrackAcceptanceMessages.STATUS_TEXT_CHECKED
+        ))
+        print(format_msg(
+            TrackAcceptanceMessages.BATCH_CHECK_SUMMARY_FORMAT,
+            ticket_id=args.ticket_id,
+            checked_count=checked_count,
+            total_count=total_count
+        ))
 
     return 0
 
