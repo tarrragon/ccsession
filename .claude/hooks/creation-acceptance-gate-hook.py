@@ -47,7 +47,7 @@ _hooks_dir = Path(__file__).parent
 if _hooks_dir not in [p for p in sys.path if Path(p) == _hooks_dir]:
     sys.path.insert(0, str(_hooks_dir))
 
-from hook_utils import setup_hook_logging, run_hook_safely, read_json_from_stdin, parse_ticket_frontmatter, get_project_root
+from hook_utils import setup_hook_logging, run_hook_safely, read_json_from_stdin, parse_ticket_frontmatter, get_project_root, save_check_log
 from lib.hook_messages import GateMessages, CoreMessages, format_message
 
 import re
@@ -278,45 +278,6 @@ def generate_hook_output(
     return output
 
 
-def save_check_log(
-    prompt: str,
-    ticket_ids: Optional[List[str]],
-    is_blocked: bool,
-    error_count: int,
-    logger
-) -> None:
-    """
-    儲存檢查日誌
-
-    Args:
-        prompt: 用戶提示文本
-        ticket_ids: Ticket ID 清單
-        is_blocked: 是否被阻止
-        error_count: 錯誤數量
-        logger: 日誌物件
-    """
-    project_dir = get_project_root()
-    log_dir = project_dir / ".claude" / "hook-logs" / "creation-acceptance-gate"
-    log_dir.mkdir(parents=True, exist_ok=True)
-
-    report_file = log_dir / f"checks-{datetime.now().strftime('%Y%m%d')}.log"
-
-    try:
-        status = "BLOCKED" if is_blocked else "ALLOWED"
-        ticket_ids_str = ", ".join(ticket_ids) if ticket_ids else "none"
-
-        log_entry = f"""[{datetime.now().isoformat()}]
-  Prompt: {prompt[:100]}...
-  TicketIDs: {ticket_ids_str}
-  Errors: {error_count}
-  Status: {status}
-
-"""
-        with open(report_file, "a", encoding="utf-8") as f:
-            f.write(log_entry)
-        logger.debug(f"檢查日誌已儲存: {report_file}")
-    except Exception as e:
-        logger.warning(f"儲存檢查日誌失敗: {e}")
 
 
 # ============================================================================
@@ -368,7 +329,14 @@ def main() -> int:
             logger.debug("非 claim 命令，靜默通過")
             output = generate_hook_output(False, [])
             print(json.dumps(output, ensure_ascii=False, indent=2))
-            save_check_log(prompt, None, False, 0, logger)
+            log_entry = f"""[{datetime.now().isoformat()}]
+  Prompt: {prompt[:100]}...
+  TicketIDs: none
+  Errors: 0
+  Status: ALLOWED
+
+"""
+            save_check_log("creation-acceptance-gate", log_entry, logger)
             return EXIT_SUCCESS
 
         # 步驟 5: 檢查各 Ticket 的 creation_accepted 欄位
@@ -390,7 +358,16 @@ def main() -> int:
         print(json.dumps(hook_output, ensure_ascii=False, indent=2))
 
         # 步驟 7: 儲存日誌
-        save_check_log(prompt, ticket_ids, is_blocked, len(error_messages), logger)
+        status = "BLOCKED" if is_blocked else "ALLOWED"
+        ticket_ids_str = ", ".join(ticket_ids) if ticket_ids else "none"
+        log_entry = f"""[{datetime.now().isoformat()}]
+  Prompt: {prompt[:100]}...
+  TicketIDs: {ticket_ids_str}
+  Errors: {len(error_messages)}
+  Status: {status}
+
+"""
+        save_check_log("creation-acceptance-gate", log_entry, logger)
 
         # 步驟 8: 決定 exit code
         if is_blocked:

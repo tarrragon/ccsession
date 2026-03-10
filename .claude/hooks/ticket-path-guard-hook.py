@@ -39,7 +39,7 @@ from pathlib import Path
 # 加入 hook_utils 路徑（相同目錄）
 sys.path.insert(0, str(Path(__file__).parent))
 
-from hook_utils import setup_hook_logging, run_hook_safely, get_project_root
+from hook_utils import setup_hook_logging, run_hook_safely, get_project_root, save_check_log
 from lib.hook_messages import GateMessages, CoreMessages, format_message
 
 from datetime import datetime
@@ -157,31 +157,6 @@ def generate_hook_output(is_allowed: bool, reason: str, logger) -> Dict[str, Any
     }
 
 
-def save_check_log(
-    tool_name: str,
-    file_path: str,
-    is_allowed: bool,
-    reason: str,
-    logger
-) -> None:
-    """儲存檢查日誌"""
-    try:
-        project_dir = get_project_root()
-        log_dir = project_dir / ".claude" / "hook-logs" / "ticket-path-guard"
-        log_dir.mkdir(parents=True, exist_ok=True)
-
-        report_file = log_dir / f"checks-{datetime.now().strftime('%Y%m%d')}.log"
-
-        log_entry = f"""[{datetime.now().isoformat()}]
-  Tool: {tool_name}
-  FilePath: {file_path}
-  Permission: {"ALLOWED" if is_allowed else "BLOCKED"}
-
-"""
-        with open(report_file, "a", encoding="utf-8") as f:
-            f.write(log_entry)
-    except Exception as e:
-        logger.error(f"儲存檢查日誌失敗: {e}")
 
 
 # ============================================================================
@@ -249,7 +224,13 @@ def main() -> int:
         hook_output = generate_hook_output(is_allowed, reason, logger)
         print(json.dumps(hook_output, ensure_ascii=False))
 
-        save_check_log(tool_name, file_path, is_allowed, reason, logger)
+        log_entry = f"""[{datetime.now().isoformat()}]
+  Tool: {tool_name}
+  FilePath: {file_path}
+  Permission: {"ALLOWED" if is_allowed else "BLOCKED"}
+
+"""
+        save_check_log("ticket-path-guard", log_entry, logger)
 
         exit_code = EXIT_ALLOW if is_allowed else EXIT_BLOCK
         logger.info(f"Hook 檢查完成，exit code: {exit_code}")

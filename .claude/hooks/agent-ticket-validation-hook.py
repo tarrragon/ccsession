@@ -43,7 +43,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from hook_utils import (
     setup_hook_logging, run_hook_safely, read_json_from_stdin, get_project_root,
-    find_ticket_files, find_ticket_file, validate_ticket_has_decision_tree
+    find_ticket_files, find_ticket_file, validate_ticket_has_decision_tree, save_check_log
 )
 
 # ============================================================================
@@ -318,40 +318,6 @@ def generate_hook_output(
 
     return output
 
-def save_check_log(
-    is_valid: bool,
-    ticket_id: Optional[str],
-    error_message: Optional[str],
-    logger
-) -> None:
-    """
-    儲存檢查日誌
-
-    Args:
-        is_valid: 驗證是否通過
-        ticket_id: Ticket ID
-        error_message: 錯誤訊息（如有）
-        logger: 日誌物件
-    """
-    project_dir = get_project_root()
-    log_dir = project_dir / ".claude" / "hook-logs" / "agent-ticket-validation"
-    log_dir.mkdir(parents=True, exist_ok=True)
-
-    report_file = log_dir / f"checks-{datetime.now().strftime('%Y%m%d')}.log"
-
-    try:
-        log_entry = f"""[{datetime.now().isoformat()}]
-  TicketID: {ticket_id}
-  IsValid: {is_valid}
-  ErrorMessage: {error_message}
-  Status: {"ALLOWED" if is_valid else "DENIED"}
-
-"""
-        with open(report_file, "a", encoding="utf-8") as f:
-            f.write(log_entry)
-        logger.debug(f"檢查日誌已儲存: {report_file}")
-    except Exception as e:
-        logger.warning(f"儲存檢查日誌失敗: {e}")
 
 # ============================================================================
 # 主入口點
@@ -401,7 +367,14 @@ def main() -> int:
         print(json.dumps(hook_output, ensure_ascii=False, indent=2))
 
         # 步驟 6: 儲存日誌
-        save_check_log(is_valid, ticket_id, error_message if not is_valid else None, logger)
+        log_entry = f"""[{datetime.now().isoformat()}]
+  TicketID: {ticket_id}
+  IsValid: {is_valid}
+  ErrorMessage: {error_message if not is_valid else None}
+  Status: {"ALLOWED" if is_valid else "DENIED"}
+
+"""
+        save_check_log("agent-ticket-validation", log_entry, logger)
 
         # 步驟 7: 決定 exit code
         if is_valid:
