@@ -25,6 +25,7 @@ if __name__ == "__main__":
 import argparse
 import shutil
 import sys
+import unicodedata
 from typing import Any, Dict, List
 
 from ticket_system.lib.ticket_loader import (
@@ -237,9 +238,9 @@ def simplify_ticket_id(full_id: str) -> str:
 
 def calculate_visual_width(text: str) -> int:
     """
-    計算文本的視覺寬度（考慮中文字元）
+    計算文本的視覺寬度（考慮中文字元和全形字元）
 
-    中文字元佔 2 寬，英文/符號字元佔 1 寬
+    寬字元（CJK 字元、全形標點等）佔 2 寬，其他字元佔 1 寬
 
     Args:
         text: 輸入文本
@@ -249,13 +250,15 @@ def calculate_visual_width(text: str) -> int:
 
     邏輯：
         1. 逐字遍歷
-        2. 判斷是否為中文字元 (U+4E00 ~ U+9FFF)
-        3. 累加寬度
+        2. 使用 unicodedata.east_asian_width() 判斷字元寬度等級
+        3. W/F（Wide/Fullwidth）= 2 寬，其他 = 1 寬
     """
     total_width = 0
     for char in text:
-        char_code = ord(char)
-        char_width = 2 if 0x4E00 <= char_code <= 0x9FFF else 1
+        # east_asian_width() 回傳: W(寬), F(全形), A(歧義), H(半形), N(中性), Na(狹義)
+        # W 和 F 視為寬字元（2 寬），其他視為窄字元（1 寬）
+        width_category = unicodedata.east_asian_width(char)
+        char_width = 2 if width_category in ('W', 'F') else 1
         total_width += char_width
     return total_width
 
@@ -291,7 +294,7 @@ def truncate_title(title: str, max_length: int = 15) -> str:
     """
     截斷標題並加上省略符號
 
-    考慮中文字元寬度（2 寬）vs 英文字元寬度（1 寬）
+    考慮字元視覺寬度（CJK 字元和全形字元 = 2 寬，其他 = 1 寬）
 
     Args:
         title: 原始標題
@@ -302,23 +305,25 @@ def truncate_title(title: str, max_length: int = 15) -> str:
 
     邏輯：
         1. 驗證輸入
-        2. 計算字元寬度（中文 2 寬，英文 1 寬）
-        3. 截斷並加省略符
+        2. 逐字計算視覺寬度
+        3. 當寬度超過上限時截斷
+        4. 新增省略符號 ".."
     """
     # Guard Clause：驗證輸入
     if not title or max_length <= 0:
         return ""
 
-    # 計算字元寬度
+    # 逐字計算視覺寬度，找出截斷位置
     total_width = 0
     truncate_pos = len(title)
 
     for i, char in enumerate(title):
-        # 判斷是否為中文字元 (U+4E00 ~ U+9FFF)
-        char_code = ord(char)
-        char_width = 2 if 0x4E00 <= char_code <= 0x9FFF else 1
+        # 使用 unicodedata.east_asian_width() 判斷字元寬度等級
+        width_category = unicodedata.east_asian_width(char)
+        char_width = 2 if width_category in ('W', 'F') else 1
 
-        if total_width + char_width >= max_length:
+        # 當加入當前字元會超過上限時截斷
+        if total_width + char_width > max_length:
             truncate_pos = i
             break
 

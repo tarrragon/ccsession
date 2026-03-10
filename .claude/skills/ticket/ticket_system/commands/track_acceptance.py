@@ -379,6 +379,39 @@ def _execute_single_check_acceptance(
     return 0
 
 
+def _apply_check_to_item(item: str, uncheck: bool) -> tuple[str | None, bool]:
+    """
+    應用勾選/取消勾選操作到單一驗收條件項目
+
+    根據 uncheck 參數決定勾選或取消勾選行為。
+    返回 (更新後的項目, 是否有變更)。
+    無變更時返回 (None, False)。
+
+    Args:
+        item: 驗收條件項目文本
+        uncheck: True 表示取消勾選，False 表示勾選
+
+    Returns:
+        (更新後的項目或 None, 是否有變更)
+    """
+    if uncheck:
+        # 取消勾選：[x] ... → [ ] ...
+        if item.startswith("[x]"):
+            return item.replace("[x]", "[ ]", 1), True
+        # [ ] 或無前綴視為已經未勾選
+        return None, False
+
+    # 勾選：[ ] ... → [x] ... 或無前綴 → [x]
+    if item.startswith("[x]"):
+        # 已經勾選
+        return None, False
+    elif item.startswith("[ ]"):
+        return item.replace("[ ]", "[x]", 1), True
+    else:
+        # 無前綴的項，加上 [x] 前綴
+        return f"[x] {item}", True
+
+
 def _execute_batch_check_acceptance(
     args: argparse.Namespace,
     version: str,
@@ -387,34 +420,14 @@ def _execute_batch_check_acceptance(
     uncheck: bool,
 ) -> int:
     """執行批量驗收條件勾選/取消勾選"""
-    checked_count = 0
-    unchecked_count = 0
+    count = 0
 
-    # 遍歷所有驗收條件
+    # 遍歷所有驗收條件，應用狀態變更
     for i, item in enumerate(acceptance_list):
-        if uncheck:
-            # 取消勾選：[x] ... → [ ] ...
-            if item.startswith("[x]"):
-                acceptance_list[i] = item.replace("[x]", "[ ]", 1)
-                unchecked_count += 1
-            elif item.startswith("[ ]"):
-                # 已經未勾選，跳過
-                pass
-            else:
-                # 無前綴視為未勾選，跳過
-                pass
-        else:
-            # 勾選：[ ] ... → [x] ... 或無前綴 → [x]
-            if item.startswith("[x]"):
-                # 已經勾選，跳過
-                pass
-            elif item.startswith("[ ]"):
-                acceptance_list[i] = item.replace("[ ]", "[x]", 1)
-                checked_count += 1
-            else:
-                # 無前綴的項，加上 [x] 前綴
-                acceptance_list[i] = f"[x] {item}"
-                checked_count += 1
+        updated_item, changed = _apply_check_to_item(item, uncheck)
+        if changed:
+            acceptance_list[i] = updated_item
+            count += 1
 
     # 更新 acceptance 列表
     ticket["acceptance"] = acceptance_list
@@ -429,26 +442,26 @@ def _execute_batch_check_acceptance(
         print(format_info(
             InfoMessages.ACCEPTANCE_CRITERIA_UPDATED,
             ticket_id=args.ticket_id,
-            index=f"全部 ({unchecked_count}/{total_count})",
+            index=f"全部 ({count}/{total_count})",
             status_text=TrackAcceptanceMessages.STATUS_TEXT_UNCHECKED
         ))
         print(format_msg(
             TrackAcceptanceMessages.BATCH_UNCHECK_SUMMARY_FORMAT,
             ticket_id=args.ticket_id,
-            unchecked_count=unchecked_count,
+            unchecked_count=count,
             total_count=total_count
         ))
     else:
         print(format_info(
             InfoMessages.ACCEPTANCE_CRITERIA_UPDATED,
             ticket_id=args.ticket_id,
-            index=f"全部 ({checked_count}/{total_count})",
+            index=f"全部 ({count}/{total_count})",
             status_text=TrackAcceptanceMessages.STATUS_TEXT_CHECKED
         ))
         print(format_msg(
             TrackAcceptanceMessages.BATCH_CHECK_SUMMARY_FORMAT,
             ticket_id=args.ticket_id,
-            checked_count=checked_count,
+            checked_count=count,
             total_count=total_count
         ))
 
