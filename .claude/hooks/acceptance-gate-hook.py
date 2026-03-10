@@ -494,38 +494,6 @@ def _get_ticket_start_time(frontmatter: TicketFrontmatter, logger) -> Optional[d
         return None
 
 
-def get_ticket_created_time(frontmatter: TicketFrontmatter, logger) -> Optional[datetime]:
-    """
-    從 Ticket frontmatter 讀取 created 欄位並解析為 datetime
-
-    [已棄用] 改用 _get_ticket_start_time，可自動使用 started_at（精確時間）。
-
-    Args:
-        frontmatter: Ticket frontmatter 結構
-        logger: 日誌物件
-
-    Returns:
-        datetime 物件或 None（無法解析時）
-    """
-    try:
-        # 取得 created 欄位值
-        created_value = frontmatter.get("created")
-        if not created_value:
-            logger.warning("Ticket frontmatter 缺少 created 欄位")
-            return None
-
-        # 使用通用日期解析函式（來自 hook_utils）
-        dt = parse_ticket_date(created_value, logger)
-        if dt:
-            logger.info(f"Ticket created at: {dt.isoformat()}")
-        return dt
-
-    except Exception as e:
-        logger.warning(f"解析 ticket created 時間失敗: {e}")
-        sys.stderr.write(f"WARNING: 解析 ticket created 時間失敗: {e}\n")
-        return None
-
-
 # ============================================================================
 # 檢查邏輯
 # ============================================================================
