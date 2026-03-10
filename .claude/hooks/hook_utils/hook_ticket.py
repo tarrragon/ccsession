@@ -23,7 +23,7 @@ import logging
 import re
 from datetime import date, datetime
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Union
 
 from .hook_logging import get_project_root
 
@@ -45,6 +45,141 @@ DECISION_TREE_MARKERS = [
 # ============================================================================
 # Ticket 解析函式
 # ============================================================================
+
+def _read_content(content_or_path: "Union[str, Path]", logger: Optional[logging.Logger]) -> Optional[str]:
+    """讀取檔案或字串內容
+
+    Args:
+        content_or_path: 檔案路徑（Path）或內容字串（str）
+        logger: 可選 Logger 實例
+
+    Returns:
+        str: 讀取的內容，或 None 如果讀取失敗
+    """
+    if isinstance(content_or_path, Path):
+        try:
+            return content_or_path.read_text(encoding='utf-8')
+        except Exception as e:
+            if logger:
+                logger.warning("讀取檔案失敗 ({}): {}".format(content_or_path.name, e))
+            return None
+    else:
+        return str(content_or_path) if content_or_path else ""
+
+
+def _skip_empty_or_comment(line: str) -> bool:
+    """判斷是否為空行或註解行（應跳過）
+
+    Args:
+        line: 單行字串
+
+    Returns:
+        bool: 若為空行或註解行則返回 True，應跳過
+    """
+    stripped = line.strip()
+    return not stripped or stripped.startswith('#')
+
+
+def _parse_nested_line(
+    line: str,
+    current_key: Optional[str],
+    multiline_marker: Optional[str],
+    result: dict
+) -> Optional[str]:
+    """處理嵌套行（以 2 個空格開頭的縮排行）
+
+    嵌套行可能是：
+    1. 多行字串的延續行（若 multiline_marker 已設定）
+    2. 嵌套鍵值對（若無 multiline_marker）
+
+    Args:
+        line: 嵌套行（縮排）
+        current_key: 當前頂層鍵名
+        multiline_marker: 多行標記（|, >, |-, >-）或 None
+        result: 結果字典（會被修改）
+
+    Returns:
+        Optional[str]: 無修改，返回 multiline_marker 保持不變
+    """
+    nested_line = line.strip()
+
+    # 若有多行標記，直接收集縮排行
+    if multiline_marker is not None:
+        if current_key:
+            if current_key not in result:
+                result[current_key] = ""
+            result[current_key] += "\n" + nested_line if result[current_key] else nested_line
+        return multiline_marker
+
+    # 否則作為嵌套鍵值對
+    if ':' in nested_line:
+        nested_key, nested_value = nested_line.split(':', 1)
+        nested_key = nested_key.strip()
+        nested_value = nested_value.strip().strip("'\"")
+
+        if current_key:
+            if not isinstance(result.get(current_key), dict):
+                result[current_key] = {}
+            result[current_key][nested_key] = nested_value
+
+    return multiline_marker
+
+
+def _parse_yaml_lines(frontmatter_text: str) -> dict:
+    """解析 YAML frontmatter 文本（逐行）
+
+    Args:
+        frontmatter_text: frontmatter 內容（已去除---標記）
+
+    Returns:
+        dict: 解析出的 key-value 對
+    """
+    result = {}
+    current_key = None
+    multiline_marker = None
+
+    for line in frontmatter_text.split('\n'):
+        if _skip_empty_or_comment(line):
+            continue
+        if line.startswith('  ') and not line.startswith('    '):
+            multiline_marker = _parse_nested_line(line, current_key, multiline_marker, result)
+            continue
+        if ':' in line:
+            current_key, multiline_marker = _parse_top_level_pair(line, result)
+
+    return result
+
+
+def _parse_top_level_pair(line: str, result: dict) -> Tuple[Optional[str], Optional[str]]:
+    """處理頂層鍵值對
+
+    頂層鍵值對可能包含：
+    1. 簡單值（移除引號）
+    2. 多行標記（|, >, |-, >-）後續跟縮排行
+
+    Args:
+        line: 頂層鍵值對（不縮排）
+        result: 結果字典（會被修改）
+
+    Returns:
+        Tuple[Optional[str], Optional[str]]: (current_key, multiline_marker)
+            - current_key: 解析出的鍵名
+            - multiline_marker: 若有多行標記則返回標記，否則為 None
+    """
+    key, _, value = line.partition(':')
+    key = key.strip()
+    value = value.strip()
+
+    # 檢查多行標記
+    if value in ('|', '>', '|-', '>-'):
+        result[key] = ""
+        return key, value
+
+    # 移除引號
+    value_clean = value.strip("'\"") if value else ""
+    result[key] = value_clean
+    return key, None
+
 
 def parse_ticket_frontmatter(
     content_or_path: "str | Path",
@@ -68,99 +203,26 @@ def parse_ticket_frontmatter(
         dict: 解析出的 frontmatter key-value（始終返回 dict，無 frontmatter 時返回空 dict、
               或解析失敗時也返回空 dict 並記錄警告）
     """
+    # 步驟 1：取得文件內容
+    content = _read_content(content_or_path, logger)
+    if content is None:
+        return {}
+
+    # 步驟 2：驗證 frontmatter 標記和邊界
+    if not content.startswith('---'):
+        return {}
+
+    end_idx = content.find('---', 3)
+    if end_idx == -1:
+        return {}
+
+    frontmatter_text = content[3:end_idx].strip()
+    if not frontmatter_text:
+        return {}
+
     try:
-        # 步驟 1：取得文件內容
-        if isinstance(content_or_path, Path):
-            try:
-                content = content_or_path.read_text(encoding='utf-8')
-                file_name = content_or_path.name
-            except Exception as e:
-                if logger:
-                    logger.warning("讀取檔案失敗 ({}): {}".format(content_or_path.name, e))
-                return {}
-        else:
-            content = str(content_or_path) if content_or_path else ""
-            file_name = "frontmatter"
-
-        # 步驟 2：驗證 frontmatter 標記
-        if not content.startswith('---'):
-            return {}
-
-        # 步驟 3：找到 frontmatter 結束標記
-        end_idx = content.find('---', 3)
-        if end_idx == -1:
-            return {}
-
-        frontmatter_text = content[3:end_idx].strip()
-        if not frontmatter_text:
-            return {}
-
-        # 步驟 4：解析 YAML
-        result = {}
-        current_key = None
-        multiline_marker = None
-
-        lines = frontmatter_text.split('\n')
-        i = 0
-
-        while i < len(lines):
-            line = lines[i]
-
-            # 跳過空行和註解
-            if not line.strip() or line.strip().startswith('#'):
-                i += 1
-                continue
-
-            # 檢查是否為嵌套行（以 2 個空格開頭）
-            if line.startswith('  ') and not line.startswith('    '):
-                nested_line = line.strip()
-
-                # 若有多行標記，直接收集縮排行
-                if multiline_marker is not None:
-                    if current_key:
-                        if current_key not in result:
-                            result[current_key] = ""
-                        result[current_key] += "\n" + nested_line if result[current_key] else nested_line
-                    i += 1
-                    continue
-
-                # 否則作為嵌套鍵值對
-                if ':' in nested_line:
-                    nested_key, nested_value = nested_line.split(':', 1)
-                    nested_key = nested_key.strip()
-                    nested_value = nested_value.strip().strip("'\"")
-
-                    if current_key:
-                        if not isinstance(result.get(current_key), dict):
-                            result[current_key] = {}
-                        result[current_key][nested_key] = nested_value
-                i += 1
-                continue
-
-            # 頂層鍵值對
-            if ':' in line:
-                key, _, value = line.partition(':')
-                key = key.strip()
-                value = value.strip()
-
-                # 檢查多行標記
-                if value in ('|', '>', '|-', '>-'):
-                    current_key = key
-                    multiline_marker = value
-                    result[key] = ""
-                    i += 1
-                    continue
-
-                # 移除引號
-                value_clean = value.strip("'\"") if value else ""
-                result[key] = value_clean
-                current_key = key
-                multiline_marker = None
-
-            i += 1
-
-        return result
-
+        # 步驟 3：解析 YAML
+        return _parse_yaml_lines(frontmatter_text)
     except Exception as e:
         if logger:
             logger.warning("解析 frontmatter 失敗: {}".format(e))
