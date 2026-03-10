@@ -37,7 +37,7 @@ from typing import Dict, Any, Optional, Tuple
 # 加入 hook_utils 路徑（相同目錄）
 sys.path.insert(0, str(Path(__file__).parent))
 
-from hook_utils import setup_hook_logging, run_hook_safely, read_json_from_stdin, get_project_root
+from hook_utils import setup_hook_logging, run_hook_safely, read_json_from_stdin, get_project_root, save_check_log
 
 # ============================================================================
 # 常數定義
@@ -349,43 +349,6 @@ def generate_hook_output(
 
     return output
 
-def save_check_log(
-    is_valid: bool,
-    file_path: str,
-    ticket_id: Optional[str],
-    warning_message: Optional[str],
-    logger
-) -> None:
-    """
-    儲存檢查日誌
-
-    Args:
-        is_valid: 驗證是否通過
-        file_path: 檔案路徑
-        ticket_id: Ticket ID
-        warning_message: 警告訊息（如有）
-        logger: Logger 實例
-    """
-    project_dir = get_project_root()
-    log_dir = project_dir / ".claude" / "hook-logs" / "ticket-id-validator"
-    log_dir.mkdir(parents=True, exist_ok=True)
-
-    report_file = log_dir / f"checks-{datetime.now().strftime('%Y%m%d')}.log"
-
-    try:
-        status = "VALID" if is_valid else "INVALID"
-        log_entry = f"""[{datetime.now().isoformat()}]
-  FilePath: {file_path}
-  TicketID: {ticket_id}
-  Status: {status}
-  Warning: {warning_message or "None"}
-
-"""
-        with open(report_file, "a", encoding="utf-8") as f:
-            f.write(log_entry)
-        logger.debug(f"檢查日誌已儲存: {report_file}")
-    except Exception as e:
-        logger.warning(f"儲存檢查日誌失敗: {e}")
 
 # ============================================================================
 # 主入口點
@@ -450,7 +413,15 @@ def main() -> int:
                 warning_message=warning_msg
             )
             print(json.dumps(hook_output, ensure_ascii=False, indent=2))
-            save_check_log(False, file_path, None, warning_msg, logger)
+            status = "INVALID"
+            log_entry = f"""[{datetime.now().isoformat()}]
+  FilePath: {file_path}
+  TicketID: None
+  Status: {status}
+  Warning: {warning_msg or "None"}
+
+"""
+            save_check_log("ticket-id-validator", log_entry, logger)
             return EXIT_SUCCESS
 
         # 步驟 5: 驗證 Ticket ID
@@ -468,7 +439,15 @@ def main() -> int:
         print(json.dumps(hook_output, ensure_ascii=False, indent=2))
 
         # 步驟 7: 儲存日誌
-        save_check_log(is_valid, file_path, ticket_id, error_msg if not is_valid else None, logger)
+        status = "VALID" if is_valid else "INVALID"
+        log_entry = f"""[{datetime.now().isoformat()}]
+  FilePath: {file_path}
+  TicketID: {ticket_id}
+  Status: {status}
+  Warning: {error_msg if not is_valid else "None"}
+
+"""
+        save_check_log("ticket-id-validator", log_entry, logger)
 
         logger.info("Ticket ID 驗證 Hook 完成")
         return EXIT_SUCCESS

@@ -80,6 +80,7 @@ from hook_utils import (
     validate_ticket_has_decision_tree,
     find_ticket_files,
     get_current_version_from_todolist,
+    save_check_log,
 )
 from lib.hook_messages import GateMessages, CoreMessages, format_message
 
@@ -724,50 +725,6 @@ def generate_hook_output(
 
     return output
 
-def save_check_log(
-    prompt: str,
-    is_dev_cmd: bool,
-    is_valid: bool,
-    ticket_id: Optional[str],
-    has_relevance_warning: bool = False,
-    logger=None
-) -> None:
-    """
-    儲存檢查日誌
-
-    Args:
-        prompt: 用戶提示文本
-        is_dev_cmd: 是否為開發命令
-        is_valid: Ticket 驗證是否通過
-        ticket_id: Ticket ID
-        has_relevance_warning: 是否有關聯性警告
-        logger: 日誌物件
-    """
-    project_dir = get_project_root()
-    log_dir = project_dir / ".claude" / "hook-logs" / "command-entrance-gate"
-    log_dir.mkdir(parents=True, exist_ok=True)
-
-    report_file = log_dir / f"checks-{datetime.now().strftime('%Y%m%d')}.log"
-
-    try:
-        should_block = is_dev_cmd and not is_valid
-        status = "BLOCKED" if should_block else "ALLOWED"
-        warning_status = "WITH_WARNING" if has_relevance_warning else "OK"
-
-        log_entry = f"""[{datetime.now().isoformat()}]
-  Prompt: {prompt[:100]}...
-  IsDevelopmentCommand: {is_dev_cmd}
-  TicketValidationPassed: {is_valid}
-  TicketID: {ticket_id}
-  RelevanceWarning: {warning_status}
-  Status: {status}
-
-"""
-        with open(report_file, "a", encoding="utf-8") as f:
-            f.write(log_entry)
-        logger.debug(f"檢查日誌已儲存: {report_file}")
-    except Exception as e:
-        logger.warning(f"儲存檢查日誌失敗: {e}")
 
 # ============================================================================
 # 主入口點
@@ -845,7 +802,19 @@ def main() -> int:
         print(json.dumps(hook_output, ensure_ascii=False, indent=2))
 
         # 步驟 7: 儲存日誌
-        save_check_log(prompt, is_dev_cmd, is_valid, ticket_id, relevance_warning is not None, logger)
+        should_block = is_dev_cmd and not is_valid
+        status = "BLOCKED" if should_block else "ALLOWED"
+        warning_status = "WITH_WARNING" if relevance_warning is not None else "OK"
+        log_entry = f"""[{datetime.now().isoformat()}]
+  Prompt: {prompt[:100]}...
+  IsDevelopmentCommand: {is_dev_cmd}
+  TicketValidationPassed: {is_valid}
+  TicketID: {ticket_id}
+  RelevanceWarning: {warning_status}
+  Status: {status}
+
+"""
+        save_check_log("command-entrance-gate", log_entry, logger)
 
         # 步驟 8: 決定 exit code（阻塞式）
         if is_dev_cmd and not is_valid:

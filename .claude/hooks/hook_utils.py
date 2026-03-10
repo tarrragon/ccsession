@@ -699,8 +699,10 @@ def parse_ticket_date(value: "Any", logger: "logging.Logger | None" = None) -> O
         return None
 
     # 優先級 1: ISO 8601 / RFC 3339（使用 fromisoformat）
+    # Python 3.9 不支援 "Z" 後綴，替換為 "+00:00"（RFC 3339 相容格式）
     try:
-        dt = datetime.fromisoformat(value)
+        normalized_value = value.replace("Z", "+00:00") if value.endswith("Z") else value
+        dt = datetime.fromisoformat(normalized_value)
         if logger:
             logger.debug("日期解析成功（ISO 8601）: {}".format(dt.isoformat()))
         return dt
@@ -1039,7 +1041,7 @@ def _parse_version_from_ticket_id(ticket_id: str) -> Optional[str]:
     return None
 
 
-def validate_ticket_has_decision_tree(ticket_content: str, logger: "logging.Logger") -> bool:
+def validate_ticket_has_decision_tree(ticket_content: str, logger: "Optional[logging.Logger]" = None) -> bool:
     """驗證 Ticket 是否包含決策樹欄位
 
     檢查 Ticket 是否在 YAML frontmatter 或內容中包含決策樹相關欄位。
@@ -1047,23 +1049,73 @@ def validate_ticket_has_decision_tree(ticket_content: str, logger: "logging.Logg
 
     Args:
         ticket_content: Ticket 檔案內容
-        logger: Logger 物件
+        logger: Logger 物件（可選）
 
     Returns:
         bool: 是否包含決策樹欄位
     """
     if not ticket_content:
-        logger.debug("Ticket 內容為空")
+        if logger:
+            logger.debug("Ticket 內容為空")
         return False
 
     # 檢查任何決策樹欄位（包含 YAML frontmatter 和標題區段）
     for marker in DECISION_TREE_MARKERS:
         if marker in ticket_content:
-            logger.debug("在 Ticket 中找到決策樹標記: {}".format(marker))
+            if logger:
+                logger.debug("在 Ticket 中找到決策樹標記: {}".format(marker))
             return True
 
-    logger.debug("未在 Ticket 中找到決策樹欄位")
+    if logger:
+        logger.debug("未在 Ticket 中找到決策樹欄位")
     return False
+
+
+def save_check_log(
+    hook_name: str,
+    log_content: str,
+    logger: Optional[logging.Logger] = None
+) -> None:
+    """統一的 Hook 檢查日誌儲存函式
+
+    功能：
+    - 建立日誌目錄 .claude/hook-logs/{hook_name}/
+    - 建立日誌檔案 checks-{YYYYMMDD}.log（每日一個檔案）
+    - 寫入檢查結果日誌
+
+    Args:
+        hook_name: Hook 識別名稱，用於識別日誌目錄
+        log_content: 要寫入的日誌內容（字串）
+        logger: 可選的 Logger 實例，用於記錄錯誤
+
+    Returns:
+        None
+
+    Example:
+        >>> save_check_log(
+        ...     hook_name="command-entrance-gate",
+        ...     log_content=f"[{datetime.now().isoformat()}] Prompt: ...",
+        ...     logger=logger
+        ... )
+    """
+    try:
+        project_dir = get_project_root()
+        log_dir = project_dir / ".claude" / "hook-logs" / hook_name
+        log_dir.mkdir(parents=True, exist_ok=True)
+
+        log_file = log_dir / f"checks-{datetime.now().strftime('%Y%m%d')}.log"
+
+        try:
+            with open(log_file, "a", encoding="utf-8") as f:
+                f.write(log_content)
+            if logger:
+                logger.debug("檢查日誌已儲存: {}".format(log_file))
+        except Exception as e:
+            if logger:
+                logger.warning("寫入日誌檔案失敗: {}".format(e))
+    except Exception as e:
+        if logger:
+            logger.warning("儲存檢查日誌失敗: {}".format(e))
 
 
 def run_hook_safely(main_func: Callable[[], int], hook_name: str) -> int:

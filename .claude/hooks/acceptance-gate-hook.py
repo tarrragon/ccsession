@@ -59,6 +59,7 @@ from hook_utils import (
     get_project_root,
     scan_ticket_files_by_version,
     find_ticket_file,
+    save_check_log,
 )
 from lib.hook_messages import GateMessages, CoreMessages, AskUserQuestionMessages, format_message
 
@@ -865,33 +866,6 @@ def generate_hook_output(
     return output
 
 
-def save_check_log(ticket_id: str, should_block: bool, project_dir: Path, logger) -> None:
-    """
-    儲存檢查日誌
-
-    Args:
-        ticket_id: Ticket ID
-        should_block: 是否阻擋執行
-        project_dir: 專案根目錄
-        logger: 日誌物件
-    """
-    log_dir = project_dir / ".claude" / "hook-logs" / "acceptance-gate"
-    log_dir.mkdir(parents=True, exist_ok=True)
-
-    log_file = log_dir / f"checks-{datetime.now().strftime('%Y%m%d')}.log"
-
-    try:
-        status = "BLOCKED" if should_block else "ALLOWED"
-        log_entry = f"""[{datetime.now().isoformat()}]
-  TicketID: {ticket_id}
-  Status: {status}
-
-"""
-        with open(log_file, "a", encoding="utf-8") as f:
-            f.write(log_entry)
-        logger.debug(f"檢查日誌已儲存: {log_file}")
-    except Exception as e:
-        logger.warning(f"儲存檢查日誌失敗: {e}")
 
 
 # ============================================================================
@@ -1032,7 +1006,13 @@ def main() -> int:
         # 步驟 4: 生成輸出並儲存日誌
         output = generate_hook_output(ticket_id, result, project_dir, logger)
         print(json.dumps(output, ensure_ascii=False, indent=2))
-        save_check_log(ticket_id, result.should_block, project_dir, logger)
+        status = "BLOCKED" if result.should_block else "ALLOWED"
+        log_entry = f"""[{datetime.now().isoformat()}]
+  TicketID: {ticket_id}
+  Status: {status}
+
+"""
+        save_check_log("acceptance-gate", log_entry, logger)
 
         # 步驟 5: 決定 exit code
         if result.should_block:

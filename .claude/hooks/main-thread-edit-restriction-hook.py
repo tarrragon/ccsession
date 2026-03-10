@@ -64,7 +64,7 @@ from typing import Dict, Any, Optional, Tuple
 # 設置 sys.path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from hook_utils import setup_hook_logging, run_hook_safely, get_project_root
+from hook_utils import setup_hook_logging, run_hook_safely, get_project_root, save_check_log
 from lib.hook_messages import GateMessages, CoreMessages, format_message
 
 
@@ -295,39 +295,6 @@ def generate_hook_output(is_allowed: bool, reason: str) -> Dict[str, Any]:
     }
 
 
-def save_check_log(
-    file_path: str,
-    is_allowed: bool,
-    reason: str,
-    logger
-) -> None:
-    """
-    儲存檢查日誌
-
-    Args:
-        file_path: 檔案路徑
-        is_allowed: 是否允許編輯
-        reason: 原因說明
-        logger: 日誌物件
-    """
-    try:
-        project_dir = get_project_root()
-        log_dir = project_dir / ".claude" / "hook-logs" / "main-thread-edit-restriction"
-        log_dir.mkdir(parents=True, exist_ok=True)
-
-        report_file = log_dir / f"checks-{datetime.now().strftime('%Y%m%d')}.log"
-
-        log_entry = f"""[{datetime.now().isoformat()}]
-  FilePath: {file_path}
-  Permission: {"ALLOWED" if is_allowed else "BLOCKED"}
-  Reason: {reason}
-
-"""
-        with open(report_file, "a", encoding="utf-8") as f:
-            f.write(log_entry)
-        logger.debug(f"檢查日誌已儲存: {report_file}")
-    except Exception as e:
-        logger.error(f"儲存檢查日誌失敗: {e}")
 
 
 # ============================================================================
@@ -382,7 +349,13 @@ def main() -> int:
         print(json.dumps(hook_output, ensure_ascii=False))
 
         # 步驟 6: 儲存日誌
-        save_check_log(file_path, is_allowed, reason, logger)
+        log_entry = f"""[{datetime.now().isoformat()}]
+  FilePath: {file_path}
+  Permission: {"ALLOWED" if is_allowed else "BLOCKED"}
+  Reason: {reason}
+
+"""
+        save_check_log("main-thread-edit-restriction", log_entry, logger)
 
         # 步驟 7: 返回適當的 exit code
         exit_code = EXIT_ALLOW if is_allowed else EXIT_BLOCK
