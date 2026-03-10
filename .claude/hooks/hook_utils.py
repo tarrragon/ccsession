@@ -967,7 +967,7 @@ def find_ticket_file(
 
     # 嘗試解析 ticket_id 中的版本號（格式：{version}-W{wave}-{seq}）
     # 範例：0.1.0-W31-003 → version="0.1.0"
-    version = _parse_version_from_ticket_id(ticket_id)
+    version = extract_version_from_ticket_id(ticket_id)
 
     # Strategy 1: 直接構建路徑（如果能解析出版本號）
     if version:
@@ -1008,8 +1008,8 @@ def find_ticket_file(
     return None
 
 
-def _parse_version_from_ticket_id(ticket_id: str) -> Optional[str]:
-    """從 Ticket ID 解析版本號
+def extract_version_from_ticket_id(ticket_id: str) -> Optional[str]:
+    """從 Ticket ID 中提取版本號
 
     Ticket ID 標準格式：{version}-W{wave}-{seq}
     範例：0.1.0-W31-003 → "0.1.0"
@@ -1018,27 +1018,48 @@ def _parse_version_from_ticket_id(ticket_id: str) -> Optional[str]:
         ticket_id: Ticket ID 字串
 
     Returns:
-        版本號字串，或 None 如無法解析
+        版本號字串（如 "0.1.0"），或 None 如無法解析
     """
     if not ticket_id:
         return None
 
-    # 尋找第一個 '-W' 分隔符
-    wave_marker = "-W"
-    wave_index = ticket_id.find(wave_marker)
-
-    if wave_index <= 0:
-        # 未找到 '-W' 或位置不合法
-        return None
-
-    # 版本號是 '-W' 之前的部分
-    version = ticket_id[:wave_index]
-
-    # 驗證版本號不為空，且形如 "x.y.z" 或類似格式
-    if version and "." in version:
-        return version
+    # 使用正則表達式提取版本號（格式：\d+\.\d+\.\d+）
+    version_match = re.match(r'(\d+\.\d+\.\d+)-W', ticket_id)
+    if version_match:
+        return version_match.group(1)
 
     return None
+
+
+def extract_wave_from_ticket_id(ticket_id: str) -> Optional[int]:
+    """從 Ticket ID 中提取 Wave 號
+
+    Ticket ID 標準格式：{version}-W{wave}-{seq}
+    範例：0.1.0-W31-003 → 31
+
+    Args:
+        ticket_id: Ticket ID 字串
+
+    Returns:
+        Wave 號（整數），或 None 如無法解析
+    """
+    if not ticket_id:
+        return None
+
+    # 使用正則表達式提取 Wave 號
+    wave_match = re.search(r'-W(\d+)-', ticket_id)
+    if wave_match:
+        return int(wave_match.group(1))
+
+    return None
+
+
+def _parse_version_from_ticket_id(ticket_id: str) -> Optional[str]:
+    """[已棄用] 改用 extract_version_from_ticket_id
+
+    此函式保留以維持後向相容。
+    """
+    return extract_version_from_ticket_id(ticket_id)
 
 
 def validate_ticket_has_decision_tree(ticket_content: str, logger: "Optional[logging.Logger]" = None) -> bool:

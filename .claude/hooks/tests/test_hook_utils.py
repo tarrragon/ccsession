@@ -29,7 +29,8 @@ try:
         scan_ticket_files_by_version,
         find_ticket_files,
         find_ticket_file,
-        _parse_version_from_ticket_id,
+        extract_version_from_ticket_id,
+        extract_wave_from_ticket_id,
     )
 except ImportError:
     # 如果模組還不存在，定義虛擬函式以便測試可以 import
@@ -54,7 +55,10 @@ except ImportError:
     def find_ticket_file(ticket_id, project_root=None, logger=None):
         raise NotImplementedError()
 
-    def _parse_version_from_ticket_id(ticket_id: str):
+    def extract_version_from_ticket_id(ticket_id: str):
+        raise NotImplementedError()
+
+    def extract_wave_from_ticket_id(ticket_id: str):
         raise NotImplementedError()
 
 
@@ -969,50 +973,79 @@ class TestFindTicketFile:
 
     def test_parse_standard_version_format(self, project_root):
         """解析標準版本號格式 {version}-W{wave}-{seq}"""
-        from hook_utils import _parse_version_from_ticket_id
-
         # 標準格式
-        assert _parse_version_from_ticket_id("0.1.0-W1-001") == "0.1.0"
-        assert _parse_version_from_ticket_id("0.31.0-W31-003") == "0.31.0"
-        assert _parse_version_from_ticket_id("1.2.3-W10-050") == "1.2.3"
+        assert extract_version_from_ticket_id("0.1.0-W1-001") == "0.1.0"
+        assert extract_version_from_ticket_id("0.31.0-W31-003") == "0.31.0"
+        assert extract_version_from_ticket_id("1.2.3-W10-050") == "1.2.3"
 
     def test_parse_version_with_subtask(self, project_root):
         """解析包含子任務的版本號"""
-        from hook_utils import _parse_version_from_ticket_id
-
         # 子任務格式
-        assert _parse_version_from_ticket_id("0.1.0-W1-001.1") == "0.1.0"
-        assert _parse_version_from_ticket_id("0.1.0-W1-001.2.3") == "0.1.0"
+        assert extract_version_from_ticket_id("0.1.0-W1-001.1") == "0.1.0"
+        assert extract_version_from_ticket_id("0.1.0-W1-001.2.3") == "0.1.0"
 
     def test_parse_version_invalid_format_no_wave(self, project_root):
         """無效格式：無 -W 標記，應返回 None"""
-        from hook_utils import _parse_version_from_ticket_id
-
         # 無 -W 的非標準格式
-        assert _parse_version_from_ticket_id("old-ticket-001") is None
-        assert _parse_version_from_ticket_id("ticket123") is None
-        assert _parse_version_from_ticket_id("0.1.0") is None
+        assert extract_version_from_ticket_id("old-ticket-001") is None
+        assert extract_version_from_ticket_id("ticket123") is None
+        assert extract_version_from_ticket_id("0.1.0") is None
 
     def test_parse_version_invalid_format_no_dot(self, project_root):
         """無效格式：版本號無 '.'，應返回 None"""
-        from hook_utils import _parse_version_from_ticket_id
-
         # 版本號無 '.'
-        assert _parse_version_from_ticket_id("0-W1-001") is None
-        assert _parse_version_from_ticket_id("v1-W1-001") is None
+        assert extract_version_from_ticket_id("0-W1-001") is None
+        assert extract_version_from_ticket_id("v1-W1-001") is None
 
     def test_parse_version_edge_cases(self, project_root):
         """邊界情況測試"""
-        from hook_utils import _parse_version_from_ticket_id
-
         # 空字串
-        assert _parse_version_from_ticket_id("") is None
+        assert extract_version_from_ticket_id("") is None
 
         # 只有 -W（無版本號部分）
-        assert _parse_version_from_ticket_id("-W1-001") is None
+        assert extract_version_from_ticket_id("-W1-001") is None
 
         # -W 出現在開頭
-        assert _parse_version_from_ticket_id("-W1-001-0.1.0") is None
+        assert extract_version_from_ticket_id("-W1-001-0.1.0") is None
+
+    def test_extract_wave_standard_format(self, project_root):
+        """解析標準 Wave 號格式"""
+        # 標準格式
+        assert extract_wave_from_ticket_id("0.1.0-W1-001") == 1
+        assert extract_wave_from_ticket_id("0.31.0-W31-003") == 31
+        assert extract_wave_from_ticket_id("1.2.3-W10-050") == 10
+        assert extract_wave_from_ticket_id("0.1.0-W100-001") == 100
+
+    def test_extract_wave_with_subtask(self, project_root):
+        """解析包含子任務的 Wave 號"""
+        # 子任務格式
+        assert extract_wave_from_ticket_id("0.1.0-W1-001.1") == 1
+        assert extract_wave_from_ticket_id("0.1.0-W22-025.2.3") == 22
+
+    def test_extract_wave_invalid_format_no_wave(self, project_root):
+        """無效格式：無 -W 標記，應返回 None"""
+        # 無 -W 的非標準格式
+        assert extract_wave_from_ticket_id("old-ticket-001") is None
+        assert extract_wave_from_ticket_id("ticket123") is None
+        assert extract_wave_from_ticket_id("0.1.0") is None
+
+    def test_extract_wave_invalid_format_malformed(self, project_root):
+        """無效格式：Wave 號格式不符合 -W{digits}-"""
+        # 格式不符
+        assert extract_wave_from_ticket_id("0.1.0-W-001") is None
+        assert extract_wave_from_ticket_id("0.1.0-WABC-001") is None
+        assert extract_wave_from_ticket_id("0.1.0-W1") is None
+
+    def test_extract_wave_edge_cases(self, project_root):
+        """邊界情況測試"""
+        # 空字串
+        assert extract_wave_from_ticket_id("") is None
+
+        # 只有 -W（無波次號）
+        assert extract_wave_from_ticket_id("-W-001") is None
+
+        # Wave 號為 0
+        assert extract_wave_from_ticket_id("0.1.0-W0-001") == 0
 
     # ========================================================================
     # Fallback to Full Scan Tests

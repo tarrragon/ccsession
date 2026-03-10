@@ -60,6 +60,8 @@ from hook_utils import (
     scan_ticket_files_by_version,
     find_ticket_file,
     save_check_log,
+    extract_version_from_ticket_id,
+    extract_wave_from_ticket_id,
 )
 from lib.hook_messages import GateMessages, CoreMessages, AskUserQuestionMessages, format_message
 
@@ -358,54 +360,6 @@ def is_doc_type(ticket_type: Optional[str]) -> bool:
 # Sibling Ticket 檢查（場景 #9）
 # ============================================================================
 
-def extract_wave_from_ticket_id(ticket_id: str, logger) -> Optional[int]:
-    """
-    從 Ticket ID 中提取 Wave 號
-
-    格式範例: "0.1.0-W22-025" → wave=22
-
-    Args:
-        ticket_id: Ticket ID (格式: version-WN-number)
-        logger: 日誌物件
-
-    Returns:
-        int - Wave 號，或 None（格式不符）
-    """
-    # 使用正則表達式提取 W 後面的數字
-    wave_match = re.search(r'-W(\d+)-', ticket_id)
-    if wave_match:
-        wave_num = int(wave_match.group(1))
-        logger.debug(f"從 Ticket ID {ticket_id} 提取 Wave 號: {wave_num}")
-        return wave_num
-    else:
-        logger.warning(f"無法從 Ticket ID 中提取 Wave 號: {ticket_id}")
-        return None
-
-
-def extract_version_from_ticket_id(ticket_id: str, logger) -> Optional[str]:
-    """
-    從 Ticket ID 中提取版本號
-
-    格式範例: "0.1.0-W22-025" → version="0.1.0"
-
-    Args:
-        ticket_id: Ticket ID (格式: version-WN-number)
-        logger: 日誌物件
-
-    Returns:
-        str - 版本號，或 None（格式不符）
-    """
-    # 使用正則表達式提取版本號（版本號格式: \d+\.\d+\.\d+）
-    version_match = re.match(r'(\d+\.\d+\.\d+)-W', ticket_id)
-    if version_match:
-        version = version_match.group(1)
-        logger.debug(f"從 Ticket ID {ticket_id} 提取版本號: {version}")
-        return version
-    else:
-        logger.warning(f"無法從 Ticket ID 中提取版本號: {ticket_id}")
-        return None
-
-
 def find_pending_sibling_tickets(
     ticket_id: str,
     project_dir: Path,
@@ -430,8 +384,8 @@ def find_pending_sibling_tickets(
         list - pending sibling ticket ID 清單，若查詢失敗或無 sibling，返回 []
     """
     # 步驟 1: 提取 wave 號和版本號
-    wave_num = extract_wave_from_ticket_id(ticket_id, logger)
-    version = extract_version_from_ticket_id(ticket_id, logger)
+    wave_num = extract_wave_from_ticket_id(ticket_id)
+    version = extract_version_from_ticket_id(ticket_id)
 
     if wave_num is None or version is None:
         logger.warning(f"無法從 {ticket_id} 提取 wave 或 version，返回空清單")
@@ -461,7 +415,7 @@ def find_pending_sibling_tickets(
                     continue
 
                 # 檢查是否為同 Wave
-                file_wave = extract_wave_from_ticket_id(file_ticket_id, logger)
+                file_wave = extract_wave_from_ticket_id(file_ticket_id)
                 if file_wave != wave_num:
                     logger.debug(f"不同 Wave: {file_ticket_id} (Wave {file_wave})")
                     continue
