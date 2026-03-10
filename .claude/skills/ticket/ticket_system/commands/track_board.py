@@ -235,6 +235,58 @@ def simplify_ticket_id(full_id: str) -> str:
         return full_id
 
 
+def calculate_visual_width(text: str) -> int:
+    """
+    計算文本的視覺寬度（考慮中文字元）
+
+    中文字元佔 2 寬，英文/符號字元佔 1 寬
+
+    Args:
+        text: 輸入文本
+
+    Returns:
+        int: 視覺寬度
+
+    邏輯：
+        1. 逐字遍歷
+        2. 判斷是否為中文字元 (U+4E00 ~ U+9FFF)
+        3. 累加寬度
+    """
+    total_width = 0
+    for char in text:
+        char_code = ord(char)
+        char_width = 2 if 0x4E00 <= char_code <= 0x9FFF else 1
+        total_width += char_width
+    return total_width
+
+
+def ljust_with_chinese_width(text: str, width: int) -> str:
+    """
+    填充文本至指定視覺寬度（考慮中文字元）
+
+    與 str.ljust() 相似，但正確計算中文字元寬度
+
+    Args:
+        text: 輸入文本
+        width: 目標視覺寬度
+
+    Returns:
+        str: 填充後的文本
+
+    邏輯：
+        1. 計算文本的視覺寬度
+        2. 計算需要填充的空格數
+        3. 返回填充後的文本
+
+    Example:
+        >>> ljust_with_chinese_width("測試", 10)  # 中文 2 寬 + 2 寬 = 4 寬
+        '測試      '  # 補 6 個空格至 10 寬
+    """
+    visual_width = calculate_visual_width(text)
+    padding_count = max(0, width - visual_width)
+    return text + " " * padding_count
+
+
 def truncate_title(title: str, max_length: int = 15) -> str:
     """
     截斷標題並加上省略符號
@@ -448,7 +500,7 @@ def calculate_layout(
 
 
 def render_board_unicode(
-    cards_by_status: Dict[str, List[Dict[str, Any]]], layout: Dict[str, Any]
+    cards_by_status: Dict[str, List[Dict[str, Any]]], layout: Dict[str, Any], version: str = ""
 ) -> str:
     """
     使用 Unicode 方框字元渲染看板
@@ -456,6 +508,7 @@ def render_board_unicode(
     Args:
         cards_by_status: 按狀態分組的卡片資料
         layout: 佈局參數
+        version: 版本號（用於標題）
 
     Returns:
         str: 完整的看板字串（多行）
@@ -476,7 +529,7 @@ def render_board_unicode(
     title_line = "╔" + "═" * (total_width - 2) + "╗"
     lines.append(title_line)
 
-    version_text = TrackBoardMessages.UNICODE_BOARD_TITLE
+    version_text = format_msg(TrackBoardMessages.UNICODE_BOARD_TITLE, version=version)
     padding = (total_width - 2 - len(version_text)) // 2
     version_line = "║" + " " * padding + version_text + " " * (total_width - 2 - padding - len(version_text)) + "║"
     lines.append(version_line)
@@ -504,7 +557,7 @@ def render_board_unicode(
     headers = TrackBoardMessages.UNICODE_HEADERS
     header_line = " " * 2
     for header in headers:
-        header_line += header.ljust(card_width) + "  "
+        header_line += ljust_with_chinese_width(header, card_width) + "  "
     lines.append(header_line)
 
     # 渲染分隔線
@@ -523,14 +576,11 @@ def render_board_unicode(
             if row_idx < len(cards):
                 card = cards[row_idx]
                 # 卡片內容（3 行）
-                if row_idx == 0:
-                    col_content = [
-                        card["id"].ljust(card_width),
-                        card["title"].ljust(card_width),
-                        card["priority"].ljust(card_width),
-                    ]
-                else:
-                    col_content = ["", "", ""]
+                col_content = [
+                    ljust_with_chinese_width(card["id"], card_width),
+                    ljust_with_chinese_width(card["title"], card_width),
+                    ljust_with_chinese_width(card["priority"], card_width),
+                ]
             else:
                 col_content = ["", "", ""]
             cols.append(col_content)
@@ -540,7 +590,7 @@ def render_board_unicode(
             line_content = ""
             for col_idx, col in enumerate(cols):
                 if line_in_card < len(col):
-                    line_content += "│ " + col[line_in_card].ljust(card_width - 2) + " "
+                    line_content += "│ " + ljust_with_chinese_width(col[line_in_card], card_width - 2) + " "
                 else:
                     line_content += "│ " + " " * (card_width - 2) + " "
             line_content += "│"

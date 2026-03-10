@@ -73,8 +73,8 @@ class TrackBoardMessages:
     # render_tree_node 中的 Wave 標題格式
     WAVE_TITLE_FORMAT = "{wave} ({count} tasks)"
 
-    # render_board_unicode 中的標題
-    UNICODE_BOARD_TITLE = "TICKET BOARD - v0.31.0 (W7)"
+    # render_board_unicode 中的標題（動態版本號）
+    UNICODE_BOARD_TITLE = "TICKET BOARD - v{version}"
 
     # render_board_unicode 中的統計行標籤
     UNICODE_STATS_PENDING = "[待處理]"
