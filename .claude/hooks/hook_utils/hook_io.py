@@ -19,6 +19,56 @@ import sys
 from typing import List, Optional
 
 
+def _extract_field(
+    input_data: "dict | None",
+    field_name: str,
+    logger: "logging.Logger | None" = None
+) -> dict:
+    """安全提取 input_data 中指定欄位的通用邏輯
+
+    處理三種情況：
+    1. input_data 為 None 或空值 → 返回 {}
+    2. 指定欄位缺失或為 None → 返回 {}
+    3. 欄位為有效的 dict → 返回該 dict
+
+    Args:
+        input_data: Hook 輸入資料（dict 或 None）
+        field_name: 要提取的欄位名稱（如 "tool_input" 或 "tool_response"）
+        logger: 可選 Logger 實例，用於記錄詳細資訊
+
+    Returns:
+        dict: 提取出的欄位值（始終返回 dict，無欄位時返回空 dict）
+    """
+    if input_data is None:
+        if logger:
+            logger.debug("input_data 為 None，返回空 dict")
+        return {}
+
+    if not isinstance(input_data, dict):
+        if logger:
+            logger.warning("input_data 非 dict 類型，返回空 dict: {}".format(type(input_data)))
+        return {}
+
+    field_value = input_data.get(field_name)
+
+    # 欄位為 None 或不存在時返回 {}
+    if field_value is None:
+        if logger:
+            logger.debug("{} 欄位為 None 或不存在，返回空 dict".format(field_name))
+        return {}
+
+    # 欄位應為 dict，但可能是其他型別
+    if not isinstance(field_value, dict):
+        if logger:
+            logger.warning("{} 非 dict 類型，返回空 dict: {}".format(field_name, type(field_value)))
+        return {}
+
+    if logger:
+        logger.debug("成功提取 {}，欄位數: {}".format(field_name, len(field_value)))
+
+    return field_value
+
+
 def run_git(
     args: List[str],
     cwd: "str | None" = None,
@@ -126,34 +176,7 @@ def extract_tool_input(
         >>> extract_tool_input(None)
         {}
     """
-    if input_data is None:
-        if logger:
-            logger.debug("input_data 為 None，返回空 dict")
-        return {}
-
-    if not isinstance(input_data, dict):
-        if logger:
-            logger.warning("input_data 非 dict 類型，返回空 dict: {}".format(type(input_data)))
-        return {}
-
-    tool_input = input_data.get("tool_input")
-
-    # tool_input 為 None 或不存在時返回 {}
-    if tool_input is None:
-        if logger:
-            logger.debug("tool_input 欄位為 None 或不存在，返回空 dict")
-        return {}
-
-    # tool_input 應為 dict，但可能是其他型別
-    if not isinstance(tool_input, dict):
-        if logger:
-            logger.warning("tool_input 非 dict 類型，返回空 dict: {}".format(type(tool_input)))
-        return {}
-
-    if logger:
-        logger.debug("成功提取 tool_input，欄位數: {}".format(len(tool_input)))
-
-    return tool_input
+    return _extract_field(input_data, "tool_input", logger)
 
 
 def extract_tool_response(
@@ -184,31 +207,4 @@ def extract_tool_response(
         >>> extract_tool_response(None)
         {}
     """
-    if input_data is None:
-        if logger:
-            logger.debug("input_data 為 None，返回空 dict")
-        return {}
-
-    if not isinstance(input_data, dict):
-        if logger:
-            logger.warning("input_data 非 dict 類型，返回空 dict: {}".format(type(input_data)))
-        return {}
-
-    tool_response = input_data.get("tool_response")
-
-    # tool_response 為 None 或不存在時返回 {}
-    if tool_response is None:
-        if logger:
-            logger.debug("tool_response 欄位為 None 或不存在，返回空 dict")
-        return {}
-
-    # tool_response 應為 dict，但可能是其他型別
-    if not isinstance(tool_response, dict):
-        if logger:
-            logger.warning("tool_response 非 dict 類型，返回空 dict: {}".format(type(tool_response)))
-        return {}
-
-    if logger:
-        logger.debug("成功提取 tool_response，欄位數: {}".format(len(tool_response)))
-
-    return tool_response
+    return _extract_field(input_data, "tool_response", logger)
