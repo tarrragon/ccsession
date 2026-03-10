@@ -129,7 +129,8 @@ def render_tree_node(
     # 格式化顯示
     short_id = simplify_ticket_id(ticket_id)
     priority = ticket.get("priority", "P2")
-    title = truncate_title(ticket.get("title", ""), 30)
+    # Tree view 顯示完整標題（不截斷）
+    title = ticket.get("title", "")
 
     lines.append(f"{prefix}{connector}{short_id} [{priority}] {title}")
 
