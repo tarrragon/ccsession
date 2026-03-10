@@ -126,6 +126,113 @@ DEVELOPMENT_KEYWORDS = (
     DELETE_KEYWORDS
 )
 
+# ============================================================================
+# is_management_operation 函式的白名單常數
+# ============================================================================
+
+# 短回答白名單（確認、同意等，長度 <= 15 字元）
+SHORT_ANSWER_PATTERNS = [
+    # 肯定
+    "是", "好", "確認", "同意", "ok", "yes", "y",
+    "對", "沒錯", "没错",
+    # 否定
+    "否", "不", "取消", "cancel", "no", "n",
+    "不要", "不用",
+    # 理解確認
+    "了解", "知道了", "收到", "明白", "got it",
+    # 數字選擇（0-20）
+    "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10",
+    "11", "12", "13", "14", "15", "16", "17", "18", "19", "20",
+]
+
+# 短回答正則模式（長度 <= 15 的特殊格式，需完整匹配整個字串）
+SHORT_ANSWER_REGEX_PATTERNS = [
+    r"^\d{1,2}(,\s*\d{1,2})*$",  # 組合多選：如 "2, 4" 或 "1,3,5"
+    r"^phase\s+\d+[a-z]?$",        # Phase 選項標籤：如 "Phase 4a"、"phase 3b"
+    r"^[a-z]$",                     # 單字母選項：如 "a"、"b"
+]
+
+# Ticket 管理相關模式
+TICKET_PATTERNS = [
+    "ticket", "/ticket",
+    "建立 ticket", "新增 ticket", "建 ticket",
+    "認領", "claim",
+]
+
+# Hook / 系統管理相關模式
+MANAGEMENT_PATTERNS = [
+    "hook", "暫停", "停用", "啟用",
+    "設定", "配置", "config",
+    "/commit", "/version-release",
+    "/pre-fix-eval", "/tech-debt",
+    "/manager",
+    "commit",  # 不帶 / 的 commit 指令
+    "plan",    # Plan Mode 相關操作
+    "記錄",    # 記錄狀況、記錄筆記（非開發行為）
+    # 提交和 Git 操作
+    "提交",    # 中文 commit（git 提交）
+    "git",     # Git 操作前綴（push, pull, status 等）
+    "push",    # git push
+    # 查詢和摘要操作
+    "查詢",    # 查詢操作（非開發）
+    "摘要",    # 摘要操作（非開發）
+    "summary", # 英文摘要
+    "列出",    # 列出操作
+    "查看",    # 查看操作
+    "顯示",    # 顯示操作
+]
+
+# PM 調度/派發相關模式
+DISPATCH_PATTERNS = [
+    "派發", "並行", "繼續", "序列",
+    "開始處理", "恢復", "接手",
+    "開始",    # 「W25-006 開始」等 Ticket 生命週期指令
+    "完成",    # 「W25-006 完成」等 Ticket 生命週期指令
+    # 工作流延續
+    "接著",    # 「接著處理下一個」工作流延續
+    "然後",    # 「然後測試」工作流延續
+    "下一步",  # 工作流延續
+    "next",    # 英文工作流延續
+]
+
+# 探索 / 分析模式（前置行為，非開發命令）
+# 與決策樹第二層一致：分析類走「問題處理流程」
+EXPLORATION_PATTERNS = [
+    "分析",    # 分析程式碼/架構/結構
+    "研究",    # 研究文章/方案
+    "調查",    # 調查問題原因
+    "探索",    # 探索程式碼庫
+    "評估",    # 評估方案/風險
+    "追蹤",    # 追蹤問題/進度
+    "閱讀",    # 閱讀文章/文件
+    "瀏覽",    # 瀏覽程式碼
+    "了解",    # 了解架構/現況
+    "比較",    # 比較方案
+    "review",  # Code review / 文件 review
+    "analyze", # 英文分析
+    "explore", # 英文探索
+    "investigate", # 英文調查
+]
+
+# 問題 / 討論模式（非指令性）
+DISCUSSION_PATTERNS = [
+    "為什麼", "怎麼", "如何", "是什麼",
+    "可以嗎", "應該", "建議", "說明",
+    "幫我", "請問", "?", "？",
+    # 追問和選擇
+    "什麼",    # 「這是什麼」等問句
+    "哪個",    # 「哪個方案」等問句
+    "多少",    # 「多少個」等問句
+    # 英文禮貌和問句
+    "please",  # 英文禮貌用語
+    "can you", # 英文問句
+    "could",   # 英文問句
+    "would",   # 英文問句
+    "what",    # 英文問句
+    "how",     # 英文問句
+    "why",     # 英文問句
+]
+
 # Exit Code
 EXIT_SUCCESS = 0
 EXIT_ERROR = 1
@@ -218,121 +325,21 @@ def is_management_operation(prompt: str, logger) -> bool:
         logger.info(f"識別為 SKILL 指令（/ 前綴）: {prompt_stripped[:30]}")
         return True
 
-    # 短回答白名單（確認、同意等，長度 <= 15 字元）
-    # 新增：否定、理解確認、更多數字選擇
-    short_answer_patterns = [
-        # 肯定
-        "是", "好", "確認", "同意", "ok", "yes", "y",
-        "對", "沒錯", "没错",
-        # 否定
-        "否", "不", "取消", "cancel", "no", "n",
-        "不要", "不用",
-        # 理解確認
-        "了解", "知道了", "收到", "明白", "got it",
-        # 數字選擇（0-20）
-        "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10",
-        "11", "12", "13", "14", "15", "16", "17", "18", "19", "20",
-    ]
-
-    # 短回答正則模式（長度 <= 15 的特殊格式，需完整匹配整個字串）
-    short_answer_regex_patterns = [
-        r"^\d{1,2}(,\s*\d{1,2})*$",  # 組合多選：如 "2, 4" 或 "1,3,5"
-        r"^phase\s+\d+[a-z]?$",        # Phase 選項標籤：如 "Phase 4a"、"phase 3b"
-        r"^[a-z]$",                     # 單字母選項：如 "a"、"b"
-    ]
-
     # 檢查短回答：長度 <= 15 且完全匹配白名單或正則模式
     if len(prompt_stripped) <= 15:
-        if prompt_stripped.lower() in short_answer_patterns:
+        if prompt_stripped.lower() in SHORT_ANSWER_PATTERNS:
             logger.info(f"識別為短回答（白名單）: {prompt}")
             return True
-        for pattern in short_answer_regex_patterns:
+        for pattern in SHORT_ANSWER_REGEX_PATTERNS:
             if re.match(pattern, prompt_stripped.lower()):
                 logger.info(f"識別為短回答（正則模式 {pattern}）: {prompt}")
                 return True
 
-    # Ticket 管理相關模式
-    ticket_patterns = [
-        "ticket", "/ticket",
-        "建立 ticket", "新增 ticket", "建 ticket",
-        "認領", "claim",
-    ]
-
-    # Hook / 系統管理相關模式
-    management_patterns = [
-        "hook", "暫停", "停用", "啟用",
-        "設定", "配置", "config",
-        "/commit", "/version-release",
-        "/pre-fix-eval", "/tech-debt",
-        "/manager",
-        "commit",  # 不帶 / 的 commit 指令
-        "plan",    # Plan Mode 相關操作
-        "記錄",    # 記錄狀況、記錄筆記（非開發行為）
-        # 提交和 Git 操作
-        "提交",    # 中文 commit（git 提交）
-        "git",     # Git 操作前綴（push, pull, status 等）
-        "push",    # git push
-        # 查詢和摘要操作
-        "查詢",    # 查詢操作（非開發）
-        "摘要",    # 摘要操作（非開發）
-        "summary", # 英文摘要
-        "列出",    # 列出操作
-        "查看",    # 查看操作
-        "顯示",    # 顯示操作
-    ]
-
-    # PM 調度/派發相關模式
-    dispatch_patterns = [
-        "派發", "並行", "繼續", "序列",
-        "開始處理", "恢復", "接手",
-        "開始",    # 「W25-006 開始」等 Ticket 生命週期指令
-        "完成",    # 「W25-006 完成」等 Ticket 生命週期指令
-        # 工作流延續
-        "接著",    # 「接著處理下一個」工作流延續
-        "然後",    # 「然後測試」工作流延續
-        "下一步",  # 工作流延續
-        "next",    # 英文工作流延續
-    ]
-
-    # 探索 / 分析模式（前置行為，非開發命令）
-    # 與決策樹第二層一致：分析類走「問題處理流程」
-    exploration_patterns = [
-        "分析",    # 分析程式碼/架構/結構
-        "研究",    # 研究文章/方案
-        "調查",    # 調查問題原因
-        "探索",    # 探索程式碼庫
-        "評估",    # 評估方案/風險
-        "追蹤",    # 追蹤問題/進度
-        "閱讀",    # 閱讀文章/文件
-        "瀏覽",    # 瀏覽程式碼
-        "了解",    # 了解架構/現況
-        "比較",    # 比較方案
-        "review",  # Code review / 文件 review
-        "analyze", # 英文分析
-        "explore", # 英文探索
-        "investigate", # 英文調查
-    ]
-
-    # 問題 / 討論模式（非指令性）
-    discussion_patterns = [
-        "為什麼", "怎麼", "如何", "是什麼",
-        "可以嗎", "應該", "建議", "說明",
-        "幫我", "請問", "?", "？",
-        # 追問和選擇
-        "什麼",    # 「這是什麼」等問句
-        "哪個",    # 「哪個方案」等問句
-        "多少",    # 「多少個」等問句
-        # 英文禮貌和問句
-        "please",  # 英文禮貌用語
-        "can you", # 英文問句
-        "could",   # 英文問句
-        "would",   # 英文問句
-        "what",    # 英文問句
-        "how",     # 英文問句
-        "why",     # 英文問句
-    ]
-
-    all_bypass_patterns = ticket_patterns + management_patterns + dispatch_patterns + exploration_patterns + discussion_patterns
+    # 合併所有白名單模式（動態拼接）
+    all_bypass_patterns = (
+        TICKET_PATTERNS + MANAGEMENT_PATTERNS + DISPATCH_PATTERNS +
+        EXPLORATION_PATTERNS + DISCUSSION_PATTERNS
+    )
 
     for pattern in all_bypass_patterns:
         if pattern in prompt_lower:
