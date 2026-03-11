@@ -535,8 +535,10 @@ def render_board_unicode(
     lines.append(title_line)
 
     version_text = format_msg(TrackBoardMessages.UNICODE_BOARD_TITLE, version=version)
-    padding = (total_width - 2 - len(version_text)) // 2
-    version_line = "║" + " " * padding + version_text + " " * (total_width - 2 - padding - len(version_text)) + "║"
+    # 使用 calculate_visual_width 而非 len()，以正確處理中文字元寬度
+    version_text_width = calculate_visual_width(version_text)
+    padding = (total_width - 2 - version_text_width) // 2
+    version_line = "║" + " " * padding + version_text + " " * (total_width - 2 - padding - version_text_width) + "║"
     lines.append(version_line)
 
     lines.append("╚" + "═" * (total_width - 2) + "╝")
