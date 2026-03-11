@@ -26,6 +26,7 @@ def ticket_validator_module():
         hooks_path / "ticket-id-validator-hook.py"
     )
     module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
     return module
 
 
