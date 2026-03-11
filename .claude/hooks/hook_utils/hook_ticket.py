@@ -16,7 +16,6 @@ Hook Ticket 操作模組
 - extract_version_from_ticket_id(ticket_id)
 - extract_wave_from_ticket_id(ticket_id)
 - validate_ticket_has_decision_tree(ticket_content, logger)
-- _parse_version_from_ticket_id(ticket_id) [deprecated]
 """
 
 import logging
