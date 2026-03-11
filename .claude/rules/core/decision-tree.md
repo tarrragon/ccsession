@@ -212,7 +212,7 @@ Skill 是預建的專用工具，優先於代理人派發。
           blocked? → 升級 PM
 ```
 
-**建立後審核檢查（強制）**：pending Ticket 認領前必須 `creation_accepted: true`，否則強制並行派發 acceptance-auditor + system-analyst 審核。豁免：DOC 類型或已審核父 Ticket 的子任務。
+**建立後審核檢查（強制）**：pending Ticket 認領前必須 `creation_accepted: true`，否則強制並行派發 acceptance-auditor + system-analyst 審核。豁免：已審核父 Ticket 的子任務。
 
 **Wave 邊界檢查（強制）**：當用戶指定「繼續 Wx」時，**必須**只處理該 Wave 的任務，禁止跨 Wave 執行。
 
@@ -369,4 +369,4 @@ Level 5: TDD 階段代理人 + thyme-python-developer
 ---
 
 **Last Updated**: 2026-03-11
-**Version**: 7.19.0 - 第八層操作指引提取至 references/decision-tree-checkpoint-details.md，原位留索引（0.1.0-W35-001.6）
+**Version**: 7.20.0 - 移除建立後審核的 DOC 類型豁免條件（0.1.0-W37-001）
