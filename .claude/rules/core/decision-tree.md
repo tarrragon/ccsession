@@ -182,6 +182,15 @@ Skill 是預建的專用工具，優先於代理人派發。
 - 發現了需要追蹤的問題嗎？→ 是 → **直接 /ticket create**
 - 要不要處理、優先級高不高 → 這是後續 acceptance-auditor 審核的職責，不是此刻的決策點
 
+### 子任務 vs 獨立 Ticket 判斷
+
+| 判斷條件 | 建立方式 | 範例 |
+|---------|---------|------|
+| 因執行當前 Ticket 而產生（因果關係） | 子任務（`/ticket create --parent {current_id}`） | 實作中發現需要先重構某模組 |
+| 與當前 Ticket 相同功能模組 | 子任務 | 同一個 feature 的額外驗收條件 |
+| 獨立問題、不同模組 | 獨立 Ticket | 發現另一個模組的 bug |
+| 跨版本的技術債 | 獨立 Ticket（歸入 todolist） | 長期架構改善 |
+
 > 識別條件、強制處理流程、禁止行為清單：.claude/rules/flows/plan-to-ticket-flow.md（「執行中額外發現」章節）
 
 ---
