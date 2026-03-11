@@ -249,6 +249,11 @@ def validate_input(input_data: Dict[str, Any], logger) -> bool:
     Returns:
         bool - 輸入格式是否正確
     """
+    # 防護：input_data 可能為 None（read_json_from_stdin 返回）
+    if input_data is None:
+        logger.error("輸入資料為 None")
+        return False
+
     # UserPromptSubmit Hook 至少需要 prompt 欄位
     if "prompt" not in input_data:
         logger.error("缺少必要欄位: prompt")
