@@ -27,7 +27,9 @@ from ticket_system.commands.track_board import (
     render_board_unicode,
     render_board_tree,
     render_board_ascii,
+    execute_board,
 )
+from ticket_system.lib.command_tracking_messages import TrackBoardMessages
 
 
 # ============================================================================
@@ -928,6 +930,283 @@ class TestRegressionPreviously:
         result = render_tree_node("non-existent", tickets_dict, tree_structure)
         # 應返回空清單，不應崩潰
         assert result == []
+
+
+# ============================================================================
+# 補充測試 - 覆蓋未測試的路徑（W37-002）
+# ============================================================================
+
+class TestRenderBoardTreeEmptyFiltered:
+    """測試當所有任務被過濾後的 NO_TASKS_TEXT 路徑（Lines 179-181）"""
+
+    def test_all_completed_no_show_all(self):
+        """當所有任務都是 completed 且 show_all=False 時顯示 NO_TASKS_TEXT"""
+        # 建立 completed tickets
+        tickets = [
+            {
+                "id": "0.31.0-W1-001",
+                "title": "Completed Task 1",
+                "status": "completed",
+                "priority": "P1"
+            },
+            {
+                "id": "0.31.0-W1-002",
+                "title": "Completed Task 2",
+                "status": "completed",
+                "priority": "P2"
+            }
+        ]
+
+        result = render_board_tree(tickets, "0.31.0", show_all=False)
+
+        # 應包含 NO_TASKS_TEXT
+        assert TrackBoardMessages.NO_TASKS_TEXT in result
+        # 不應包含任何 ticket ID
+        assert "W1-001" not in result
+        assert "W1-002" not in result
+
+
+class TestCalculateLayoutExceptions:
+    """測試 calculate_layout 中異常情況（Lines 487-488, 497）"""
+
+    def test_terminal_size_exception_fallback(self):
+        """shutil.get_terminal_size() 拋出異常時應使用預設寬度 120"""
+        cards_by_status = {
+            "pending": [],
+            "in_progress": [],
+            "completed": [],
+            "blocked": []
+        }
+        args = argparse.Namespace(ascii=False, width=None)
+
+        # Mock get_terminal_size 拋出異常
+        with patch('shutil.get_terminal_size') as mock_size:
+            mock_size.side_effect = Exception("Terminal size error")
+            result = calculate_layout(cards_by_status, args)
+
+        # 應使用預設寬度 120
+        assert result["terminal_width"] == 120
+        assert "card_width" in result
+
+    def test_custom_width_parameter(self):
+        """args.width 自訂寬度應被優先使用（Line 497）"""
+        cards_by_status = {
+            "pending": [],
+            "in_progress": [],
+            "completed": [],
+            "blocked": []
+        }
+        args = argparse.Namespace(ascii=False, width=25)
+
+        with patch('shutil.get_terminal_size') as mock_size:
+            mock_size.return_value.columns = 120
+            result = calculate_layout(cards_by_status, args)
+
+        # 應使用自訂寬度 25，而不是計算值
+        assert result["card_width"] == 25
+
+
+class TestRenderBoardUnicodeAsymmetric:
+    """測試 render_board_unicode 中的不對稱卡片分佈（Lines 616, 622-626）"""
+
+    def test_asymmetric_card_distribution_with_empty_cells(self):
+        """當各欄卡片數不同時應填充空白行（Line 616），測試空行填充"""
+        # 建立明確的不對稱分佈：
+        # pending: 2 行（2 張卡片，每張 3 行）
+        # in_progress: 0 行
+        # completed: 1 行（1 張卡片，3 行）
+        # blocked: 0 行
+        cards_by_status = {
+            "pending": [
+                {"id": "W1-001", "title": "Task 1", "priority": "[P1]", "height": 3},
+                {"id": "W1-002", "title": "Task 2", "priority": "[P1]", "height": 3}
+            ],
+            "in_progress": [],
+            "completed": [
+                {"id": "W3-001", "title": "Done", "priority": "[P1]", "height": 3}
+            ],
+            "blocked": []
+        }
+        layout = {
+            "card_width": 20,
+            "max_rows": 6,  # max(2*3, 0, 1*3, 0) = 6
+            "use_ascii": False
+        }
+
+        result = render_board_unicode(cards_by_status, layout, "0.31.0")
+
+        # 應包含所有卡片
+        assert "W1-001" in result
+        assert "W1-002" in result
+        assert "W3-001" in result
+        # 應能正確處理不對稱分佈並填充空白行（不應崩潰）
+
+    def test_row_separator_lines_multirow(self):
+        """測試行間分隔線（Lines 622-626）- 必須有 2+ 行才能觸發"""
+        # 建立 3 行卡片，確保觸發分隔線邏輯
+        cards_by_status = {
+            "pending": [
+                {"id": "W1-001", "title": "Task 1", "priority": "[P1]", "height": 3},
+                {"id": "W1-002", "title": "Task 2", "priority": "[P1]", "height": 3},
+                {"id": "W1-003", "title": "Task 3", "priority": "[P1]", "height": 3}
+            ],
+            "in_progress": [
+                {"id": "W2-001", "title": "In Progress", "priority": "[P0]", "height": 3}
+            ],
+            "completed": [],
+            "blocked": []
+        }
+        layout = {
+            "card_width": 20,
+            "max_rows": 9,  # 3 行，每行 3 行內容
+            "use_ascii": False
+        }
+
+        result = render_board_unicode(cards_by_status, layout, "0.31.0")
+
+        # 應包含行分隔線（├── 的 Unicode 版本 ├ 和 ┤）
+        assert "├" in result
+        assert "┤" in result
+        # 行分隔線應出現多次（在每行之間）
+        assert result.count("├") >= 2  # 至少 2 行分隔線
+
+
+class TestRenderBoardAsciiIdTruncation:
+    """測試 render_board_ascii 中超長 ID 截斷（Line 684）"""
+
+    def test_long_id_string_truncation(self):
+        """當 id_string 超過 40 字元時應截斷加 '...'"""
+        # 建立足夠多的卡片讓 ID 字串超過 40 字元
+        cards_by_status = {
+            "pending": [
+                {"id": "W1-001"},
+                {"id": "W1-002"},
+                {"id": "W1-003"},
+                {"id": "W1-004"},
+                {"id": "W1-005"},
+                {"id": "W1-006"},
+                {"id": "W1-007"}
+            ],
+            "in_progress": [],
+            "completed": [],
+            "blocked": []
+        }
+        layout = {}
+
+        result = render_board_ascii(cards_by_status, layout)
+
+        # 應包含 "..." 表示截斷
+        assert "..." in result
+
+
+class TestExecuteBoardMainFunction:
+    """測試 execute_board 主入口函式（Lines 707-727）"""
+
+    def test_execute_board_success(self):
+        """正常執行 board 命令成功路徑"""
+        args = argparse.Namespace(
+            wave=None,
+            all=False
+        )
+
+        # Mock list_tickets
+        test_tickets = [
+            {
+                "id": "0.31.0-W1-001",
+                "title": "Test Task",
+                "status": "pending",
+                "priority": "P1"
+            }
+        ]
+
+        with patch('ticket_system.commands.track_board.list_tickets', return_value=test_tickets):
+            with patch('builtins.print') as mock_print:
+                result = execute_board(args, "0.31.0")
+
+        # 應返回 0（成功）
+        assert result == 0
+        # 應調用 print
+        assert mock_print.called
+
+    def test_execute_board_with_wave_filter(self):
+        """execute_board 應支援 Wave 過濾（Line 712-714）"""
+        args = argparse.Namespace(
+            wave="W1",
+            all=False
+        )
+
+        test_tickets = [
+            {
+                "id": "0.31.0-W1-001",
+                "title": "Wave 1 Task",
+                "status": "pending",
+                "priority": "P1"
+            },
+            {
+                "id": "0.31.0-W2-001",
+                "title": "Wave 2 Task",
+                "status": "pending",
+                "priority": "P1"
+            }
+        ]
+
+        with patch('ticket_system.commands.track_board.list_tickets', return_value=test_tickets):
+            with patch('builtins.print') as mock_print:
+                result = execute_board(args, "0.31.0")
+
+        # 應返回 0（成功）
+        assert result == 0
+        # print 輸出應只包含 W1
+        output_calls = [str(call) for call in mock_print.call_args_list]
+        combined_output = " ".join(output_calls)
+        # W1-001 應在輸出中，W2-001 應被過濾
+        assert "W1-001" in combined_output
+
+    def test_execute_board_exception_handling(self):
+        """execute_board 應捕獲異常並返回 1（Lines 725-727）"""
+        args = argparse.Namespace(
+            wave=None,
+            all=False
+        )
+
+        # Mock list_tickets 拋出異常
+        with patch('ticket_system.commands.track_board.list_tickets', side_effect=Exception("Load error")):
+            with patch('builtins.print') as mock_print:
+                result = execute_board(args, "0.31.0")
+
+        # 應返回 1（失敗）
+        assert result == 1
+        # 應輸出錯誤訊息
+        assert mock_print.called
+
+
+class TestRenderBoardTreeWithAllFlag:
+    """測試 render_board_tree show_all 參數的完整覆蓋"""
+
+    def test_show_all_includes_completed_tasks(self):
+        """show_all=True 應包含已完成任務"""
+        tickets = [
+            {
+                "id": "0.31.0-W1-001",
+                "title": "Pending Task",
+                "status": "pending",
+                "priority": "P1"
+            },
+            {
+                "id": "0.31.0-W1-002",
+                "title": "Completed Task",
+                "status": "completed",
+                "priority": "P1"
+            }
+        ]
+
+        result = render_board_tree(tickets, "0.31.0", show_all=True)
+
+        # 兩個任務都應在輸出中
+        assert "W1-001" in result
+        assert "W1-002" in result
+        assert "Pending Task" in result
+        assert "Completed Task" in result
 
 
 if __name__ == "__main__":
