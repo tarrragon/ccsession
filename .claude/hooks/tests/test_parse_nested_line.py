@@ -283,6 +283,98 @@ config:
         # 驗證結果相同
         assert result1 == result2
 
+    def test_two_space_indented_list_items(self):
+        """測試 2 格縮排的列表項目（真實 Ticket 格式）"""
+        content = """---
+id: "0.1.0-W34-011"
+where:
+  layer: hooks
+  files:
+  - hook_utils/hook_ticket.py
+  - tests/test_parse.py
+---
+
+# 執行日誌
+"""
+        result = parse_ticket_frontmatter(content)
+
+        # 驗證結構
+        assert result['id'] == "0.1.0-W34-011"
+        assert isinstance(result['where'], dict)
+        assert result['where']['layer'] == "hooks"
+
+        # 驗證列表項目被正確累積
+        files = result['where']['files']
+        assert isinstance(files, str)
+        assert "hook_utils/hook_ticket.py" in files
+        assert "tests/test_parse.py" in files
+
+        # 驗證項目用換行符分隔
+        file_list = [f for f in files.split('\n') if f]
+        assert len(file_list) == 2
+        assert file_list[0] == "hook_utils/hook_ticket.py"
+        assert file_list[1] == "tests/test_parse.py"
+
+    def test_four_space_indented_list_items(self):
+        """測試 4 格縮排的列表項目（深層嵌套）"""
+        content = """---
+id: "0.1.0-W34-012"
+where:
+  files:
+    - deep_item1.py
+    - deep_item2.py
+---
+
+# 執行日誌
+"""
+        result = parse_ticket_frontmatter(content)
+
+        # 驗證結構
+        assert result['id'] == "0.1.0-W34-012"
+        assert isinstance(result['where'], dict)
+
+        # 驗證 4 格縮排的列表項目
+        files = result['where']['files']
+        assert isinstance(files, str)
+        assert "deep_item1.py" in files
+        assert "deep_item2.py" in files
+
+        file_list = [f for f in files.split('\n') if f]
+        assert len(file_list) == 2
+        assert file_list[0] == "deep_item1.py"
+        assert file_list[1] == "deep_item2.py"
+
+    def test_mixed_nested_structure_with_lists(self):
+        """測試混合嵌套結構：字典 + 列表項目"""
+        content = """---
+id: "0.1.0-W34-013"
+where:
+  layer: hooks
+  files:
+  - file1.py
+  - file2.py
+  depth: 2
+---
+
+# 執行日誌
+"""
+        result = parse_ticket_frontmatter(content)
+
+        # 驗證結構
+        assert result['id'] == "0.1.0-W34-013"
+        where = result['where']
+
+        # 驗證字典項目
+        assert where['layer'] == "hooks"
+        assert where['depth'] == "2"
+
+        # 驗證列表項目
+        files = where['files']
+        file_list = [f for f in files.split('\n') if f]
+        assert len(file_list) == 2
+        assert file_list[0] == "file1.py"
+        assert file_list[1] == "file2.py"
+
 
 if __name__ == "__main__":
     # 執行所有測試
