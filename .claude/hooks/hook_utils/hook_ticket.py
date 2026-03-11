@@ -96,13 +96,15 @@ def _skip_empty_or_comment(line: str) -> bool:
 def _parse_nested_line(
     line: str,
     current_key: Optional[str],
-    multiline_marker: Optional[str]
+    multiline_marker: Optional[str],
+    current_nested_key: Optional[str] = None
 ) -> _NestedLineResult:
     """處理嵌套行（以 2 個空格開頭的縮排行）
 
     嵌套行可能是：
     1. 多行字串的延續行（若 multiline_marker 已設定）
     2. 嵌套鍵值對（若無 multiline_marker）
+    3. 列表項目（以 "- " 開頭）
 
     此函式無副作用，回傳明確的結果以供呼叫端處理。
 
@@ -110,6 +112,7 @@ def _parse_nested_line(
         line: 嵌套行（縮排）
         current_key: 當前頂層鍵名
         multiline_marker: 多行標記（|, >, |-, >-）或 None
+        current_nested_key: 當前嵌套鍵名（用於列表項目累積）
 
     Returns:
         _NestedLineResult: 含有：
@@ -117,6 +120,7 @@ def _parse_nested_line(
             - update_action: (鍵名, 值, 是否為嵌套字典) 或 None
               當為多行模式時，值為增量內容（呼叫端需累積）
               當為嵌套鍵值對時，值為新增的鍵值對
+              當為列表項目時，值為列表項目內容（呼叫端負責累積）
     """
     nested_line = line.strip()
 
@@ -136,7 +140,18 @@ def _parse_nested_line(
                 update_action=None
             )
 
-    # 路徑 2：嵌套鍵值對
+    # 路徑 2：列表項目（以 "- " 開頭）
+    if nested_line.startswith('- ') and current_nested_key and current_key:
+        # 列表項目內容
+        item_content = nested_line[2:]  # 去除 "- " 前綴
+        # 特殊標記：使用 None 作為鍵名的第一個元素，表示這是列表項目
+        # 呼叫端會識別 None 並累積到 current_nested_key
+        return _NestedLineResult(
+            multiline_marker=None,
+            update_action=(current_nested_key, item_content, False)
+        )
+
+    # 路徑 3：嵌套鍵值對
     if ':' in nested_line:
         nested_key, nested_value = nested_line.split(':', 1)
         nested_key = nested_key.strip()
@@ -159,6 +174,9 @@ def _parse_nested_line(
 def _parse_yaml_lines(frontmatter_text: str) -> dict:
     """解析 YAML frontmatter 文本（逐行）
 
+    支援列表項目：當遇到 "key:" 後跟著 "  - item" 格式的行時，
+    會將這些項目累積到該鍵底下（以換行符分隔）。
+
     Args:
         frontmatter_text: frontmatter 內容（已去除---標記）
 
@@ -167,13 +185,41 @@ def _parse_yaml_lines(frontmatter_text: str) -> dict:
     """
     result = {}
     current_key = None
+    current_nested_key = None  # 追蹤嵌套鍵（用於列表項目的累積）
     multiline_marker = None
 
     for line in frontmatter_text.split('\n'):
         if _skip_empty_or_comment(line):
             continue
-        if line.startswith('  ') and not line.startswith('    '):
-            nested_result = _parse_nested_line(line, current_key, multiline_marker)
+
+        # 判斷行的縮排層級
+        if line.startswith('    '):
+            # 4 格以上：深層嵌套（如列表項目或多層嵌套）
+            # 如果 current_nested_key 存在，累積到該鍵
+            if current_nested_key and current_key:
+                nested_line = line.strip()
+                # 處理列表項目（以 - 開頭）或其他深層內容
+                if not isinstance(result.get(current_key), dict):
+                    result[current_key] = {}
+
+                nested_dict = result[current_key]
+                if current_nested_key not in nested_dict:
+                    nested_dict[current_nested_key] = ""
+
+                # 累積內容（處理列表項目或其他深層行）
+                if nested_line.startswith('- '):
+                    # 列表項目：去除 '- ' 前綴
+                    item_content = nested_line[2:]
+                else:
+                    # 其他深層行
+                    item_content = nested_line
+
+                # 累積內容
+                nested_dict[current_nested_key] += "\n" + item_content if nested_dict[current_nested_key] else item_content
+            continue
+        elif line.startswith('  '):
+            # 2 格：嵌套鍵值對、多行標記或列表項目
+            nested_result = _parse_nested_line(line, current_key, multiline_marker, current_nested_key)
             multiline_marker = nested_result.multiline_marker
 
             # 根據回傳的 update_action 更新 result
@@ -184,15 +230,29 @@ def _parse_yaml_lines(frontmatter_text: str) -> dict:
                     if not isinstance(result.get(key), dict):
                         result[key] = {}
                     result[key].update(value)
+                    # 記錄最後更新的嵌套鍵（用於後續列表項目的累積）
+                    if value:
+                        current_nested_key = list(value.keys())[0]
                 else:
-                    # 多行模式：累積內容
-                    # 邏輯與原始代碼一致：第一行直接設定，後續行前面加換行符
-                    if key not in result:
-                        result[key] = ""
-                    result[key] += "\n" + value if result[key] else value
+                    # 多行模式或列表項目：累積內容
+                    # 如果 current_nested_key 存在且 current_key 是字典，視為列表項目
+                    if current_nested_key and isinstance(result.get(current_key), dict):
+                        # 列表項目模式：累積到 current_nested_key
+                        nested_dict = result[current_key]
+                        if current_nested_key not in nested_dict:
+                            nested_dict[current_nested_key] = ""
+                        nested_dict[current_nested_key] += "\n" + value if nested_dict[current_nested_key] else value
+                    else:
+                        # 多行模式：累積到 key（頂層）
+                        if key not in result:
+                            result[key] = ""
+                        result[key] += "\n" + value if result[key] else value
             continue
+
         if ':' in line:
+            # 頂層鍵值對
             current_key, multiline_marker = _parse_top_level_pair(line, result)
+            current_nested_key = None  # 重設嵌套鍵追蹤
 
     return result
 

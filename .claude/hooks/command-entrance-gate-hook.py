@@ -234,6 +234,12 @@ DISCUSSION_PATTERNS = [
     "why",     # 英文問句
 ]
 
+# 管理操作白名單合併（is_management_operation 使用）
+ALL_BYPASS_PATTERNS = (
+    TICKET_PATTERNS + MANAGEMENT_PATTERNS + DISPATCH_PATTERNS +
+    EXPLORATION_PATTERNS + DISCUSSION_PATTERNS
+)
+
 # Exit Code
 EXIT_SUCCESS = 0
 EXIT_ERROR = 1
@@ -320,13 +326,8 @@ def is_management_operation(prompt: str, logger) -> bool:
                 logger.info(f"識別為短回答（正則模式 {pattern}）: {prompt}")
                 return True
 
-    # 合併所有白名單模式（動態拼接）
-    all_bypass_patterns = (
-        TICKET_PATTERNS + MANAGEMENT_PATTERNS + DISPATCH_PATTERNS +
-        EXPLORATION_PATTERNS + DISCUSSION_PATTERNS
-    )
-
-    for pattern in all_bypass_patterns:
+    # 檢查管理操作白名單
+    for pattern in ALL_BYPASS_PATTERNS:
         if pattern in prompt_lower:
             logger.info(f"識別為管理/討論操作（白名單）: {pattern}")
             return True
