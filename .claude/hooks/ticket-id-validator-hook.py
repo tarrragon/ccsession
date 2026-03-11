@@ -55,8 +55,10 @@ TICKET_ID_MARKERS = [
 ]
 
 # Wave 合理範圍
+# 設定為 999 以容許任意大小的 Wave 號
+# （實際專案現已執行到 W37，舊的 WAVE_MAX=10 會導致 W10+ 的 Ticket 誤判為無效）
 WAVE_MIN = 1
-WAVE_MAX = 10
+WAVE_MAX = 999
 
 # Exit Code
 EXIT_SUCCESS = 0
