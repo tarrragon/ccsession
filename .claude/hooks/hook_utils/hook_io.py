@@ -22,6 +22,26 @@ from pathlib import Path
 from typing import List, Optional, Tuple, Dict, Any
 
 
+# ============================================================================
+# 快取變數（模組級，用於 W39-002 效能改善）
+# ============================================================================
+
+_handoff_recovery_cache: Optional[bool] = None
+"""Process-level 快取：is_handoff_recovery_mode() 的結果（同一 session 內快取）"""
+
+
+def clear_handoff_recovery_cache() -> None:
+    """清空 Handoff 恢復模式快取（測試輔助函式）
+
+    將 _handoff_recovery_cache 重設為 None，
+    供測試隔離或其他需要重新掃描的場景使用。
+
+    生產環境不應呼叫此函式。
+    """
+    global _handoff_recovery_cache
+    _handoff_recovery_cache = None
+
+
 def _extract_field(
     input_data: "dict | None",
     field_name: str,
@@ -221,10 +241,14 @@ def extract_tool_response(
 def is_handoff_recovery_mode(
     logger: "logging.Logger | None" = None
 ) -> bool:
-    """檢查是否處於 Handoff 恢復模式
+    """檢查是否處於 Handoff 恢復模式（快取版本）
 
     Handoff 恢復時，Claude 自動讀取 Ticket 和派發代理人，
     這些操作應被豁免，允許恢復流程正常進行。
+
+    本函式使用 Process-level 快取：
+    - 首次呼叫：執行 glob 掃描，快取結果
+    - 後續呼叫：直接返回快取結果，避免重複 I/O
 
     Args:
         logger: 可選 Logger 實例，用於記錄詳細資訊
@@ -236,6 +260,14 @@ def is_handoff_recovery_mode(
     - 檢查 .claude/handoff/pending 目錄是否存在
     - 目錄內是否有任何 .json 檔案
     """
+    global _handoff_recovery_cache
+
+    # 快取命中：直接返回快取結果
+    if _handoff_recovery_cache is not None:
+        if logger:
+            logger.debug("使用快取的 Handoff 恢復模式結果: {}".format(_handoff_recovery_cache))
+        return _handoff_recovery_cache
+
     try:
         # 嘗試從環境變數或尋找 CLAUDE.md 取得專案根目錄
         from .hook_logging import get_project_root as _get_project_root
@@ -253,15 +285,19 @@ def is_handoff_recovery_mode(
             if any(handoff_pending_dir.glob("*.json")):
                 if logger:
                     logger.info("檢測到 Handoff 恢復模式")
+                _handoff_recovery_cache = True
                 return True
 
         if logger:
             logger.debug("未檢測到 Handoff 恢復模式")
+        _handoff_recovery_cache = False
         return False
 
     except Exception as e:
         if logger:
             logger.warning("檢查 Handoff 恢復模式時發生錯誤: {}".format(e))
+        # 錯誤時快取 False（安全預設）
+        _handoff_recovery_cache = False
         return False
 
 
