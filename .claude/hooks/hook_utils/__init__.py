@@ -23,6 +23,8 @@ from .hook_io import (
     read_json_from_stdin,
     extract_tool_input,
     extract_tool_response,
+    is_handoff_recovery_mode,
+    validate_hook_input,
 )
 from .hook_ticket import (
     parse_ticket_frontmatter,
@@ -46,6 +48,8 @@ __all__ = [
     "read_json_from_stdin",
     "extract_tool_input",
     "extract_tool_response",
+    "is_handoff_recovery_mode",
+    "validate_hook_input",
     "parse_ticket_frontmatter",
     "parse_ticket_date",
     "check_error_patterns_changed",

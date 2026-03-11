@@ -236,6 +236,26 @@ def simplify_ticket_id(full_id: str) -> str:
         return full_id
 
 
+def get_char_display_width(char: str) -> int:
+    """
+    計算單一字元的顯示寬度（考慮中文字元和全形字元）
+
+    寬字元（CJK 字元、全形標點等）佔 2 寬，其他字元佔 1 寬
+
+    Args:
+        char: 單一字元
+
+    Returns:
+        int: 顯示寬度（1 或 2）
+
+    說明：
+        east_asian_width() 回傳: W(寬), F(全形), A(歧義), H(半形), N(中性), Na(狹義)
+        W 和 F 視為寬字元（2 寬），其他視為窄字元（1 寬）
+    """
+    width_category = unicodedata.east_asian_width(char)
+    return 2 if width_category in ('W', 'F') else 1
+
+
 def calculate_visual_width(text: str) -> int:
     """
     計算文本的視覺寬度（考慮中文字元和全形字元）
@@ -250,16 +270,12 @@ def calculate_visual_width(text: str) -> int:
 
     邏輯：
         1. 逐字遍歷
-        2. 使用 unicodedata.east_asian_width() 判斷字元寬度等級
-        3. W/F（Wide/Fullwidth）= 2 寬，其他 = 1 寬
+        2. 使用 get_char_display_width() 計算單一字元寬度
+        3. 累計總寬度
     """
     total_width = 0
     for char in text:
-        # east_asian_width() 回傳: W(寬), F(全形), A(歧義), H(半形), N(中性), Na(狹義)
-        # W 和 F 視為寬字元（2 寬），其他視為窄字元（1 寬）
-        width_category = unicodedata.east_asian_width(char)
-        char_width = 2 if width_category in ('W', 'F') else 1
-        total_width += char_width
+        total_width += get_char_display_width(char)
     return total_width
 
 
@@ -318,9 +334,7 @@ def truncate_title(title: str, max_length: int = 15) -> str:
     truncate_pos = len(title)
 
     for i, char in enumerate(title):
-        # 使用 unicodedata.east_asian_width() 判斷字元寬度等級
-        width_category = unicodedata.east_asian_width(char)
-        char_width = 2 if width_category in ('W', 'F') else 1
+        char_width = get_char_display_width(char)
 
         # 當加入當前字元會超過上限時截斷
         if total_width + char_width > max_length:
@@ -535,8 +549,10 @@ def render_board_unicode(
     lines.append(title_line)
 
     version_text = format_msg(TrackBoardMessages.UNICODE_BOARD_TITLE, version=version)
-    padding = (total_width - 2 - len(version_text)) // 2
-    version_line = "║" + " " * padding + version_text + " " * (total_width - 2 - padding - len(version_text)) + "║"
+    # 使用 calculate_visual_width 而非 len()，以正確處理中文字元寬度
+    version_text_width = calculate_visual_width(version_text)
+    padding = (total_width - 2 - version_text_width) // 2
+    version_line = "║" + " " * padding + version_text + " " * (total_width - 2 - padding - version_text_width) + "║"
     lines.append(version_line)
 
     lines.append("╚" + "═" * (total_width - 2) + "╝")

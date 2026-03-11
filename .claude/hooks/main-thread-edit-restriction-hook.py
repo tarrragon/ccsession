@@ -64,7 +64,7 @@ from typing import Dict, Any, Optional, Tuple
 # 設置 sys.path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from hook_utils import setup_hook_logging, run_hook_safely, get_project_root, save_check_log
+from hook_utils import setup_hook_logging, run_hook_safely, get_project_root, save_check_log, read_json_from_stdin
 from lib.hook_messages import GateMessages, CoreMessages, format_message
 
 
@@ -324,8 +324,14 @@ def main() -> int:
         logger.info("Main Thread Edit Restriction Hook 啟動")
 
         # 步驟 2: 讀取 JSON 輸入
-        input_data = json.load(sys.stdin)
-        logger.debug(f"輸入 JSON: {json.dumps(input_data, ensure_ascii=False)[:200]}...")
+        input_data = read_json_from_stdin(logger)
+        if input_data:
+            logger.debug(f"輸入 JSON: {json.dumps(input_data, ensure_ascii=False)[:200]}...")
+        else:
+            logger.debug("輸入為空或解析失敗，返回預設允許")
+            result = generate_hook_output(True, "輸入為空，預設允許")
+            print(json.dumps(result, ensure_ascii=False))
+            return EXIT_ALLOW
 
         # 步驟 3: 取得工具資訊和檔案路徑
         tool_name = input_data.get("tool_name", "")
@@ -361,18 +367,6 @@ def main() -> int:
         exit_code = EXIT_ALLOW if is_allowed else EXIT_BLOCK
         logger.info(f"Hook 檢查完成，exit code: {exit_code}")
         return exit_code
-
-    except json.JSONDecodeError as e:
-        logger.error(f"JSON 解析錯誤: {e}")
-        error_output = {
-            "hookSpecificOutput": {
-                "hookEventName": "PreToolUse",
-                "permissionDecision": "allow",
-                "permissionDecisionReason": "JSON 解析錯誤，預設允許"
-            }
-        }
-        print(json.dumps(error_output, ensure_ascii=False))
-        return EXIT_ALLOW
 
     except Exception as e:
         logger.error(f"Hook 執行錯誤: {e}")

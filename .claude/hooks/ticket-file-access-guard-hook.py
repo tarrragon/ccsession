@@ -42,7 +42,10 @@ from pathlib import Path
 # 加入 hook_utils 路徑（相同目錄）
 sys.path.insert(0, str(Path(__file__).parent))
 
-from hook_utils import setup_hook_logging, run_hook_safely, get_project_root, save_check_log
+from hook_utils import (
+    setup_hook_logging, run_hook_safely, get_project_root, save_check_log,
+    read_json_from_stdin, is_handoff_recovery_mode
+)
 
 from datetime import datetime
 from typing import Dict, Any, Tuple
@@ -109,24 +112,7 @@ def is_internal_call() -> bool:
     return os.getenv("TICKET_TRACKER_INTERNAL") == "1"
 
 
-def is_handoff_recovery_mode(logger) -> bool:
-    """
-    檢查是否處於 Handoff 恢復模式
-
-    Handoff 恢復時，Claude 自動讀取 Ticket 和派發代理人，
-    這些操作應被豁免，允許恢復流程正常進行。
-    """
-    project_dir = get_project_root()
-    handoff_pending_dir = project_dir / ".claude" / "handoff" / "pending"
-
-    # 檢查是否存在 pending Handoff 任務
-    if handoff_pending_dir.exists() and handoff_pending_dir.is_dir():
-        # 檢查是否有任何 pending JSON 檔案
-        if any(handoff_pending_dir.glob("*.json")):
-            logger.debug("檢測到 Handoff 恢復模式")
-            return True
-
-    return False
+# is_handoff_recovery_mode 已遷移至 hook_utils
 
 
 def is_body_section_edit(old_string: str, logger) -> bool:
@@ -291,29 +277,15 @@ def main() -> int:
     try:
         logger.info("Ticket File Access Guard Hook 啟動")
 
-        # 防禦性編程：處理空輸入或無效 JSON
-        input_text = sys.stdin.read().strip()
-        if not input_text:
-            logger.warning("輸入為空，返回預設允許")
+        # 讀取 JSON 輸入
+        input_data = read_json_from_stdin(logger)
+        if not input_data:
+            logger.warning("輸入為空或解析失敗，返回預設允許")
             error_output = {
                 "hookSpecificOutput": {
                     "hookEventName": "PreToolUse",
                     "permissionDecision": "allow",
-                    "permissionDecisionReason": "輸入為空，預設允許"
-                }
-            }
-            print(json.dumps(error_output, ensure_ascii=False))
-            return EXIT_ALLOW
-
-        try:
-            input_data = json.loads(input_text)
-        except json.JSONDecodeError as parse_error:
-            logger.error(f"JSON 解析錯誤: {parse_error}，輸入內容: {input_text[:100]}")
-            error_output = {
-                "hookSpecificOutput": {
-                    "hookEventName": "PreToolUse",
-                    "permissionDecision": "allow",
-                    "permissionDecisionReason": f"JSON 解析錯誤，預設允許: {str(parse_error)}"
+                    "permissionDecisionReason": "輸入為空或解析失敗，預設允許"
                 }
             }
             print(json.dumps(error_output, ensure_ascii=False))

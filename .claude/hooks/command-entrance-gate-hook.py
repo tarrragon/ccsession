@@ -81,6 +81,7 @@ from hook_utils import (
     find_ticket_files,
     get_current_version_from_todolist,
     save_check_log,
+    validate_hook_input,
 )
 from lib.hook_messages import GateMessages, CoreMessages, format_message
 
@@ -131,7 +132,7 @@ DEVELOPMENT_KEYWORDS = (
 # ============================================================================
 
 # 短回答白名單（確認、同意等，長度 <= 15 字元）
-SHORT_ANSWER_PATTERNS = [
+SHORT_ANSWER_PATTERNS = frozenset([
     # 肯定
     "是", "好", "確認", "同意", "ok", "yes", "y",
     "對", "沒錯", "没错",
@@ -143,7 +144,7 @@ SHORT_ANSWER_PATTERNS = [
     # 數字選擇（0-20）
     "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10",
     "11", "12", "13", "14", "15", "16", "17", "18", "19", "20",
-]
+])
 
 # 短回答正則模式（長度 <= 15 的特殊格式，需完整匹配整個字串）
 SHORT_ANSWER_REGEX_PATTERNS = [
@@ -233,28 +234,18 @@ DISCUSSION_PATTERNS = [
     "why",     # 英文問句
 ]
 
+# 管理操作白名單合併（is_management_operation 使用）
+ALL_BYPASS_PATTERNS = (
+    TICKET_PATTERNS + MANAGEMENT_PATTERNS + DISPATCH_PATTERNS +
+    EXPLORATION_PATTERNS + DISCUSSION_PATTERNS
+)
+
 # Exit Code
 EXIT_SUCCESS = 0
 EXIT_ERROR = 1
 EXIT_BLOCK = 2
 
-def validate_input(input_data: Dict[str, Any], logger) -> bool:
-    """
-    驗證輸入格式
-
-    Args:
-        input_data: Hook 輸入資料
-        logger: 日誌物件
-
-    Returns:
-        bool - 輸入格式是否正確
-    """
-    # UserPromptSubmit Hook 至少需要 prompt 欄位
-    if "prompt" not in input_data:
-        logger.error("缺少必要欄位: prompt")
-        return False
-
-    return True
+# validate_input 已遷移至 hook_utils.validate_hook_input
 
 # ============================================================================
 # 開發命令識別
@@ -335,13 +326,8 @@ def is_management_operation(prompt: str, logger) -> bool:
                 logger.info(f"識別為短回答（正則模式 {pattern}）: {prompt}")
                 return True
 
-    # 合併所有白名單模式（動態拼接）
-    all_bypass_patterns = (
-        TICKET_PATTERNS + MANAGEMENT_PATTERNS + DISPATCH_PATTERNS +
-        EXPLORATION_PATTERNS + DISCUSSION_PATTERNS
-    )
-
-    for pattern in all_bypass_patterns:
+    # 檢查管理操作白名單
+    for pattern in ALL_BYPASS_PATTERNS:
         if pattern in prompt_lower:
             logger.info(f"識別為管理/討論操作（白名單）: {pattern}")
             return True
@@ -763,7 +749,7 @@ def main() -> int:
         input_data = read_json_from_stdin(logger)
 
         # 步驟 3: 驗證輸入格式
-        if not validate_input(input_data, logger):
+        if not validate_hook_input(input_data, logger, ("prompt",)):
             logger.error("輸入格式錯誤")
             print(json.dumps({
                 "hookSpecificOutput": {"hookEventName": "UserPromptSubmit"}

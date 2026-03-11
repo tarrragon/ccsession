@@ -62,6 +62,7 @@ from hook_utils import (
     save_check_log,
     extract_version_from_ticket_id,
     extract_wave_from_ticket_id,
+    validate_hook_input,
 )
 from lib.hook_messages import GateMessages, CoreMessages, AskUserQuestionMessages, format_message
 
@@ -119,23 +120,7 @@ TICKET_ID_PATTERN = r'\d+\.\d+\.\d+-W\d+-\d+(?:\.\d+)*'
 # ============================================================================
 
 
-def validate_input(input_data: Dict[str, Any], logger) -> bool:
-    """
-    驗證輸入格式
-
-    Args:
-        input_data: Hook 輸入資料
-        logger: 日誌物件
-
-    Returns:
-        bool - 輸入格式是否正確
-    """
-    # PreToolUse Hook 需要 tool_name 和 tool_input
-    if "tool_name" not in input_data or "tool_input" not in input_data:
-        logger.error("缺少必要欄位: tool_name 或 tool_input")
-        return False
-
-    return True
+# validate_input 已遷移至 hook_utils.validate_hook_input
 
 
 # ============================================================================
@@ -828,7 +813,7 @@ def _parse_and_validate_input(input_data: Dict[str, Any], logger) -> Optional[Tu
         _output_allow_json()
         return None
 
-    if not validate_input(input_data, logger):
+    if not validate_hook_input(input_data, logger, ("tool_name", "tool_input")):
         logger.error("輸入格式錯誤")
         _output_allow_json()
         return None
