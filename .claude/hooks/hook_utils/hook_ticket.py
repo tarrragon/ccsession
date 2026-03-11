@@ -759,3 +759,67 @@ def validate_ticket_has_decision_tree(ticket_content: str, logger: "Optional[log
     if logger:
         logger.debug("未在 Ticket 中找到決策樹欄位")
     return False
+
+
+def validate_ticket_unified(
+    ticket_id: str,
+    project_root: Optional[Path] = None,
+    logger: Optional[logging.Logger] = None
+) -> Tuple[bool, Optional[str]]:
+    """統一的 Ticket 完整性驗證
+
+    整合 find_ticket_file + 讀取內容 + validate_ticket_has_decision_tree
+    的完整驗證流程，供 agent-ticket-validation-hook 等 Hook 使用。
+
+    Args:
+        ticket_id: Ticket ID，如 "0.1.0-W39-001"
+        project_root: 專案根目錄；若為 None 則自動呼叫 get_project_root()
+        logger: 可選 Logger 實例
+
+    Returns:
+        Tuple[bool, Optional[str]]: (is_valid, error_message)
+            - (True, None): Ticket 存在且包含決策樹欄位
+            - (False, "錯誤訊息"): 驗證失敗及原因
+
+    Examples:
+        >>> is_valid, error_msg = validate_ticket_unified("0.1.0-W39-001", logger=logger)
+        >>> if not is_valid:
+        ...     logger.error(error_msg)
+        ...     return False, error_msg
+    """
+    # 取得 project_root
+    if project_root is None:
+        project_root = get_project_root()
+
+    # 步驟 1：尋找 Ticket 檔案
+    ticket_path = find_ticket_file(ticket_id, project_root=project_root, logger=logger)
+    if not ticket_path:
+        msg = "找不到 Ticket: {}".format(ticket_id)
+        if logger:
+            logger.error(msg)
+        return False, msg
+
+    # 步驟 2：讀取 Ticket 內容
+    try:
+        content = ticket_path.read_text(encoding="utf-8")
+        if not content:
+            msg = "Ticket 檔案內容為空: {}".format(ticket_id)
+            if logger:
+                logger.error(msg)
+            return False, msg
+    except Exception as e:
+        msg = "無法讀取 Ticket 檔案: {}".format(ticket_id)
+        if logger:
+            logger.error("{}: {}".format(msg, e))
+        return False, msg
+
+    # 步驟 3：驗證決策樹欄位
+    if not validate_ticket_has_decision_tree(content, logger):
+        msg = "Ticket {} 缺少決策樹欄位，為無效 Ticket".format(ticket_id)
+        if logger:
+            logger.error(msg)
+        return False, msg
+
+    if logger:
+        logger.info("Ticket {} 驗證通過".format(ticket_id))
+    return True, None

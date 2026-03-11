@@ -34,7 +34,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from hook_utils import (
     setup_hook_logging, run_hook_safely, read_json_from_stdin,
-    get_project_root, validate_hook_input
+    get_project_root, validate_hook_input, validate_tool_input
 )
 from lib.hook_messages import QualityMessages, CoreMessages, format_message
 
@@ -100,8 +100,7 @@ def get_default_cache_stats() -> Dict[str, Any]:
 
 def validate_input(input_data: Dict[str, Any], logger) -> bool:
     """
-    驗證輸入格式 - 由 hook_utils.validate_hook_input 擔當基礎驗證，
-    此函式負責額外的深層驗證（tool_input 的子欄位檢查）
+    驗證輸入格式 - 由 hook_utils 提供統一驗證
 
     Args:
         input_data: Hook 輸入資料
@@ -110,14 +109,13 @@ def validate_input(input_data: Dict[str, Any], logger) -> bool:
     Returns:
         bool - 輸入格式是否正確
     """
-    # 基礎驗證：必要頂層欄位
+    # 頂層欄位驗證
     if not validate_hook_input(input_data, logger, ("tool_name", "tool_input")):
         return False
 
-    # 額外驗證：tool_input 子欄位
-    tool_input = input_data.get("tool_input") or {}
-    if "file_path" not in tool_input or "content" not in tool_input:
-        logger.error("tool_input 缺少 file_path 或 content")
+    # tool_input 子欄位驗證（委派給 hook_utils）
+    tool_input = input_data["tool_input"]
+    if not validate_tool_input(tool_input, logger, ("file_path", "content")):
         return False
 
     return True

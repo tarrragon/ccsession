@@ -325,3 +325,53 @@ def validate_hook_input(
     if logger:
         logger.debug("輸入驗證通過")
     return True
+
+
+def validate_tool_input(
+    tool_input: dict,
+    logger: "logging.Logger | None" = None,
+    required_fields: "Tuple[str, ...] | None" = None
+) -> bool:
+    """驗證 tool_input 的必要欄位
+
+    呼叫前應確保 tool_input 已由 validate_hook_input() 驗證存在。
+    此函式只檢查 tool_input 內的子欄位。
+
+    Args:
+        tool_input: tool_input dict（已驗證存在）
+        logger: 可選 Logger 實例，允許 None（靜默模式）
+        required_fields: tool_input 必須包含的欄位清單，如 ("file_path", "content")
+                        預設為 None，表示只做存在性確認（寬鬆驗證）
+
+    Returns:
+        bool: tool_input 子欄位驗證是否通過
+
+    Examples:
+        # 使用流程：先驗證頂層欄位，再驗證 tool_input 子欄位
+        >>> if not validate_hook_input(input_data, logger, ("tool_name", "tool_input")):
+        ...     return False
+        >>> tool_input = input_data["tool_input"]
+        >>> if not validate_tool_input(tool_input, logger, ("file_path", "content")):
+        ...     return False
+    """
+    # 防禦性檢查：tool_input 本身
+    if not isinstance(tool_input, dict):
+        if logger:
+            logger.error("tool_input 非 dict 型別: {}".format(type(tool_input)))
+        return False
+
+    # 欄位驗證
+    if required_fields:
+        for field in required_fields:
+            if field not in tool_input:
+                if logger:
+                    logger.error("tool_input 缺少必要欄位: {}".format(field))
+                return False
+            if tool_input.get(field) is None:
+                if logger:
+                    logger.error("tool_input 欄位值為 None: {}".format(field))
+                return False
+
+    if logger:
+        logger.debug("tool_input 驗證通過")
+    return True

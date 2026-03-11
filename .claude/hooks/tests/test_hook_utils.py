@@ -30,6 +30,8 @@ try:
         find_ticket_file,
         extract_version_from_ticket_id,
         extract_wave_from_ticket_id,
+        validate_tool_input,
+        validate_ticket_unified,
     )
 except ImportError:
     # 如果模組還不存在，定義虛擬函式以便測試可以 import
@@ -55,6 +57,12 @@ except ImportError:
         raise NotImplementedError()
 
     def extract_wave_from_ticket_id(ticket_id: str):
+        raise NotImplementedError()
+
+    def validate_tool_input(tool_input, logger=None, required_fields=None):
+        raise NotImplementedError()
+
+    def validate_ticket_unified(ticket_id, project_root=None, logger=None):
         raise NotImplementedError()
 
 
@@ -1199,3 +1207,365 @@ class TestFindTicketFile:
         result = find_ticket_file("unusual-name", project_root=project_root, logger=logger)
 
         assert result is not None
+
+
+# ============================================================================
+# TestValidateToolInput - validate_tool_input() 測試
+# ============================================================================
+
+class TestValidateToolInput:
+    """validate_tool_input() 功能測試"""
+
+    # ========================================================================
+    # Scenario 1: 正常路徑測試（Case A1-A3）
+    # ========================================================================
+
+    def test_validate_tool_input_normal_all_fields_present(self, reset_loggers):
+        """場景 1：子欄位完整時回傳 True"""
+        logger = logging.getLogger("test-validate-tool-input-1")
+
+        tool_input = {"file_path": "test.md", "content": "hello"}
+        required_fields = ("file_path", "content")
+
+        result = validate_tool_input(tool_input, logger, required_fields)
+
+        assert result is True
+
+    def test_validate_tool_input_normal_extra_fields(self, reset_loggers):
+        """場景 1 變體：多於 2 個子欄位時仍通過"""
+        logger = logging.getLogger("test-validate-tool-input-2")
+
+        tool_input = {"file_path": "x.md", "content": "x", "extra": "y"}
+        required_fields = ("file_path", "content")
+
+        result = validate_tool_input(tool_input, logger, required_fields)
+
+        assert result is True
+
+    def test_validate_tool_input_normal_empty_string_value(self, reset_loggers):
+        """場景 1 變體：空字串值（非 None）應通過"""
+        logger = logging.getLogger("test-validate-tool-input-3")
+
+        tool_input = {"file_path": "", "content": "text"}
+        required_fields = ("file_path", "content")
+
+        result = validate_tool_input(tool_input, logger, required_fields)
+
+        assert result is True
+
+    # ========================================================================
+    # Scenario 2: 異常路徑測試（Case B1-B8）
+    # ========================================================================
+
+    def test_validate_tool_input_missing_subfield(self, reset_loggers):
+        """場景 2：子欄位缺失時回傳 False"""
+        logger = logging.getLogger("test-validate-tool-input-4")
+
+        tool_input = {"file_path": "x.md"}
+        required_fields = ("file_path", "content")
+
+        result = validate_tool_input(tool_input, logger, required_fields)
+
+        assert result is False
+
+    def test_validate_tool_input_multiple_fields_missing(self, reset_loggers):
+        """場景 2 變體：多個子欄位缺失時回傳 False"""
+        logger = logging.getLogger("test-validate-tool-input-5")
+
+        tool_input = {}
+        required_fields = ("file_path", "content")
+
+        result = validate_tool_input(tool_input, logger, required_fields)
+
+        assert result is False
+
+    def test_validate_tool_input_input_data_none(self, reset_loggers):
+        """場景 3：tool_input 為 None 時回傳 False"""
+        logger = logging.getLogger("test-validate-tool-input-6")
+
+        required_fields = ("file_path", "content")
+
+        result = validate_tool_input(None, logger, required_fields)
+
+        assert result is False
+
+    def test_validate_tool_input_input_data_not_dict(self, reset_loggers):
+        """場景 3b：tool_input 非 dict 型別時回傳 False"""
+        logger = logging.getLogger("test-validate-tool-input-7")
+
+        required_fields = ("file_path", "content")
+
+        result = validate_tool_input("invalid", logger, required_fields)
+
+        assert result is False
+
+    def test_validate_tool_input_subfield_value_is_none(self, reset_loggers):
+        """場景 4：子欄位值為 None 時回傳 False"""
+        logger = logging.getLogger("test-validate-tool-input-8")
+
+        tool_input = {"file_path": None, "content": "x"}
+        required_fields = ("file_path", "content")
+
+        result = validate_tool_input(tool_input, logger, required_fields)
+
+        assert result is False
+
+    def test_validate_tool_input_tool_input_not_dict(self, reset_loggers):
+        """邊界：tool_input 非 dict 型別時回傳 False"""
+        logger = logging.getLogger("test-validate-tool-input-9")
+
+        required_fields = ("file_path", "content")
+
+        result = validate_tool_input("string", logger, required_fields)
+
+        assert result is False
+
+    # ========================================================================
+    # Scenario 3: 特殊情況測試（Case C1-C3）
+    # ========================================================================
+
+    def test_validate_tool_input_logger_none(self, reset_loggers):
+        """特殊情況：logger 為 None（靜默模式）"""
+        tool_input = {"file_path": "x.md", "content": "x"}
+        required_fields = ("file_path", "content")
+
+        result = validate_tool_input(tool_input, None, required_fields)
+
+        assert result is True
+
+    def test_validate_tool_input_no_subfields_required(self, reset_loggers):
+        """特殊情況：required_fields 為 None"""
+        logger = logging.getLogger("test-validate-tool-input-12")
+
+        tool_input = {"any_field": "any_value"}
+
+        result = validate_tool_input(tool_input, logger, None)
+
+        assert result is True
+
+    def test_validate_tool_input_empty_subfields_tuple(self, reset_loggers):
+        """特殊情況：required_fields 為空 tuple"""
+        logger = logging.getLogger("test-validate-tool-input-13")
+
+        tool_input = {}
+
+        result = validate_tool_input(tool_input, logger, ())
+
+        assert result is True
+
+
+# ============================================================================
+# TestValidateTicketUnified - validate_ticket_unified() 測試
+# ============================================================================
+
+class TestValidateTicketUnified:
+    """validate_ticket_unified() 功能測試"""
+
+    # ========================================================================
+    # Scenario 1: 正常路徑測試（Case A1-A2）
+    # ========================================================================
+
+    def test_validate_ticket_unified_valid_ticket(self, project_root, reset_loggers):
+        """場景 5：Ticket 有效（存在且包含決策樹欄位）"""
+        logger = logging.getLogger("test-validate-ticket-unified-1")
+
+        # 建立有效 Ticket
+        tickets_dir = project_root / "docs" / "work-logs" / "v0.1.0" / "tickets"
+        tickets_dir.mkdir(parents=True, exist_ok=True)
+        ticket_path = tickets_dir / "0.1.0-W1-001.md"
+        ticket_path.write_text("""---
+id: 0.1.0-W1-001
+title: Test Ticket
+---
+
+# Test
+
+decision_tree_path: test-path
+""")
+
+        is_valid, error_msg = validate_ticket_unified("0.1.0-W1-001", project_root, logger)
+
+        assert is_valid is True
+        assert error_msg is None
+
+    def test_validate_ticket_unified_auto_project_root(self, reset_loggers):
+        """場景 5 變體：project_root 為 None（自動查找）"""
+        logger = logging.getLogger("test-validate-ticket-unified-2")
+
+        # 此測試依賴實際專案環境，使用 get_project_root() 自動探測
+        # 在測試環境中，如果 Ticket 不存在則應返回 False
+        is_valid, error_msg = validate_ticket_unified("nonexistent-ticket-auto", None, logger)
+
+        # 由於是自動探測且 Ticket 不存在，應回傳 False
+        assert is_valid is False
+        assert error_msg is not None
+
+    # ========================================================================
+    # Scenario 2: 異常路徑測試（Case B1-B5）
+    # ========================================================================
+
+    def test_validate_ticket_unified_ticket_not_found(self, project_root, reset_loggers):
+        """場景 6：Ticket 不存在"""
+        logger = logging.getLogger("test-validate-ticket-unified-3")
+
+        # 建立空的 Ticket 目錄（無 Ticket 檔案）
+        tickets_dir = project_root / "docs" / "work-logs" / "v0.1.0" / "tickets"
+        tickets_dir.mkdir(parents=True, exist_ok=True)
+
+        is_valid, error_msg = validate_ticket_unified("0.1.0-W99-999", project_root, logger)
+
+        assert is_valid is False
+        assert "找不到 Ticket: 0.1.0-W99-999" in error_msg
+
+    def test_validate_ticket_unified_missing_decision_tree(self, project_root, reset_loggers):
+        """場景 7：缺少決策樹欄位"""
+        logger = logging.getLogger("test-validate-ticket-unified-4")
+
+        # 建立無決策樹欄位的 Ticket
+        tickets_dir = project_root / "docs" / "work-logs" / "v0.1.0" / "tickets"
+        tickets_dir.mkdir(parents=True, exist_ok=True)
+        ticket_path = tickets_dir / "0.1.0-W1-002.md"
+        ticket_path.write_text("""---
+id: 0.1.0-W1-002
+title: Test Ticket
+---
+
+# Test (no decision tree)
+""")
+
+        is_valid, error_msg = validate_ticket_unified("0.1.0-W1-002", project_root, logger)
+
+        assert is_valid is False
+        assert "缺少決策樹欄位" in error_msg
+
+    def test_validate_ticket_unified_permission_denied(self, project_root, reset_loggers):
+        """邊界：Ticket 檔案存在但讀取失敗（權限問題）"""
+        logger = logging.getLogger("test-validate-ticket-unified-5")
+
+        # 建立 Ticket 檔案並設定為無讀取權限
+        tickets_dir = project_root / "docs" / "work-logs" / "v0.1.0" / "tickets"
+        tickets_dir.mkdir(parents=True, exist_ok=True)
+        ticket_path = tickets_dir / "0.1.0-W1-003.md"
+        ticket_path.write_text("# Test")
+
+        # 移除讀取權限
+        import os
+        os.chmod(str(ticket_path), 0o000)
+
+        try:
+            is_valid, error_msg = validate_ticket_unified("0.1.0-W1-003", project_root, logger)
+
+            assert is_valid is False
+            assert "無法讀取 Ticket 檔案" in error_msg
+        finally:
+            # 恢復權限以便清理
+            os.chmod(str(ticket_path), 0o644)
+
+    def test_validate_ticket_unified_empty_file(self, project_root, reset_loggers):
+        """邊界：Ticket 檔案為空"""
+        logger = logging.getLogger("test-validate-ticket-unified-6")
+
+        # 建立空 Ticket 檔案
+        tickets_dir = project_root / "docs" / "work-logs" / "v0.1.0" / "tickets"
+        tickets_dir.mkdir(parents=True, exist_ok=True)
+        ticket_path = tickets_dir / "0.1.0-W1-004.md"
+        ticket_path.write_text("")
+
+        is_valid, error_msg = validate_ticket_unified("0.1.0-W1-004", project_root, logger)
+
+        assert is_valid is False
+        assert "Ticket 檔案內容為空" in error_msg
+
+    def test_validate_ticket_unified_empty_ticket_id(self, project_root, reset_loggers):
+        """邊界：ticket_id 為空字串"""
+        logger = logging.getLogger("test-validate-ticket-unified-7")
+
+        # 建立 Ticket 目錄結構
+        tickets_dir = project_root / "docs" / "work-logs" / "v0.1.0" / "tickets"
+        tickets_dir.mkdir(parents=True, exist_ok=True)
+
+        is_valid, error_msg = validate_ticket_unified("", project_root, logger)
+
+        assert is_valid is False
+        assert "找不到 Ticket" in error_msg
+
+    # ========================================================================
+    # Scenario 3: 特殊情況測試（Case C1-C2）
+    # ========================================================================
+
+    def test_validate_ticket_unified_logger_none(self, project_root, reset_loggers):
+        """特殊情況：logger 為 None（靜默模式）"""
+        # 建立有效 Ticket
+        tickets_dir = project_root / "docs" / "work-logs" / "v0.1.0" / "tickets"
+        tickets_dir.mkdir(parents=True, exist_ok=True)
+        ticket_path = tickets_dir / "0.1.0-W1-005.md"
+        ticket_path.write_text("""---
+id: 0.1.0-W1-005
+title: Test Ticket
+---
+
+# Test
+
+decision_tree_path: test-path
+""")
+
+        is_valid, error_msg = validate_ticket_unified("0.1.0-W1-005", project_root, None)
+
+        assert is_valid is True
+        assert error_msg is None
+
+    def test_validate_ticket_unified_nonstandard_format(self, project_root, reset_loggers):
+        """場景 6 變體：ticket_id 格式非標準"""
+        logger = logging.getLogger("test-validate-ticket-unified-8")
+
+        # 建立 Ticket 目錄結構
+        tickets_dir = project_root / "docs" / "work-logs" / "v0.1.0" / "tickets"
+        tickets_dir.mkdir(parents=True, exist_ok=True)
+
+        is_valid, error_msg = validate_ticket_unified("invalid-format", project_root, logger)
+
+        assert is_valid is False
+        assert "找不到 Ticket" in error_msg
+
+
+# ============================================================================
+# TestImportsAndExports - Import 和 Re-export 測試
+# ============================================================================
+
+class TestImportsAndExports:
+    """驗證新函式可正確匯入"""
+
+    def test_import_validate_tool_input(self):
+        """驗證 validate_tool_input 可從 hook_utils 匯入"""
+        from hook_utils import validate_tool_input as imported_func
+
+        assert callable(imported_func)
+        assert imported_func.__name__ == "validate_tool_input"
+
+    def test_import_validate_ticket_unified(self):
+        """驗證 validate_ticket_unified 可從 hook_utils 匯入"""
+        from hook_utils import validate_ticket_unified as imported_func
+
+        assert callable(imported_func)
+        assert imported_func.__name__ == "validate_ticket_unified"
+
+    def test_existing_exports_still_available(self):
+        """驗證既有符號仍可匯入"""
+        from hook_utils import (
+            setup_hook_logging,
+            run_hook_safely,
+            validate_hook_input,
+            find_ticket_file,
+            extract_version_from_ticket_id,
+            extract_wave_from_ticket_id,
+            validate_ticket_has_decision_tree,
+        )
+
+        # 驗證所有都是 callable
+        assert callable(setup_hook_logging)
+        assert callable(run_hook_safely)
+        assert callable(validate_hook_input)
+        assert callable(find_ticket_file)
+        assert callable(extract_version_from_ticket_id)
+        assert callable(extract_wave_from_ticket_id)
+        assert callable(validate_ticket_has_decision_tree)

@@ -25,6 +25,7 @@ from .hook_io import (
     extract_tool_response,
     is_handoff_recovery_mode,
     validate_hook_input,
+    validate_tool_input,
 )
 from .hook_ticket import (
     parse_ticket_frontmatter,
@@ -37,6 +38,7 @@ from .hook_ticket import (
     extract_version_from_ticket_id,
     extract_wave_from_ticket_id,
     validate_ticket_has_decision_tree,
+    validate_ticket_unified,
 )
 
 __all__ = [
@@ -50,6 +52,7 @@ __all__ = [
     "extract_tool_response",
     "is_handoff_recovery_mode",
     "validate_hook_input",
+    "validate_tool_input",
     "parse_ticket_frontmatter",
     "parse_ticket_date",
     "check_error_patterns_changed",
@@ -60,4 +63,5 @@ __all__ = [
     "extract_version_from_ticket_id",
     "extract_wave_from_ticket_id",
     "validate_ticket_has_decision_tree",
+    "validate_ticket_unified",
 ]
