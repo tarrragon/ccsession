@@ -23,7 +23,7 @@ import logging
 import re
 from datetime import date, datetime
 from pathlib import Path
-from typing import List, Optional, Tuple, Union
+from typing import Any, List, NamedTuple, Optional, Tuple, Union
 
 from .hook_logging import get_project_root
 
@@ -40,6 +40,19 @@ DECISION_TREE_MARKERS = [
     "## Decision Tree",
     "## 決策流程",
 ]
+
+
+# ============================================================================
+# 私有資料結構
+# ============================================================================
+
+class _NestedLineResult(NamedTuple):
+    """_parse_nested_line 的回傳值結構
+
+    表達嵌套行的解析結果，語義明確。
+    """
+    multiline_marker: Optional[str]  # 多行標記（|, >, |-, >-）或 None
+    update_action: Optional[Tuple[str, Any, bool]]  # (鍵名, 值, 是否為嵌套字典) 或 None
 
 
 # ============================================================================
@@ -83,46 +96,64 @@ def _skip_empty_or_comment(line: str) -> bool:
 def _parse_nested_line(
     line: str,
     current_key: Optional[str],
-    multiline_marker: Optional[str],
-    result: dict
-) -> Optional[str]:
+    multiline_marker: Optional[str]
+) -> _NestedLineResult:
     """處理嵌套行（以 2 個空格開頭的縮排行）
 
     嵌套行可能是：
     1. 多行字串的延續行（若 multiline_marker 已設定）
     2. 嵌套鍵值對（若無 multiline_marker）
 
+    此函式無副作用，回傳明確的結果以供呼叫端處理。
+
     Args:
         line: 嵌套行（縮排）
         current_key: 當前頂層鍵名
         multiline_marker: 多行標記（|, >, |-, >-）或 None
-        result: 結果字典（會被修改）
 
     Returns:
-        Optional[str]: 無修改，返回 multiline_marker 保持不變
+        _NestedLineResult: 含有：
+            - multiline_marker: 多行標記（保留或清空）
+            - update_action: (鍵名, 值, 是否為嵌套字典) 或 None
+              當為多行模式時，值為增量內容（呼叫端需累積）
+              當為嵌套鍵值對時，值為新增的鍵值對
     """
     nested_line = line.strip()
 
-    # 若有多行標記，直接收集縮排行
+    # 路徑 1：多行字串延續行
     if multiline_marker is not None:
         if current_key:
-            if current_key not in result:
-                result[current_key] = ""
-            result[current_key] += "\n" + nested_line if result[current_key] else nested_line
-        return multiline_marker
+            # 回傳增量內容，呼叫端負責累積
+            # 第一行（result[key] 為空）直接設定，後續行前面加換行符
+            return _NestedLineResult(
+                multiline_marker=multiline_marker,
+                update_action=(current_key, nested_line, False)
+            )
+        else:
+            # 無當前鍵，保留 multiline_marker 但無動作
+            return _NestedLineResult(
+                multiline_marker=multiline_marker,
+                update_action=None
+            )
 
-    # 否則作為嵌套鍵值對
+    # 路徑 2：嵌套鍵值對
     if ':' in nested_line:
         nested_key, nested_value = nested_line.split(':', 1)
         nested_key = nested_key.strip()
         nested_value = nested_value.strip().strip("'\"")
 
         if current_key:
-            if not isinstance(result.get(current_key), dict):
-                result[current_key] = {}
-            result[current_key][nested_key] = nested_value
+            # 回傳嵌套鍵值對資訊
+            return _NestedLineResult(
+                multiline_marker=None,
+                update_action=(current_key, {nested_key: nested_value}, True)
+            )
 
-    return multiline_marker
+    # 無 multiline_marker 也無冒號，無動作
+    return _NestedLineResult(
+        multiline_marker=None,
+        update_action=None
+    )
 
 
 def _parse_yaml_lines(frontmatter_text: str) -> dict:
@@ -142,7 +173,23 @@ def _parse_yaml_lines(frontmatter_text: str) -> dict:
         if _skip_empty_or_comment(line):
             continue
         if line.startswith('  ') and not line.startswith('    '):
-            multiline_marker = _parse_nested_line(line, current_key, multiline_marker, result)
+            nested_result = _parse_nested_line(line, current_key, multiline_marker)
+            multiline_marker = nested_result.multiline_marker
+
+            # 根據回傳的 update_action 更新 result
+            if nested_result.update_action is not None:
+                key, value, is_nested_dict = nested_result.update_action
+                if is_nested_dict:
+                    # 嵌套字典模式：初始化或更新嵌套字典
+                    if not isinstance(result.get(key), dict):
+                        result[key] = {}
+                    result[key].update(value)
+                else:
+                    # 多行模式：累積內容
+                    # 邏輯與原始代碼一致：第一行直接設定，後續行前面加換行符
+                    if key not in result:
+                        result[key] = ""
+                    result[key] += "\n" + value if result[key] else value
             continue
         if ':' in line:
             current_key, multiline_marker = _parse_top_level_pair(line, result)
