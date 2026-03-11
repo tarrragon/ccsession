@@ -43,7 +43,8 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from hook_utils import (
     setup_hook_logging, run_hook_safely, read_json_from_stdin, get_project_root,
-    find_ticket_files, find_ticket_file, validate_ticket_has_decision_tree, save_check_log
+    find_ticket_files, find_ticket_file, validate_ticket_has_decision_tree, save_check_log,
+    is_handoff_recovery_mode, validate_hook_input
 )
 
 # ============================================================================
@@ -68,28 +69,7 @@ EXIT_SUCCESS = 0
 EXIT_ERROR = 1
 EXIT_BLOCK = 2
 
-def validate_input(input_data: Dict[str, Any], logger) -> bool:
-    """
-    驗證輸入格式
-
-    Args:
-        input_data: Hook 輸入資料
-        logger: 日誌物件
-
-    Returns:
-        bool - 輸入格式是否正確
-    """
-    # PreToolUse Hook 需要 tool_input 欄位
-    if "tool_input" not in input_data:
-        logger.error("缺少必要欄位: tool_input")
-        return False
-
-    tool_input = input_data.get("tool_input") or {}
-    if "prompt" not in tool_input:
-        logger.error("缺少必要欄位: tool_input.prompt")
-        return False
-
-    return True
+# validate_input 已遷移至 hook_utils.validate_hook_input
 
 # ============================================================================
 # Ticket ID 提取
@@ -188,27 +168,7 @@ def validate_ticket(ticket_id: str, logger) -> Tuple[bool, Optional[str]]:
 # 派發驗證
 # ============================================================================
 
-def is_handoff_recovery_mode(logger) -> bool:
-    """
-    檢查是否處於 Handoff 恢復模式
-
-    Handoff 恢復時，Claude 自動讀取 Ticket 和派發代理人，
-    這些操作應被豁免，允許恢復流程正常進行。
-
-    Args:
-        logger: 日誌物件
-    """
-    project_dir = get_project_root()
-    handoff_pending_dir = project_dir / ".claude" / "handoff" / "pending"
-
-    # 檢查是否存在 pending Handoff 任務
-    if handoff_pending_dir.exists() and handoff_pending_dir.is_dir():
-        # 檢查是否有任何 pending JSON 檔案
-        if any(handoff_pending_dir.glob("*.json")):
-            logger.info("檢測到 Handoff 恢復模式")
-            return True
-
-    return False
+# is_handoff_recovery_mode 已遷移至 hook_utils
 
 def is_exempt_agent_type(subagent_type: str, logger) -> bool:
     """
@@ -348,14 +308,14 @@ def main() -> int:
         input_data = read_json_from_stdin(logger)
 
         # 步驟 3: 驗證輸入格式
-        if not validate_input(input_data, logger):
+        if not validate_hook_input(input_data, logger, ("tool_input",)):
             logger.error("輸入格式錯誤")
             print(json.dumps({
                 "hookSpecificOutput": {"hookEventName": "PreToolUse"}
             }, ensure_ascii=False, indent=2))
             return EXIT_SUCCESS
 
-        tool_input = input_data.get("tool_input") or {}
+        tool_input = input_data.get("tool_input", {})
 
         # 步驟 4: 驗證 Task 派發有效性
         is_valid, error_message, ticket_id = validate_task_dispatch(tool_input, logger)

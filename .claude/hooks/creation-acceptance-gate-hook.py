@@ -47,7 +47,11 @@ _hooks_dir = Path(__file__).parent
 if _hooks_dir not in [p for p in sys.path if Path(p) == _hooks_dir]:
     sys.path.insert(0, str(_hooks_dir))
 
-from hook_utils import setup_hook_logging, run_hook_safely, read_json_from_stdin, parse_ticket_frontmatter, get_project_root, save_check_log
+from hook_utils import (
+    setup_hook_logging, run_hook_safely, read_json_from_stdin,
+    parse_ticket_frontmatter, get_project_root, save_check_log,
+    validate_hook_input
+)
 from hook_utils.hook_ticket import find_ticket_file
 from lib.hook_messages import GateMessages, CoreMessages, format_message
 
@@ -76,23 +80,7 @@ EXIT_BLOCK = 2
 # ============================================================================
 
 
-def validate_input(input_data: Dict[str, Any], logger) -> bool:
-    """
-    驗證輸入格式
-
-    Args:
-        input_data: Hook 輸入資料
-        logger: 日誌物件
-
-    Returns:
-        bool - 輸入格式是否正確
-    """
-    # UserPromptSubmit Hook 至少需要 prompt 欄位
-    if "prompt" not in input_data:
-        logger.error("缺少必要欄位: prompt")
-        return False
-
-    return True
+# validate_input 已遷移至 hook_utils.validate_hook_input
 
 
 # ============================================================================
@@ -279,7 +267,7 @@ def main() -> int:
         input_data = read_json_from_stdin(logger)
 
         # 步驟 3: 驗證輸入格式
-        if not validate_input(input_data, logger):
+        if not validate_hook_input(input_data, logger, ("prompt",)):
             logger.error("輸入格式錯誤")
             print(json.dumps({
                 "hookSpecificOutput": {"hookEventName": "UserPromptSubmit"}

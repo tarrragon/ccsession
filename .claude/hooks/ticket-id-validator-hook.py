@@ -37,7 +37,10 @@ from typing import Dict, Any, Optional, Tuple
 # 加入 hook_utils 路徑（相同目錄）
 sys.path.insert(0, str(Path(__file__).parent))
 
-from hook_utils import setup_hook_logging, run_hook_safely, read_json_from_stdin, get_project_root, save_check_log
+from hook_utils import (
+    setup_hook_logging, run_hook_safely, read_json_from_stdin,
+    get_project_root, save_check_log, validate_hook_input
+)
 
 # ============================================================================
 # 常數定義
@@ -69,28 +72,7 @@ EXIT_BLOCK = 2
 # 輸入讀取和驗證
 # ============================================================================
 
-def validate_input(input_data: Dict[str, Any], logger) -> bool:
-    """
-    驗證輸入格式
-
-    Args:
-        input_data: Hook 輸入資料
-        logger: Logger 實例
-
-    Returns:
-        bool - 輸入格式是否正確
-    """
-    # PostToolUse Hook 需要 tool_input 欄位
-    if "tool_input" not in input_data:
-        logger.debug("缺少 tool_input 欄位，跳過檢查")
-        return False
-
-    tool_input = input_data.get("tool_input") or {}
-    if "file_path" not in tool_input:
-        logger.debug("缺少 file_path 欄位，跳過檢查")
-        return False
-
-    return True
+# validate_input 已遷移至 hook_utils.validate_hook_input
 
 # ============================================================================
 # 檔案路徑檢查
@@ -381,14 +363,14 @@ def main() -> int:
         input_data = read_json_from_stdin(logger)
 
         # 步驟 2: 驗證輸入格式
-        if not validate_input(input_data, logger):
+        if not validate_hook_input(input_data, logger, ("tool_input",)):
             logger.debug("輸入格式不完整，跳過檢查")
             print(json.dumps({
                 "hookSpecificOutput": {"hookEventName": "PostToolUse"}
             }, ensure_ascii=False, indent=2))
             return EXIT_SUCCESS
 
-        tool_input = input_data.get("tool_input") or {}
+        tool_input = input_data.get("tool_input", {})
         file_path = tool_input.get("file_path", "")
 
         logger.info(f"檢查檔案: {file_path}")

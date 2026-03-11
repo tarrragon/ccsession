@@ -42,7 +42,10 @@ from pathlib import Path
 # 加入 hook_utils 路徑（相同目錄）
 sys.path.insert(0, str(Path(__file__).parent))
 
-from hook_utils import setup_hook_logging, run_hook_safely, get_project_root, save_check_log, read_json_from_stdin
+from hook_utils import (
+    setup_hook_logging, run_hook_safely, get_project_root, save_check_log,
+    read_json_from_stdin, is_handoff_recovery_mode
+)
 
 from datetime import datetime
 from typing import Dict, Any, Tuple
@@ -109,24 +112,7 @@ def is_internal_call() -> bool:
     return os.getenv("TICKET_TRACKER_INTERNAL") == "1"
 
 
-def is_handoff_recovery_mode(logger) -> bool:
-    """
-    檢查是否處於 Handoff 恢復模式
-
-    Handoff 恢復時，Claude 自動讀取 Ticket 和派發代理人，
-    這些操作應被豁免，允許恢復流程正常進行。
-    """
-    project_dir = get_project_root()
-    handoff_pending_dir = project_dir / ".claude" / "handoff" / "pending"
-
-    # 檢查是否存在 pending Handoff 任務
-    if handoff_pending_dir.exists() and handoff_pending_dir.is_dir():
-        # 檢查是否有任何 pending JSON 檔案
-        if any(handoff_pending_dir.glob("*.json")):
-            logger.debug("檢測到 Handoff 恢復模式")
-            return True
-
-    return False
+# is_handoff_recovery_mode 已遷移至 hook_utils
 
 
 def is_body_section_edit(old_string: str, logger) -> bool:

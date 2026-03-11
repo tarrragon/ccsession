@@ -81,6 +81,7 @@ from hook_utils import (
     find_ticket_files,
     get_current_version_from_todolist,
     save_check_log,
+    validate_hook_input,
 )
 from lib.hook_messages import GateMessages, CoreMessages, format_message
 
@@ -238,28 +239,7 @@ EXIT_SUCCESS = 0
 EXIT_ERROR = 1
 EXIT_BLOCK = 2
 
-def validate_input(input_data: Dict[str, Any], logger) -> bool:
-    """
-    驗證輸入格式
-
-    Args:
-        input_data: Hook 輸入資料
-        logger: 日誌物件
-
-    Returns:
-        bool - 輸入格式是否正確
-    """
-    # 防護：input_data 可能為 None（read_json_from_stdin 返回）
-    if input_data is None:
-        logger.error("輸入資料為 None")
-        return False
-
-    # UserPromptSubmit Hook 至少需要 prompt 欄位
-    if "prompt" not in input_data:
-        logger.error("缺少必要欄位: prompt")
-        return False
-
-    return True
+# validate_input 已遷移至 hook_utils.validate_hook_input
 
 # ============================================================================
 # 開發命令識別
@@ -768,7 +748,7 @@ def main() -> int:
         input_data = read_json_from_stdin(logger)
 
         # 步驟 3: 驗證輸入格式
-        if not validate_input(input_data, logger):
+        if not validate_hook_input(input_data, logger, ("prompt",)):
             logger.error("輸入格式錯誤")
             print(json.dumps({
                 "hookSpecificOutput": {"hookEventName": "UserPromptSubmit"}
