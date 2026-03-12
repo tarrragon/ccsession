@@ -205,6 +205,7 @@ PM 收到代理人回報後執行：
 
 ## 相關文件
 
+- .claude/skills/tdd/SKILL.md - `/tdd` SKILL（統一 TDD 流程入口，含 `/tdd start`、`/tdd next`、`/tdd split`、`/tdd status`、`/tdd phase4-exempt`）
 - .claude/references/tdd-flow-details.md - 豁免規則詳細、Phase 詳細描述、異常處理、日誌模板
 - @.claude/rules/core/decision-tree.md - 主線程決策樹
 - @.claude/rules/core/quality-baseline.md - 品質基線（Phase 4 不可跳過）
@@ -212,4 +213,4 @@ PM 收到代理人回報後執行：
 ---
 
 **Last Updated**: 2026-03-12
-**Version**: 2.6.0 - Phase 1-3 代理人自治執行規範：自行 commit 和更新 Ticket（0.1.0-W43-003）
+**Version**: 2.7.0 - 新增 /tdd SKILL 引用（0.1.0-W44-001.6 遷移整合）
