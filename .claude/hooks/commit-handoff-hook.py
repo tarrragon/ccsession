@@ -309,6 +309,12 @@ def main() -> int:
         print(json.dumps(DEFAULT_OUTPUT, ensure_ascii=False))
         return EXIT_SUCCESS
 
+    # 偵測 subagent 環境：agent_id 僅在 subagent 中出現
+    if input_data.get("agent_id"):
+        logger.info("偵測到 subagent 環境（agent_id=%s），跳過 AskUserQuestion 提醒", input_data.get("agent_id"))
+        print(json.dumps(DEFAULT_OUTPUT, ensure_ascii=False))
+        return EXIT_SUCCESS
+
     # 取得命令和輸出
     tool_input = input_data.get("tool_input") or {}
     command = tool_input.get("command", "")
