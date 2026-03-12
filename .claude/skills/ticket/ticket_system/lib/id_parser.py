@@ -10,7 +10,7 @@ from typing import Optional, Dict, Any, List
 from .constants import TICKET_ID_PATTERN, KNOWN_TICKET_SUFFIXES
 
 
-def extract_core_ticket_id(raw_id: str) -> Optional[str]:
+def extract_core_ticket_id(raw_id: Optional[str]) -> Optional[str]:
     """
     從可能帶描述後綴的 ID 字串中提取核心 Ticket ID。
 
@@ -65,14 +65,14 @@ def extract_core_ticket_id(raw_id: str) -> Optional[str]:
     return core_id
 
 
-def has_description_suffix(raw_id: str) -> bool:
+def has_description_suffix(raw_id: Optional[str]) -> bool:
     """
     判斷 ID 是否帶有描述後綴。
 
     快速布林判斷，用於區分帶後綴 ID 和標準 ID。
 
     Args:
-        raw_id: 原始 ID 字串
+        raw_id: 原始 ID 字串（可能為 None）
 
     Returns:
         bool: 是否有描述後綴

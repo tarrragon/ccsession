@@ -445,7 +445,8 @@ def _emit_result(
     file_path: str,
     ticket_id: Optional[str],
     error_msg: str,
-    status: str
+    status: str,
+    logger: Any
 ) -> None:
     """
     輸出驗證結果並儲存日誌
@@ -458,6 +459,7 @@ def _emit_result(
         ticket_id: Ticket ID（可能為 None）
         error_msg: 錯誤訊息（如有）
         status: 狀態字串（"VALID" 或 "INVALID"）
+        logger: Logger 實例，用於日誌記錄
     """
     hook_output = generate_hook_output(
         is_valid=is_valid,
@@ -537,7 +539,8 @@ def main() -> int:
                 file_path=file_path,
                 ticket_id=None,
                 error_msg=warning_msg,
-                status="INVALID"
+                status="INVALID",
+                logger=logger
             )
             return EXIT_SUCCESS
 
@@ -553,7 +556,8 @@ def main() -> int:
             file_path=file_path,
             ticket_id=ticket_id,
             error_msg=error_msg,
-            status=status
+            status=status,
+            logger=logger
         )
 
         logger.info("Ticket ID 驗證 Hook 完成")
