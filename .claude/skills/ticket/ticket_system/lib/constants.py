@@ -55,6 +55,10 @@ STATUS_LABELS: Dict[str, str] = {
 #   詳見 .claude/rules/core/ticket-id-conventions.md (Ticket ID 命名規範)
 TICKET_ID_PATTERN: str = r"^(\d+\.\d+\.\d+)-W(\d+)-(\d+(?:\.\d+)*)(-[a-z0-9][a-z0-9-]{0,59})?$"
 
+# 預編譯正則表達式，避免重複編譯提升效能
+# 使用此常數而非每次都 re.compile(TICKET_ID_PATTERN)
+TICKET_ID_RE = re.compile(TICKET_ID_PATTERN)
+
 # ============================================================
 # 已知的描述性後綴模式（用於命名規範和 Hook 驗證）
 # ============================================================

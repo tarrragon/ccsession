@@ -7,7 +7,7 @@ Ticket ID 解析模組
 import re
 from typing import Optional, Dict, Any, List
 
-from .constants import TICKET_ID_PATTERN, KNOWN_TICKET_SUFFIXES
+from .constants import TICKET_ID_RE, KNOWN_TICKET_SUFFIXES
 
 
 def extract_core_ticket_id(raw_id: Optional[str]) -> Optional[str]:
@@ -53,7 +53,7 @@ def extract_core_ticket_id(raw_id: Optional[str]) -> Optional[str]:
         return None
 
     # 正則匹配
-    match = re.match(TICKET_ID_PATTERN, raw_id)
+    match = TICKET_ID_RE.match(raw_id)
     if not match:
         return None
 
@@ -92,7 +92,7 @@ def has_description_suffix(raw_id: Optional[str]) -> bool:
     if raw_id is None:
         return False
 
-    match = re.match(TICKET_ID_PATTERN, raw_id)
+    match = TICKET_ID_RE.match(raw_id)
     if not match:
         return False
 
@@ -100,7 +100,7 @@ def has_description_suffix(raw_id: Optional[str]) -> bool:
     return suffix is not None
 
 
-def extract_id_components(ticket_id: str) -> Optional[Dict[str, Any]]:
+def extract_id_components(ticket_id: Optional[str]) -> Optional[Dict[str, Any]]:
     """
     提取 Ticket ID 的元件。
 
@@ -113,10 +113,10 @@ def extract_id_components(ticket_id: str) -> Optional[Dict[str, Any]]:
     - 序號: 整數序列，支援無限深度（如 001, 001.1, 001.1.2）
 
     Args:
-        ticket_id: Ticket ID（格式: {version}-W{wave}-{seq}）
+        ticket_id: Ticket ID（格式: {version}-W{wave}-{seq}），可為 None
 
     Returns:
-        Dict: {version, wave, sequence} 或 None 如果格式無效
+        Dict: {version, wave, sequence} 或 None 如果格式無效或輸入為 None
 
     Examples:
         >>> extract_id_components("0.31.0-W3-001")
@@ -125,8 +125,14 @@ def extract_id_components(ticket_id: str) -> Optional[Dict[str, Any]]:
         {'version': '0.31.0', 'wave': 3, 'sequence': '001.1.2'}
         >>> extract_id_components("invalid")
         None
+        >>> extract_id_components(None)
+        None
     """
-    match = re.match(TICKET_ID_PATTERN, ticket_id)
+    # 防守式編程：None 檢查
+    if ticket_id is None:
+        return None
+
+    match = TICKET_ID_RE.match(ticket_id)
     if not match:
         return None
 
