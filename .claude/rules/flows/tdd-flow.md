@@ -134,7 +134,7 @@
 | Phase 2 | Phase 3a | 測試案例設計完成 |
 | Phase 3a | 3b 拆分評估 | 策略文件完成 |
 | 3b 拆分評估 | Phase 3b | PM 完成拆分評估（見下方） |
-| Phase 3b | Phase 4a | 測試全部通過（標準流程）；直接到 Phase 4b（豁免條件） |
+| Phase 3b | Phase 4a 或 4b | 測試全部通過後，PM 自動檢查豁免條件（<=2 檔案/DOC/單純）：符合 → 直接 Phase 4b；不符合 → AskUserQuestion #13 選擇 Phase 4a 或 4b |
 | Phase 4a | Phase 4b | 多視角分析報告完成 |
 | Phase 4b | Phase 4c | 重構執行完成（標準流程）；/tech-debt-capture → 完成（豁免條件） |
 | Phase 4c | 完成 | 多視角再審核報告完成 |
@@ -213,4 +213,4 @@ PM 收到代理人回報後執行：
 ---
 
 **Last Updated**: 2026-03-12
-**Version**: 2.7.0 - 新增 /tdd SKILL 引用（0.1.0-W44-001.6 遷移整合）
+**Version**: 2.8.0 - Phase 3b 轉換規則修正：明確豁免自動判定和 #13 觸發條件（0.1.0-W47-002）

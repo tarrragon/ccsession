@@ -66,7 +66,7 @@
 | Phase 完成 | 路由 |
 |-----------|------|
 | Phase 1/2/3a | 全自動 → 下一 Phase 代理人 [注 1] |
-| Phase 3b | AskUserQuestion #13：進入 Phase 4a（標準）或豁免直接 4b [注 2] |
+| Phase 3b | PM 自動檢查豁免條件 [注 2]：符合 → 全自動進入 Phase 4b；不符合 → AskUserQuestion #13（選擇 Phase 4a 或 4b） |
 | Phase 4a/4b | 全自動 → 下一 Phase（Phase 4b 可豁免跳至 tech-debt [注 2]） |
 | Phase 4c | 強制 /tech-debt-capture → AskUserQuestion #13（不可跳過） |
 
@@ -153,7 +153,7 @@ AskUserQuestion #3a（Wave 收尾 + 開始下一 Wave）
 |-----------|--------|--------|--------|
 | 分析完成 | 進入實作（建立 Ticket） | /parallel-evaluation F（結論審查） | 先 commit 再決定 |
 | 規劃完成 | /parallel-evaluation C/G（審核） | 直接進入 TDD Phase 1 | 先 commit 再決定 |
-| Phase 3b 完成 | 進入 Phase 4a（Recommended） | 直接進入 Phase 4b（豁免） | 先 commit 再決定 |
+| Phase 3b 完成（不符合豁免時才觸發 #13） | 進入 Phase 4a（Recommended） | 直接進入 Phase 4b | 先 commit 再決定 |
 | Phase 4c + tech-debt 完成 | commit 並查看 Wave 狀態（Recommended） | Handoff，下個 session 繼續 Wave 路由 | 查看所有待處理 Ticket |
 | incident 分析完成 | /parallel-evaluation F（結論審查） | 直接建立修復 Ticket | 先 commit 再決定 |
 | Wave 完成（有下一 Wave） | 開始 Wave X+1（列出任務） | Handoff 到 Wave X+1 | 先 commit 再決定 |
