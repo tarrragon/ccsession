@@ -407,3 +407,26 @@ def validate_tool_input(
     if logger:
         logger.debug("tool_input 驗證通過")
     return True
+
+
+def is_subagent_environment(input_data: "dict | None") -> bool:
+    """檢查是否為 subagent 環境
+
+    subagent 執行時，Hook 會在 input_data 中包含 agent_id 欄位。
+    此函式用於 Hook 的早期跳過邏輯，避免在 subagent 中輸出 AskUserQuestion 提醒。
+
+    Args:
+        input_data: Hook 收到的 input_data dict
+
+    Returns:
+        bool: 如果 input_data 包含 agent_id（非空），返回 True；否則返回 False
+
+    Examples:
+        >>> if is_subagent_environment(input_data):
+        ...     logger.info("偵測到 subagent 環境，跳過 AskUserQuestion 提醒")
+        ...     print(json.dumps(DEFAULT_OUTPUT, ensure_ascii=False))
+        ...     return EXIT_SUCCESS
+    """
+    if input_data is None:
+        return False
+    return bool(input_data.get("agent_id"))
