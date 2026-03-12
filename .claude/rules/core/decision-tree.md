@@ -308,7 +308,7 @@ Skill 是預建的專用工具，優先於代理人派發。
 
 | 情境 | 條件 | 路由 |
 |------|------|------|
-| D（優先） | ticket 含 tdd_phase 欄位 | D1: Phase 1/2/3a → 全自動下一 Phase；D2: Phase 3b → #13；D3a: 4a → 全自動 4b；D3b: 4b 標準 → 全自動 4c / 豁免 → /tech-debt-capture + #13；D3c: 4c → /tech-debt-capture + #13 |
+| D（優先） | ticket 含 tdd_phase 欄位 | D1: Phase 1/2 → 全自動下一 Phase；D1a: Phase 3a → 3b 拆分評估（見 tdd-flow.md）後派發 3b；D2: Phase 3b → #13；D3a: 4a → 全自動 4b；D3b: 4b 標準 → 全自動 4c / 豁免 → /tech-debt-capture + #13；D3c: 4c → /tech-debt-capture + #13 |
 | A（#11a） | ticket 仍 in_progress | Context 刷新 Handoff |
 | B（#11b） | ticket completed + 同 Wave 有 pending | 任務切換 Handoff |
 | C | ticket completed + 同 Wave 無 pending | [強制] /parallel-evaluation Wave 審查 → C1: 有其他 Wave → #3a；C2: 全完成 → /version-release check + #13 |
@@ -389,4 +389,4 @@ Level 5: TDD 階段代理人 + thyme-python-developer
 ---
 
 **Last Updated**: 2026-03-12
-**Version**: 7.21.0 - 新增派發模式選擇規則：預設背景派發（0.1.0-W43-001）
+**Version**: 7.22.0 - D1 拆分：Phase 3a 完成後新增 3b 拆分評估步驟（0.1.0-W43-002）
