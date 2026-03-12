@@ -77,3 +77,9 @@ server/go.work.sum
 .claude/tool-results/
 .claude/handoff/archive/
 .claude/handoff/pending/
+
+# Python coverage and test artifacts
+.claude/hooks/.coverage
+.claude/skills/*/.coverage
+.coverage
+htmlcov/
