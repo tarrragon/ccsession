@@ -8,6 +8,7 @@ import pytest
 from pathlib import Path
 from project_init.lib.onboard_checker import (
     check_claude_md,
+    check_docs_structure,
     check_language_template,
     check_settings_local_json,
     detect_project_language,
@@ -376,3 +377,65 @@ class TestCheckHookCompleteness:
         assert not result.completeness_ok
         assert len(result.unregistered_hooks) == 3
         assert result.unregistered_hooks == {"hook1.py", "hook2.py", "hook3.py"}
+
+
+class TestCheckDocsStructure:
+    """測試 docs 目錄結構檢查."""
+
+    def test_docs_structure_complete(self, tmp_path: Path) -> None:
+        """測試 docs 目錄結構完整."""
+        # 建立完整的 docs 結構
+        (tmp_path / "docs").mkdir()
+        (tmp_path / "docs" / "work-logs").mkdir()
+        (tmp_path / "docs" / "todolist.yaml").touch()
+
+        result = check_docs_structure(tmp_path)
+
+        assert result.exists
+        assert result.has_work_logs
+        assert result.has_todolist
+        assert result.all_complete
+
+    def test_docs_directory_missing(self, tmp_path: Path) -> None:
+        """測試 docs 目錄不存在."""
+        result = check_docs_structure(tmp_path)
+
+        assert not result.exists
+        assert not result.has_work_logs
+        assert not result.has_todolist
+        assert not result.all_complete
+
+    def test_work_logs_directory_missing(self, tmp_path: Path) -> None:
+        """測試 docs/work-logs 子目錄不存在."""
+        (tmp_path / "docs").mkdir()
+        (tmp_path / "docs" / "todolist.yaml").touch()
+
+        result = check_docs_structure(tmp_path)
+
+        assert result.exists
+        assert not result.has_work_logs
+        assert result.has_todolist
+        assert not result.all_complete
+
+    def test_todolist_file_missing(self, tmp_path: Path) -> None:
+        """測試 docs/todolist.yaml 檔案不存在."""
+        (tmp_path / "docs").mkdir()
+        (tmp_path / "docs" / "work-logs").mkdir()
+
+        result = check_docs_structure(tmp_path)
+
+        assert result.exists
+        assert result.has_work_logs
+        assert not result.has_todolist
+        assert not result.all_complete
+
+    def test_partial_structure(self, tmp_path: Path) -> None:
+        """測試部分缺失的結構."""
+        (tmp_path / "docs").mkdir()
+
+        result = check_docs_structure(tmp_path)
+
+        assert result.exists
+        assert not result.has_work_logs
+        assert not result.has_todolist
+        assert not result.all_complete

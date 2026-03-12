@@ -46,10 +46,12 @@ from .messages import (
     UVMessages,
 )
 from .onboard_checker import (
+    DocsStructureInfo,
     FrameworkFileInfo,
     HookClassificationInfo,
     ProjectLanguageInfo,
     check_claude_md,
+    check_docs_structure,
     check_language_template,
     check_settings_local_json,
     detect_project_language,
@@ -114,9 +116,11 @@ __all__ = [
     "ProjectLanguageInfo",
     "HookClassificationInfo",
     "FrameworkFileInfo",
+    "DocsStructureInfo",
     "detect_project_language",
     "parse_hook_classification",
     "check_claude_md",
     "check_language_template",
     "check_settings_local_json",
+    "check_docs_structure",
 ]

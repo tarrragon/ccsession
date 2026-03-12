@@ -44,6 +44,20 @@ class FrameworkFileInfo:
     """檔案完整路徑."""
 
 
+@dataclass
+class DocsStructureInfo:
+    """Docs 目錄結構狀態."""
+
+    exists: bool
+    """docs/ 目錄是否存在."""
+    has_work_logs: bool
+    """docs/work-logs/ 子目錄是否存在."""
+    has_todolist: bool
+    """docs/todolist.yaml 檔案是否存在."""
+    all_complete: bool
+    """所有必要目錄和檔案是否都存在."""
+
+
 def detect_project_language(project_root: Path) -> ProjectLanguageInfo:
     """偵測專案語言.
 
@@ -228,4 +242,36 @@ def check_settings_local_json(project_root: Path) -> FrameworkFileInfo:
         name="settings.local.json",
         exists=settings_file.exists(),
         path=settings_file if settings_file.exists() else None,
+    )
+
+
+def check_docs_structure(project_root: Path) -> DocsStructureInfo:
+    """檢查 docs/ 目錄結構是否完整.
+
+    檢查以下項目：
+    - docs/ 目錄存在
+    - docs/work-logs/ 子目錄存在
+    - docs/todolist.yaml 檔案存在
+
+    Args:
+        project_root: 專案根目錄。
+
+    Returns:
+        DocsStructureInfo: docs 結構檢查結果。
+    """
+    docs_dir = project_root / "docs"
+    work_logs_dir = docs_dir / "work-logs"
+    todolist_file = docs_dir / "todolist.yaml"
+
+    docs_exists = docs_dir.exists() and docs_dir.is_dir()
+    work_logs_exists = work_logs_dir.exists() and work_logs_dir.is_dir()
+    todolist_exists = todolist_file.exists() and todolist_file.is_file()
+
+    all_complete = docs_exists and work_logs_exists and todolist_exists
+
+    return DocsStructureInfo(
+        exists=docs_exists,
+        has_work_logs=work_logs_exists,
+        has_todolist=todolist_exists,
+        all_complete=all_complete,
     )

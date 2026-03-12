@@ -9,6 +9,7 @@ from pathlib import Path
 from project_init.lib import (
     OnboardMessages,
     check_claude_md,
+    check_docs_structure,
     check_language_template,
     check_settings_local_json,
     detect_project_language,
@@ -81,9 +82,19 @@ def run_onboard(project_root: Path) -> OnboardResult:
     # Step 6: 檢查 Hook 完整性
     hook_completeness = check_hook_completeness(project_root)
 
-    # Step 7: 彙整待辦清單
+    # Step 7: 檢查 docs 目錄結構
+    docs_structure = check_docs_structure(project_root)
+
+    # Step 8: 自動建立缺失的 docs 結構
+    _create_missing_docs_structure(project_root, docs_structure)
+
+    # Step 8.5: 重新檢查 docs 結構（建立完成後）
+    docs_structure = check_docs_structure(project_root)
+
+    # Step 9: 彙整待辦清單
     todo_items = _collect_todo_items(
-        language, claude_md_info, template_info, settings_info, hook_completeness
+        language, claude_md_info, template_info, settings_info, hook_completeness,
+        docs_structure
     )
 
     result = OnboardResult(
@@ -95,14 +106,15 @@ def run_onboard(project_root: Path) -> OnboardResult:
 
     # 輸出格式化結果
     _print_onboard_result(
-        result, language_info, hook_classification, hook_completeness
+        result, language_info, hook_classification, hook_completeness, docs_structure
     )
 
     return result
 
 
 def _collect_todo_items(
-    language: str, claude_md_info, template_info, settings_info, hook_completeness
+    language: str, claude_md_info, template_info, settings_info, hook_completeness,
+    docs_structure
 ) -> list[TodoItem]:
     """彙整待辦項目.
 
@@ -112,6 +124,7 @@ def _collect_todo_items(
         template_info: 語言模板檢查結果。
         settings_info: settings.local.json 檢查結果。
         hook_completeness: Hook 完整性檢查結果。
+        docs_structure: docs 目錄結構檢查結果。
 
     Returns:
         list[TodoItem]: 待辦項目清單。
@@ -159,7 +172,8 @@ def _collect_todo_items(
 
 
 def _print_onboard_result(
-    result: OnboardResult, language_info, hook_classification, hook_completeness
+    result: OnboardResult, language_info, hook_classification, hook_completeness,
+    docs_structure
 ) -> None:
     """輸出格式化的 onboard 結果到 stdout."""
     print()
@@ -171,6 +185,7 @@ def _print_onboard_result(
     _print_claude_md_section(result)
     _print_language_template_section(result)
     _print_settings_local_section(result)
+    _print_docs_structure_section(docs_structure)
     _print_todolist_section(result)
 
 
@@ -280,6 +295,17 @@ def _print_settings_local_section(result: OnboardResult) -> None:
     print()
 
 
+def _print_docs_structure_section(docs_structure) -> None:
+    """輸出 docs 目錄結構部分."""
+    print(f"[{OnboardMessages.DOCS_STRUCTURE_SECTION}]")
+    if docs_structure.all_complete:
+        print(f"  {OnboardMessages.DOCS_STRUCTURE_OK}")
+    else:
+        print(f"  {OnboardMessages.DOCS_STRUCTURE_TODO}")
+        print(f"  {OnboardMessages.DOCS_STRUCTURE_CREATE_HINT}")
+    print()
+
+
 def _print_todolist_section(result: OnboardResult) -> None:
     """輸出待辦清單部分."""
     print(SEPARATOR)
@@ -317,3 +343,33 @@ def _format_todo_count(count: int) -> str:
     if count == 0:
         return OnboardMessages.TODOLIST_NONE
     return OnboardMessages.TODOLIST_COUNT.format(count=count)
+
+
+def _create_missing_docs_structure(project_root: Path, docs_structure) -> None:
+    """自動建立缺失的 docs 目錄結構.
+
+    此函式嘗試建立缺失的 docs 目錄和檔案。如果建立失敗，將靜默失敗，
+    待辦清單會在後續檢查時反映實際狀態。
+
+    Args:
+        project_root: 專案根目錄。
+        docs_structure: docs 結構檢查結果。
+    """
+    docs_dir = project_root / "docs"
+    work_logs_dir = docs_dir / "work-logs"
+    todolist_file = docs_dir / "todolist.yaml"
+
+    try:
+        # 建立 docs/ 目錄
+        docs_dir.mkdir(parents=True, exist_ok=True)
+
+        # 建立 docs/work-logs/ 子目錄
+        work_logs_dir.mkdir(parents=True, exist_ok=True)
+
+        # 建立 docs/todolist.yaml 檔案
+        todolist_file.touch(exist_ok=True)
+
+    except (OSError, PermissionError):
+        # 如果建立失敗，靜默失敗（因為這只是引導，不是關鍵操作）
+        # 待辦清單會顯示結構缺失，使用者可手動處理
+        pass
