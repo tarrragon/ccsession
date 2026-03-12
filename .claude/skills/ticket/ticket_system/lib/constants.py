@@ -35,12 +35,37 @@ STATUS_LABELS: Dict[str, str] = {
 # Ticket ID 正則表達式
 # ============================================================
 
-# 支援無限深度子任務的正則表達式
-# 格式: {version}-W{wave}-{seq[.seq...]}
+# 支援無限深度子任務的正則表達式，以及描述性後綴
+# 格式: {version}-W{wave}-{seq[.seq...]}[-description]
 # 範例: 0.31.0-W3-001 (根任務)
 #      0.31.0-W3-001.1 (第一層子任務)
 #      0.31.0-W3-001.1.1 (第二層子任務)
-TICKET_ID_PATTERN: str = r"^(\d+\.\d+\.\d+)-W(\d+)-(\d+(?:\.\d+)*)$"
+#      0.1.0-W11-004-phase1-design (TDD Phase 文件)
+#      0.1.0-W25-005-analysis (分析文件)
+#
+# 後綴規則：
+#   - 以 "-" 開頭
+#   - 只包含小寫字母、數字、連字號
+#   - 不以 "-W" 開頭（避免與 wave 格式混淆）
+#   - 長度 1-60 字元
+TICKET_ID_PATTERN: str = r"^(\d+\.\d+\.\d+)-W(\d+)-(\d+(?:\.\d+)*)(-[a-z0-9][a-z0-9-]{0,59})?$"
+
+# ============================================================
+# 已知的描述性後綴模式（用於命名規範和 Hook 驗證）
+# ============================================================
+
+# 標準後綴清單，定義於 .claude/rules/core/ticket-id-conventions.md
+# Hook 驗證時使用此清單區分已知 vs 未知後綴
+KNOWN_TICKET_SUFFIXES: List[str] = [
+    "-phase1-design",
+    "-phase2-test-design",
+    "-phase3a-strategy",
+    "-phase3b-execution-report",
+    "-analysis",
+    "-test-cases",
+    "-test-cases-quick-reference",
+    "-feature-spec",
+]
 
 # ============================================================
 # 路徑常數
