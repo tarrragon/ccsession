@@ -156,6 +156,127 @@ def run_onboard(project_root: Path) -> OnboardResult:
     return result
 
 
+def _collect_must_items(
+    language: str,
+    claude_md_info,
+    template_info,
+    settings_info,
+    hook_completeness,
+    gitignore_info,
+    claude_dir_info,
+    hook_config_info,
+    config_dir_info,
+) -> list[TodoItem]:
+    """彙整 MUST 強制檢查項目.
+
+    Args:
+        language: 偵測到的語言。
+        claude_md_info: CLAUDE.md 檢查結果。
+        template_info: 語言模板檢查結果。
+        settings_info: settings.local.json 檢查結果。
+        hook_completeness: Hook 完整性檢查結果。
+        gitignore_info: .gitignore 檢查結果。
+        claude_dir_info: .claude 目錄結構檢查結果。
+        hook_config_info: Hook 配置檔檢查結果。
+        config_dir_info: .claude/config 目錄檢查結果。
+
+    Returns:
+        list[TodoItem]: 強制檢查待辦項目。
+    """
+    items = []
+
+    if not gitignore_info.all_required_complete:
+        missing_rules = ", ".join(gitignore_info.missing_rules[:3])
+        hint = f"缺失: {missing_rules}{'...' if len(gitignore_info.missing_rules) > 3 else ''} — 新增到 .gitignore"
+        items.append(TodoItem(description=".gitignore 缺失必須的框架規則", hint=hint))
+
+    if not claude_dir_info.all_required_complete:
+        missing_dirs = ", ".join(claude_dir_info.missing_directories[:3])
+        hint = f"缺失: {missing_dirs}{'...' if len(claude_dir_info.missing_directories) > 3 else ''} — 建立目錄"
+        items.append(TodoItem(description=".claude 核心目錄結構缺失", hint=hint))
+
+    if not hook_config_info.all_required_complete:
+        if hook_config_info.missing_files:
+            missing = ", ".join(hook_config_info.missing_files[:2])
+            hint = f"缺失: {missing} — 新增或複製配置檔"
+        elif hook_config_info.format_errors:
+            error = hook_config_info.format_errors[0][:80]
+            hint = f"格式錯誤: {error} — 修復檔案格式"
+        else:
+            hint = "檢查配置檔"
+        items.append(TodoItem(description="Hook 配置檔不完整或格式錯誤", hint=hint))
+
+    if not config_dir_info.exists:
+        items.append(
+            TodoItem(
+                description=".claude/config 目錄不存在",
+                hint="建立 .claude/config 目錄並放入配置檔",
+            )
+        )
+
+    if not claude_md_info.exists:
+        items.append(
+            TodoItem(
+                description="CLAUDE.md 不存在",
+                hint="從 .claude/templates/CLAUDE-template.md 複製",
+            )
+        )
+
+    if language == "flutter" and not template_info.exists:
+        items.append(
+            TodoItem(
+                description=f"{language.upper()} 模板不存在",
+                hint="檢查或複製 .claude/project-templates/FLUTTER.md",
+            )
+        )
+
+    if not settings_info.exists:
+        items.append(
+            TodoItem(
+                description="settings.local.json 不存在",
+                hint="根據 settings.json 建立並調整語言特定權限",
+            )
+        )
+
+    if not hook_completeness.completeness_ok:
+        unregistered_list = ", ".join(sorted(hook_completeness.unregistered_hooks)[:3])
+        hint = f"未登記: {unregistered_list}{'...' if len(hook_completeness.unregistered_hooks) > 3 else ''} — 檢查是否需要在 settings.json 註冊或新增到 hook-exclude-list.json"
+        items.append(TodoItem(description=f"有 {len(hook_completeness.unregistered_hooks)} 個未登記的 Hook", hint=hint))
+
+    return items
+
+
+def _collect_should_items(
+    readme_info,
+    language_standards_info,
+) -> list[TodoItem]:
+    """彙整 SHOULD 推薦檢查項目.
+
+    Args:
+        readme_info: README.md 檢查結果。
+        language_standards_info: 語言規範檔檢查結果。
+
+    Returns:
+        list[TodoItem]: 推薦檢查待辦項目。
+    """
+    items = []
+
+    if not readme_info.exists:
+        items.append(
+            TodoItem(
+                description="README.md 不存在（推薦）",
+                hint="建立 README.md 記錄專案說明",
+            )
+        )
+
+    if language_standards_info.missing_standards:
+        missing = ", ".join(language_standards_info.missing_standards)
+        hint = f"缺失: {missing} — 複製或建立規範檔"
+        items.append(TodoItem(description=f"語言規範文件不存在（推薦）", hint=hint))
+
+    return items
+
+
 def _collect_todo_items(
     language: str,
     claude_md_info,
@@ -171,6 +292,8 @@ def _collect_todo_items(
     language_standards_info,
 ) -> list[TodoItem]:
     """彙整待辦項目.
+
+    分別收集 MUST（強制）和 SHOULD（推薦）項目，然後合併。
 
     Args:
         language: 偵測到的語言。
@@ -189,119 +312,24 @@ def _collect_todo_items(
     Returns:
         list[TodoItem]: 待辦項目清單。
     """
-    items = []
+    must_items = _collect_must_items(
+        language,
+        claude_md_info,
+        template_info,
+        settings_info,
+        hook_completeness,
+        gitignore_info,
+        claude_dir_info,
+        hook_config_info,
+        config_dir_info,
+    )
 
-    # ===== MUST 項（強制檢查） =====
+    should_items = _collect_should_items(
+        readme_info,
+        language_standards_info,
+    )
 
-    # .gitignore 缺失規則
-    if not gitignore_info.all_required_complete:
-        missing_rules = ", ".join(gitignore_info.missing_rules[:3])
-        hint = f"缺失: {missing_rules}{'...' if len(gitignore_info.missing_rules) > 3 else ''} — 新增到 .gitignore"
-        items.append(
-            TodoItem(
-                description=".gitignore 缺失必須的框架規則",
-                hint=hint,
-            )
-        )
-
-    # .claude 核心目錄缺失
-    if not claude_dir_info.all_required_complete:
-        missing_dirs = ", ".join(claude_dir_info.missing_directories[:3])
-        hint = f"缺失: {missing_dirs}{'...' if len(claude_dir_info.missing_directories) > 3 else ''} — 建立目錄"
-        items.append(
-            TodoItem(
-                description=".claude 核心目錄結構缺失",
-                hint=hint,
-            )
-        )
-
-    # Hook 配置檔缺失或格式錯誤
-    if not hook_config_info.all_required_complete:
-        if hook_config_info.missing_files:
-            missing = ", ".join(hook_config_info.missing_files[:2])
-            hint = f"缺失: {missing} — 新增或複製配置檔"
-        elif hook_config_info.format_errors:
-            error = hook_config_info.format_errors[0][:80]
-            hint = f"格式錯誤: {error} — 修復檔案格式"
-        else:
-            hint = "檢查配置檔"
-        items.append(
-            TodoItem(
-                description="Hook 配置檔不完整或格式錯誤",
-                hint=hint,
-            )
-        )
-
-    # .claude/config 目錄不存在
-    if not config_dir_info.exists:
-        items.append(
-            TodoItem(
-                description=".claude/config 目錄不存在",
-                hint="建立 .claude/config 目錄並放入配置檔",
-            )
-        )
-
-    # CLAUDE.md 缺失
-    if not claude_md_info.exists:
-        items.append(
-            TodoItem(
-                description="CLAUDE.md 不存在",
-                hint="從 .claude/templates/CLAUDE-template.md 複製",
-            )
-        )
-
-    # 語言模板缺失（僅對已有模板的語言）
-    if language == "flutter" and not template_info.exists:
-        items.append(
-            TodoItem(
-                description=f"{language.upper()} 模板不存在",
-                hint="檢查或複製 .claude/project-templates/FLUTTER.md",
-            )
-        )
-
-    # settings.local.json 缺失
-    if not settings_info.exists:
-        items.append(
-            TodoItem(
-                description="settings.local.json 不存在",
-                hint="根據 settings.json 建立並調整語言特定權限",
-            )
-        )
-
-    # Hook 未完整登記
-    if not hook_completeness.completeness_ok:
-        unregistered_list = ", ".join(sorted(hook_completeness.unregistered_hooks)[:3])
-        hint = f"未登記: {unregistered_list}{'...' if len(hook_completeness.unregistered_hooks) > 3 else ''} — 檢查是否需要在 settings.json 註冊或新增到 hook-exclude-list.json"
-        items.append(
-            TodoItem(
-                description=f"有 {len(hook_completeness.unregistered_hooks)} 個未登記的 Hook",
-                hint=hint,
-            )
-        )
-
-    # ===== SHOULD 項（推薦檢查） =====
-
-    # README.md 缺失（SHOULD 優先級）
-    if not readme_info.exists:
-        items.append(
-            TodoItem(
-                description="README.md 不存在（推薦）",
-                hint="建立 README.md 記錄專案說明",
-            )
-        )
-
-    # 語言規範文件缺失（SHOULD 優先級）
-    if language_standards_info.missing_standards:
-        missing = ", ".join(language_standards_info.missing_standards)
-        hint = f"缺失: {missing} — 複製或建立規範檔"
-        items.append(
-            TodoItem(
-                description=f"語言規範文件不存在（推薦）",
-                hint=hint,
-            )
-        )
-
-    return items
+    return must_items + should_items
 
 
 def _print_onboard_result(

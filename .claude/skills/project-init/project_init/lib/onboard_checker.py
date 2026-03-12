@@ -9,6 +9,33 @@ from typing import Optional
 import json
 
 
+# 必須目錄清單常數
+REQUIRED_DIRECTORIES = [
+    ("rules", "rules/"),
+    ("hooks", "hooks/"),
+    ("skills", "skills/"),
+    ("methodologies", "methodologies/"),
+    ("references", "references/"),
+    ("agents", "agents/"),
+    ("config", "config/"),
+]
+
+# 必須的 .gitignore 規則
+GITIGNORE_REQUIRED_RULES = [
+    "coverage",
+    "htmlcov",
+    ".claude/hook-logs",
+    ".claude/worktrees",
+    ".claude/tool-results",
+    ".claude/handoff",
+]
+
+# Hook 配置檔案名稱常數
+HOOK_CONFIG_YAML = "hook-language-classification.yaml"
+HOOK_CONFIG_EXCLUDE_JSON = "hook-exclude-list.json"
+HOOK_CONFIG_SETTINGS_JSON = "settings.json"
+
+
 @dataclass
 class ProjectLanguageInfo:
     """專案語言偵測結果."""
@@ -400,16 +427,61 @@ def check_docs_structure(project_root: Path) -> DocsStructureInfo:
     )
 
 
+def _has_gitignore_rule(content: str, pattern: str) -> bool:
+    """檢查 .gitignore 是否包含規則（模糊匹配）.
+
+    支援規則變體：/coverage/, coverage, coverage/* 等。
+
+    Args:
+        content: .gitignore 檔案內容。
+        pattern: 要檢查的規則模式。
+
+    Returns:
+        bool: 規則是否存在。
+    """
+    base_pattern = pattern.rstrip("/*")
+    for line in content.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        line_base = line.rstrip("/*")
+        if base_pattern in line or line_base == base_pattern:
+            return True
+    return False
+
+
+def _create_missing_gitignore_result(exists: bool = False) -> GitignoreCheckInfo:
+    """建立 .gitignore 缺失或無法讀取的結果.
+
+    Args:
+        exists: .gitignore 檔案是否存在（用於編碼錯誤情況）。
+
+    Returns:
+        GitignoreCheckInfo: 缺失項目的檢查結果。
+    """
+    return GitignoreCheckInfo(
+        exists=exists,
+        has_coverage_rules=False,
+        has_hook_logs_rule=False,
+        has_worktrees_rule=False,
+        has_tool_results_rule=False,
+        has_handoff_rule=False,
+        all_required_complete=False,
+        missing_rules=[
+            "coverage/",
+            "htmlcov/",
+            ".claude/hook-logs/",
+            ".claude/worktrees/",
+            ".claude/tool-results/",
+            ".claude/handoff/",
+        ],
+    )
+
+
 def check_gitignore_completeness(project_root: Path) -> GitignoreCheckInfo:
     """檢查 .gitignore 是否包含所有必須的框架排除規則.
 
-    驗證 .gitignore 包含：
-    - coverage/, htmlcov/（測試覆蓋率報告）
-    - .claude/hook-logs/（Hook 執行日誌）
-    - .claude/worktrees/（Git worktree 暫存）
-    - .claude/tool-results/（工具輸出）
-    - .claude/handoff/（交接檔案暫存）
-
+    驗證 .gitignore 包含所有 GITIGNORE_REQUIRED_RULES 中的規則。
     使用模糊匹配支援規則變體（如 /coverage/, coverage, coverage/* 等）。
 
     Args:
@@ -421,66 +493,21 @@ def check_gitignore_completeness(project_root: Path) -> GitignoreCheckInfo:
     gitignore_path = project_root / ".gitignore"
 
     if not gitignore_path.exists():
-        return GitignoreCheckInfo(
-            exists=False,
-            has_coverage_rules=False,
-            has_hook_logs_rule=False,
-            has_worktrees_rule=False,
-            has_tool_results_rule=False,
-            has_handoff_rule=False,
-            all_required_complete=False,
-            missing_rules=[
-                "coverage/",
-                "htmlcov/",
-                ".claude/hook-logs/",
-                ".claude/worktrees/",
-                ".claude/tool-results/",
-                ".claude/handoff/",
-            ],
-        )
+        return _create_missing_gitignore_result(exists=False)
 
     try:
         content = gitignore_path.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError):
-        return GitignoreCheckInfo(
-            exists=True,
-            has_coverage_rules=False,
-            has_hook_logs_rule=False,
-            has_worktrees_rule=False,
-            has_tool_results_rule=False,
-            has_handoff_rule=False,
-            all_required_complete=False,
-            missing_rules=[
-                "coverage/",
-                "htmlcov/",
-                ".claude/hook-logs/",
-                ".claude/worktrees/",
-                ".claude/tool-results/",
-                ".claude/handoff/",
-            ],
-        )
+        return _create_missing_gitignore_result(exists=True)
 
-    # 模糊匹配規則：檢查是否包含必須的排除路徑
-    def _has_rule(content: str, pattern: str) -> bool:
-        """檢查是否包含相關規則（模糊匹配）."""
-        # 提取主要路徑（去掉斜線和萬用字元）
-        base_pattern = pattern.rstrip("/*")
-        # 檢查原始模式或變體
-        for line in content.splitlines():
-            line = line.strip()
-            if not line or line.startswith("#"):
-                continue
-            line_base = line.rstrip("/*")
-            if base_pattern in line or line_base == base_pattern:
-                return True
-        return False
+    # 檢查每個必須規則
+    has_coverage = _has_gitignore_rule(content, "coverage") or _has_gitignore_rule(content, "htmlcov")
+    has_hook_logs = _has_gitignore_rule(content, ".claude/hook-logs")
+    has_worktrees = _has_gitignore_rule(content, ".claude/worktrees")
+    has_tool_results = _has_gitignore_rule(content, ".claude/tool-results")
+    has_handoff = _has_gitignore_rule(content, ".claude/handoff")
 
-    has_coverage = _has_rule(content, "coverage") or _has_rule(content, "htmlcov")
-    has_hook_logs = _has_rule(content, ".claude/hook-logs")
-    has_worktrees = _has_rule(content, ".claude/worktrees")
-    has_tool_results = _has_rule(content, ".claude/tool-results")
-    has_handoff = _has_rule(content, ".claude/handoff")
-
+    # 彙整缺失的規則
     missing = []
     if not has_coverage:
         missing.extend(["coverage/", "htmlcov/"])
@@ -493,8 +520,6 @@ def check_gitignore_completeness(project_root: Path) -> GitignoreCheckInfo:
     if not has_handoff:
         missing.append(".claude/handoff/")
 
-    all_complete = len(missing) == 0
-
     return GitignoreCheckInfo(
         exists=True,
         has_coverage_rules=has_coverage,
@@ -502,7 +527,7 @@ def check_gitignore_completeness(project_root: Path) -> GitignoreCheckInfo:
         has_worktrees_rule=has_worktrees,
         has_tool_results_rule=has_tool_results,
         has_handoff_rule=has_handoff,
-        all_required_complete=all_complete,
+        all_required_complete=len(missing) == 0,
         missing_rules=missing,
     )
 
@@ -550,21 +575,11 @@ def check_claude_directory_structure(project_root: Path) -> ClaudeDirectoryCheck
             directory_count=0,
         )
 
-    required_dirs = [
-        ("rules", "rules/"),
-        ("hooks", "hooks/"),
-        ("skills", "skills/"),
-        ("methodologies", "methodologies/"),
-        ("references", "references/"),
-        ("agents", "agents/"),
-        ("config", "config/"),
-    ]
-
     dir_status = {}
     missing = []
     count = 0
 
-    for dir_name, display_name in required_dirs:
+    for dir_name, display_name in REQUIRED_DIRECTORIES:
         dir_path = claude_dir / dir_name
         exists = dir_path.exists() and dir_path.is_dir()
         dir_status[dir_name] = exists
@@ -620,9 +635,9 @@ def check_hook_configurations(project_root: Path) -> HookConfigurationCheckInfo:
         )
 
     # 檢查檔案存在
-    yaml_file = config_dir / "hook-language-classification.yaml"
-    json_exclude = config_dir / "hook-exclude-list.json"
-    json_settings = config_dir / "settings.json"
+    yaml_file = config_dir / HOOK_CONFIG_YAML
+    json_exclude = config_dir / HOOK_CONFIG_EXCLUDE_JSON
+    json_settings = config_dir / HOOK_CONFIG_SETTINGS_JSON
 
     has_yaml = yaml_file.exists()
     has_exclude = json_exclude.exists()
@@ -630,11 +645,11 @@ def check_hook_configurations(project_root: Path) -> HookConfigurationCheckInfo:
 
     missing_files = []
     if not has_yaml:
-        missing_files.append("hook-language-classification.yaml")
+        missing_files.append(HOOK_CONFIG_YAML)
     if not has_exclude:
-        missing_files.append("hook-exclude-list.json")
+        missing_files.append(HOOK_CONFIG_EXCLUDE_JSON)
     if not has_settings:
-        missing_files.append("settings.json")
+        missing_files.append(HOOK_CONFIG_SETTINGS_JSON)
 
     # 驗證格式
     format_errors = []
