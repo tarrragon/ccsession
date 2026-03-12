@@ -80,3 +80,43 @@ tech_debt:
     risk: 低
     priority: P3
     status: pending
+
+  - id: TD-012
+    description: "project-init onboard YAML 驗證簡樸 — 目前為簡單文字掃描，可引入 yaml 庫做結構化驗證"
+    source_version: v0.1.0
+    source_ticket: 0.1.0-W43-006
+    risk: 中
+    priority: P2
+    status: pending
+
+  - id: TD-013
+    description: "project-init onboard .gitignore 規則匹配為模糊匹配，可增強精度"
+    source_version: v0.1.0
+    source_ticket: 0.1.0-W43-006
+    risk: 中
+    priority: P2
+    status: pending
+
+  - id: TD-014
+    description: "project-init onboard 權限檢查可記錄更詳細的權限和錯誤資訊"
+    source_version: v0.1.0
+    source_ticket: 0.1.0-W43-006
+    risk: 低
+    priority: P3
+    status: pending
+
+  - id: TD-015
+    description: "project-init onboard run_onboard() 認知負擔 ~12（100 行邊界），考慮拆分"
+    source_version: v0.1.0
+    source_ticket: 0.1.0-W43-006
+    risk: 低
+    priority: P3
+    status: pending
+
+  - id: TD-016
+    description: "project-init onboard 多個 _print_*_section() 函式結構相似，可提取共用模式"
+    source_version: v0.1.0
+    source_ticket: 0.1.0-W43-006
+    risk: 低
+    priority: P3
+    status: pending
