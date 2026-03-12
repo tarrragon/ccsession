@@ -51,9 +51,23 @@ from hook_utils import (
 # 範例：0.31.0-W5-001, 0.31.0-W5-001.1, 0.31.0-W5-001.1.2
 #       0.1.0-W11-004-phase1-design, 0.1.0-W25-005-analysis
 # 後綴可選，允許描述性後綴以 "-" 開頭，只含小寫字母、數字、連字號
+#
+# ⚠️ 維護重點（Hook standalone 設計）：
+#   此常數是 constants.py 中 TICKET_ID_PATTERN 的複製版本。
+#   Hook 設計上不依賴 ticket_system 模組（dependencies = []），
+#   因此保持複製。修改此值時，務必同步更新：
+#   - .claude/skills/ticket/ticket_system/lib/constants.py (TICKET_ID_PATTERN)
+#   詳見 .claude/rules/core/ticket-id-conventions.md
 TICKET_ID_REGEX = r"^(\d+\.\d+\.\d+)-W(\d+)-(\d+(?:\.\d+)*)(-[a-z0-9][a-z0-9-]{0,59})?$"
 
 # 已知的標準後綴清單（定義於 .claude/rules/core/ticket-id-conventions.md）
+#
+# ⚠️ 維護重點（Hook standalone 設計）：
+#   此清單是 constants.py 中 KNOWN_TICKET_SUFFIXES 的複製版本。
+#   Hook 設計上不依賴 ticket_system 模組（dependencies = []），
+#   因此保持複製。修改此值時，務必同步更新：
+#   - .claude/skills/ticket/ticket_system/lib/constants.py (KNOWN_TICKET_SUFFIXES)
+#   詳見 .claude/rules/core/ticket-id-conventions.md
 KNOWN_TICKET_SUFFIXES = [
     "-phase1-design",
     "-phase2-test-design",
@@ -182,16 +196,18 @@ def extract_ticket_id_from_file(file_path: str, logger) -> Optional[str]:
         logger.error(f"讀取檔案失敗 {file_path}: {e}")
         return None
 
-def has_description_suffix(ticket_id: str) -> bool:
+def has_description_suffix(ticket_id: Optional[str]) -> bool:
     """
     判斷 ID 是否帶有描述後綴
 
     Args:
-        ticket_id: Ticket ID
+        ticket_id: Ticket ID（可能為 None）
 
     Returns:
         bool - 是否有描述後綴
     """
+    if ticket_id is None:
+        return False
     match = re.match(TICKET_ID_REGEX, ticket_id)
     if not match:
         return False
@@ -421,6 +437,47 @@ def generate_hook_output(
 
 
 # ============================================================================
+# 輔助函式
+# ============================================================================
+
+def _emit_result(
+    is_valid: bool,
+    file_path: str,
+    ticket_id: Optional[str],
+    error_msg: str,
+    status: str
+) -> None:
+    """
+    輸出驗證結果並儲存日誌
+
+    統一處理驗證結果的輸出和日誌記錄邏輯，消除重複。
+
+    Args:
+        is_valid: 驗證是否通過
+        file_path: 檔案路徑
+        ticket_id: Ticket ID（可能為 None）
+        error_msg: 錯誤訊息（如有）
+        status: 狀態字串（"VALID" 或 "INVALID"）
+    """
+    hook_output = generate_hook_output(
+        is_valid=is_valid,
+        file_path=file_path,
+        ticket_id=ticket_id,
+        warning_message=error_msg if not is_valid else None
+    )
+    print(json.dumps(hook_output, ensure_ascii=False, indent=2))
+
+    log_entry = f"""[{datetime.now().isoformat()}]
+  FilePath: {file_path}
+  TicketID: {ticket_id}
+  Status: {status}
+  Warning: {error_msg if not is_valid else "None"}
+
+"""
+    save_check_log("ticket-id-validator", log_entry, logger)
+
+
+# ============================================================================
 # 主入口點
 # ============================================================================
 
@@ -435,8 +492,7 @@ def main() -> int:
     4. 判斷是否為 Ticket 檔案
     5. 提取 Ticket ID
     6. 驗證 Ticket ID
-    7. 生成 Hook 輸出
-    8. 儲存日誌
+    7. 輸出結果並儲存日誌
 
     Returns:
         int - Exit code (0=success, 1=error)
@@ -476,22 +532,13 @@ def main() -> int:
         if not ticket_id:
             logger.warning(f"無法從檔案提取 Ticket ID")
             warning_msg = f"無法從檔案 {file_path} 中提取 Ticket ID"
-            hook_output = generate_hook_output(
+            _emit_result(
                 is_valid=False,
                 file_path=file_path,
                 ticket_id=None,
-                warning_message=warning_msg
+                error_msg=warning_msg,
+                status="INVALID"
             )
-            print(json.dumps(hook_output, ensure_ascii=False, indent=2))
-            status = "INVALID"
-            log_entry = f"""[{datetime.now().isoformat()}]
-  FilePath: {file_path}
-  TicketID: None
-  Status: {status}
-  Warning: {warning_msg or "None"}
-
-"""
-            save_check_log("ticket-id-validator", log_entry, logger)
             return EXIT_SUCCESS
 
         # 步驟 5: 驗證 Ticket ID
@@ -499,25 +546,15 @@ def main() -> int:
 
         logger.info(f"Ticket ID 驗證: is_valid={is_valid}, ticket_id={ticket_id}")
 
-        # 步驟 6: 生成 Hook 輸出
-        hook_output = generate_hook_output(
+        # 步驟 6: 輸出結果並儲存日誌
+        status = "VALID" if is_valid else "INVALID"
+        _emit_result(
             is_valid=is_valid,
             file_path=file_path,
             ticket_id=ticket_id,
-            warning_message=error_msg if not is_valid else None
+            error_msg=error_msg,
+            status=status
         )
-        print(json.dumps(hook_output, ensure_ascii=False, indent=2))
-
-        # 步驟 7: 儲存日誌
-        status = "VALID" if is_valid else "INVALID"
-        log_entry = f"""[{datetime.now().isoformat()}]
-  FilePath: {file_path}
-  TicketID: {ticket_id}
-  Status: {status}
-  Warning: {error_msg if not is_valid else "None"}
-
-"""
-        save_check_log("ticket-id-validator", log_entry, logger)
 
         logger.info("Ticket ID 驗證 Hook 完成")
         return EXIT_SUCCESS

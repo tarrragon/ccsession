@@ -38,11 +38,9 @@ from .parser import (
 from .ticket_chain_index import TicketChainIndex
 
 # 匯入 list_tickets 的實作（仍然在此模組中定義）
-import re
 from typing import Dict, Any
 
-# 匯入 Ticket ID 格式常數和解析函式
-from .constants import TICKET_ID_PATTERN
+# 匯入 Ticket ID 解析函式
 from .id_parser import extract_core_ticket_id
 
 
@@ -71,6 +69,7 @@ def list_tickets(version: str) -> list[Dict[str, Any]]:
     - 標準檔案優先載入（檔案掃描順序通常標準格式在前）
     - 帶後綴的檔案會被跳過（核心 ID 已載入）
     - 同一版本內不會重複載入同一核心 ID
+    - .md 檔案優先於 .yaml 檔案（sorted() 按檔名字母順序）
 
     Args:
         version: 版本號（如 "0.31.0" 或 "v0.31.0"）

@@ -48,6 +48,11 @@ STATUS_LABELS: Dict[str, str] = {
 #   - 只包含小寫字母、數字、連字號
 #   - 不以 "-W" 開頭（避免與 wave 格式混淆）
 #   - 長度 1-60 字元
+#
+# ⚠️ 維護重點：此正則表達式被以下模組引用，修改時須同步更新：
+#   1. .claude/hooks/ticket-id-validator-hook.py (第 54 行 TICKET_ID_REGEX)
+#   2. 新增後綴時：同時更新 KNOWN_TICKET_SUFFIXES 清單
+#   詳見 .claude/rules/core/ticket-id-conventions.md (Ticket ID 命名規範)
 TICKET_ID_PATTERN: str = r"^(\d+\.\d+\.\d+)-W(\d+)-(\d+(?:\.\d+)*)(-[a-z0-9][a-z0-9-]{0,59})?$"
 
 # ============================================================
@@ -56,6 +61,11 @@ TICKET_ID_PATTERN: str = r"^(\d+\.\d+\.\d+)-W(\d+)-(\d+(?:\.\d+)*)(-[a-z0-9][a-z
 
 # 標準後綴清單，定義於 .claude/rules/core/ticket-id-conventions.md
 # Hook 驗證時使用此清單區分已知 vs 未知後綴
+#
+# ⚠️ 維護重點：此清單被以下模組引用，修改時須同步更新：
+#   1. .claude/hooks/ticket-id-validator-hook.py (第 57-66 行 KNOWN_TICKET_SUFFIXES)
+#   2. 修改 TICKET_ID_PATTERN 時：同時更新此清單
+#   詳見 .claude/rules/core/ticket-id-conventions.md (已知的描述性後綴模式)
 KNOWN_TICKET_SUFFIXES: List[str] = [
     "-phase1-design",
     "-phase2-test-design",
