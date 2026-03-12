@@ -24,7 +24,7 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Any, List, NamedTuple, Optional, Tuple, Union
 
-from .hook_logging import get_project_root
+from .hook_base import get_project_root
 
 # ============================================================================
 # 快取變數（模組級，用於 W39-002 效能改善）

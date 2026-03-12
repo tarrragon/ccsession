@@ -21,6 +21,8 @@ import sys
 from pathlib import Path
 from typing import List, Optional, Tuple, Dict, Any
 
+from .hook_base import get_project_root
+
 
 # ============================================================================
 # 快取變數（模組級，用於 W39-002 效能改善）
@@ -268,13 +270,7 @@ def is_handoff_recovery_mode(
             logger.debug("使用快取的 Handoff 恢復模式結果: {}".format(_handoff_recovery_cache))
         return _handoff_recovery_cache
 
-    try:
-        # 嘗試從環境變數或尋找 CLAUDE.md 取得專案根目錄
-        from .hook_logging import get_project_root as _get_project_root
-        project_root = _get_project_root()
-    except Exception:
-        # Fallback：使用當前工作目錄
-        project_root = Path.cwd()
+    project_root = get_project_root()
 
     handoff_pending_dir = project_root / ".claude" / "handoff" / "pending"
 

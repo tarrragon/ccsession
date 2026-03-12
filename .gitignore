@@ -78,6 +78,15 @@ server/go.work.sum
 .claude/handoff/archive/
 .claude/handoff/pending/
 
+# Python cache and bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Python virtual environments
+.venv/
+
 # Python coverage and test artifacts
 .claude/hooks/.coverage
 .claude/skills/*/.coverage
