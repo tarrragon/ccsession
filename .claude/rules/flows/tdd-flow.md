@@ -171,11 +171,22 @@ Phase 3a 策略文件完成後，PM **必須**評估 Phase 3b 是否需要拆分
 
 ### 轉換動作
 
-每次階段轉換時：
+**Phase 1/2/3a（代理人自治）**：
+
+代理人完成後自行執行，PM 不介入：
+
+1. 更新 Ticket Execution Log（`ticket track append-log`）
+2. 執行 `git commit`（message 格式：`feat({ticket-id}): Phase X 完成 - {摘要}`）
+3. 執行 `/ticket track complete {id}`
+4. 回報主線程：僅「成功」或「失敗 + 原因」
+
+**Phase 3b/4a/4b/4c（PM 管理）**：
+
+PM 收到代理人回報後執行：
 
 1. 執行 `/ticket track complete {id}`
 2. 更新工作日誌
-3. 派發下一階段代理人
+3. 依決策樹第八層 Checkpoint 路由下一步
 
 ---
 
@@ -201,4 +212,4 @@ Phase 3a 策略文件完成後，PM **必須**評估 Phase 3b 是否需要拆分
 ---
 
 **Last Updated**: 2026-03-12
-**Version**: 2.5.0 - Phase 3a→3b 之間新增拆分評估步驟（0.1.0-W43-002）
+**Version**: 2.6.0 - Phase 1-3 代理人自治執行規範：自行 commit 和更新 Ticket（0.1.0-W43-003）

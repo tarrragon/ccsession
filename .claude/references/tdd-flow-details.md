@@ -107,6 +107,61 @@ PM 閱讀策略文件，提取以下資訊：
 
 ---
 
+## Phase 1-3 代理人自治執行規範
+
+> **來源**：0.1.0-W43-003 — 減少 PM 中轉開銷，Phase 1-3 代理人自行管理 Ticket 和 commit。
+
+### 自治範圍
+
+| 職責 | Phase 1/2/3a（自治） | Phase 3b+（PM 管理） |
+|------|---------------------|---------------------|
+| 更新 Ticket Execution Log | 代理人自行 | 代理人自行 |
+| git commit | 代理人自行 | PM 收到回報後執行 |
+| git push | 禁止 | PM 統一執行 |
+| 下一階段派發 | PM（收到成功通知後全自動） | PM（依決策樹路由） |
+| 錯誤處理 | 回報失敗 + 原因，PM 派發 incident-responder | 同左 |
+
+### 代理人自治執行清單
+
+Phase 1/2/3a 代理人完成工作後，依序執行：
+
+```
+1. 確認產出物完整（功能規格/測試案例/策略文件）
+2. ticket track append-log {id} --section "Solution" "產出物描述"
+3. git add {相關檔案}
+4. git commit -m "feat({ticket-id}): Phase X 完成 - {摘要}"
+5. ticket track complete {id}
+6. 回報主線程：「Phase X 完成，Ticket {id} 已更新」
+```
+
+### 回報格式
+
+**成功回報**（回傳給主線程的訊息）：
+
+```
+Phase X 完成。Ticket {id} 已更新並 commit。
+```
+
+**失敗回報**：
+
+```
+Phase X 失敗。原因：{簡述}。建議：派發 incident-responder 分析。
+```
+
+**禁止回報**：完整分析報告、逐步實作過程、程式碼片段。這些內容寫入 Ticket Execution Log。
+
+### PM 收到回報後的動作（全自動，決策樹情境 D1）
+
+PM 收到 Phase 1/2/3a 的成功回報後，**全自動派發下一 Phase**（不需要 AskUserQuestion）：
+
+| 收到 | 下一步 |
+|------|-------|
+| Phase 1 完成 | 自動派發 Phase 2（sage-test-architect） |
+| Phase 2 完成 | 自動派發 Phase 3a（pepper-test-implementer） |
+| Phase 3a 完成 | 進入 3b 拆分評估（PM 評估，見 tdd-flow.md） |
+
+---
+
 ## Phase 1-4 詳細描述
 
 ### Phase 1：功能設計
@@ -218,4 +273,4 @@ Phase 3b 測試失敗
 ---
 
 **Last Updated**: 2026-03-12
-**Version**: 1.1.0 - 新增 3b 拆分評估詳細說明章節（0.1.0-W43-002）
+**Version**: 1.2.0 - 新增 Phase 1-3 代理人自治執行規範章節（0.1.0-W43-003）
