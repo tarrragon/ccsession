@@ -91,6 +91,26 @@ Skill 是預建的專用工具，優先於代理人派發。
 | 是（需即時互動）且成本合理 | Agent Teams 派發 |
 | 是 但成本不合理 | Task subagent + PM 中轉 |
 
+### 派發模式選擇規則
+
+派發代理人時，**預設使用背景模式**（`run_in_background: true`），釋放主線程靈活性。
+
+| 派發類型 | 模式 | 原因 |
+|---------|------|------|
+| Task subagent（開發/分析/重構） | 背景 | PM 無需等待，準備下一步決策 |
+| Agent Teams | 背景 | 內部協作，PM 釋放靈活性 |
+| TDD Phase 代理人（Phase 1-4） | 背景 | 完整週期較長，產出物寫入 Ticket |
+| 建立後審核（acceptance-auditor + SA） | 背景 | PM 可同時準備其他 Ticket |
+
+**例外（前景執行）**：
+
+| 場景 | 原因 |
+|------|------|
+| Skill/CLI 查詢（`/ticket track list` 等） | PM 需要結果做下一步決策 |
+| 即時驗證（格式檢查、語法驗證） | PM 需要立即反饋 |
+
+**背景派發後跟蹤**：代理人完成時 TaskOutput 自動通知 PM。PM 透過 `/ticket track` 查詢結果，不需要等待。
+
 > 場景表和詳細規則：.claude/rules/guides/parallel-dispatch.md
 > AskUserQuestion 強制使用規則：.claude/rules/core/askuserquestion-rules.md
 
@@ -368,5 +388,5 @@ Level 5: TDD 階段代理人 + thyme-python-developer
 
 ---
 
-**Last Updated**: 2026-03-11
-**Version**: 7.20.0 - 移除建立後審核的 DOC 類型豁免條件（0.1.0-W37-001）
+**Last Updated**: 2026-03-12
+**Version**: 7.21.0 - 新增派發模式選擇規則：預設背景派發（0.1.0-W43-001）
