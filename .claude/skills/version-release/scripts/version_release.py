@@ -650,12 +650,14 @@ def get_monorepo_version(root: Path) -> Optional[str]:
 
         return version
 
-    except Exception:
+    except Exception as e:
+        logger = logging.getLogger(__name__)
+        logger.debug(f"讀取 monorepo 版本失敗: {e}")
         return None
 
 
 # ============================================================================
-# 新增函式 3：compare_semantic_versions（Helper）
+# Helper：compare_semantic_versions
 # ============================================================================
 
 def compare_semantic_versions(v1: str, v2: str) -> int:
@@ -698,6 +700,135 @@ def compare_semantic_versions(v1: str, v2: str) -> int:
 
 
 # ============================================================================
+# 新增函式 4：Helper — _read_l2_version
+# ============================================================================
+
+def _read_l2_version(root: Path, config: dict) -> Tuple[Optional[str], List[dict]]:
+    """
+    讀取 L2 (UI) 版本。
+
+    Args:
+        root: 專案根目錄
+        config: 配置字典
+
+    Returns:
+        (l2_version or None, messages list)
+    """
+    messages = []
+    l2_version = None
+    ui_config = config.get("versions", {}).get("ui", {})
+    ui_source = ui_config.get("source")
+    l2_path = root / ui_source if ui_source else None
+
+    if not l2_path or not l2_path.exists():
+        messages.append({
+            "level": SEVERITY_INFO,
+            "layer": "l2",
+            "text": f"{ui_source} 不存在，跳過 L2 檢查"
+        })
+        return l2_version, messages
+
+    try:
+        with open(l2_path, encoding='utf-8') as f:
+            l2_data = yaml.safe_load(f)
+
+        if isinstance(l2_data, dict):
+            ui_key = ui_config.get("key", "version")
+            l2_version = l2_data.get(ui_key)
+
+            if l2_version and not isinstance(l2_version, str):
+                l2_version = str(l2_version)
+
+    except Exception as e:
+        logger = logging.getLogger(__name__)
+        logger.debug(f"讀取 {ui_source} 失敗: {e}")
+        messages.append({
+            "level": SEVERITY_INFO,
+            "layer": "l2",
+            "text": f"讀取 {ui_source} 失敗，跳過 L2 檢查"
+        })
+
+    return l2_version, messages
+
+
+# ============================================================================
+# 新增函式 4.1：Helper — _compare_l2_version
+# ============================================================================
+
+def _compare_l2_version(l1_version: str, l2_version: str, config: dict) -> List[dict]:
+    """
+    比對 L2 版本與 L1 版本，生成訊息。
+
+    Args:
+        l1_version: L1 monorepo 版本
+        l2_version: L2 UI 版本（含 build number）
+        config: 配置字典
+
+    Returns:
+        訊息清單
+    """
+    messages = []
+
+    # 去除 build number（"1.0.0+1" → "1.0.0"）
+    l2_main = l2_version.split("+")[0]
+    cmp_result = compare_semantic_versions(l2_main, l1_version)
+
+    conflict_cfg = config.get("sync_rules", {}).get("conflict_detection", {})
+
+    if cmp_result > 0:  # L2 > L1
+        severity = conflict_cfg.get("ui_ahead_of_monorepo", {}).get("severity", SEVERITY_WARNING)
+        messages.append({
+            "level": severity,
+            "layer": "l2",
+            "text": "UI 版本大於 monorepo，確認是否故意？"
+        })
+    elif cmp_result < 0:  # L2 < L1
+        severity = conflict_cfg.get("ui_behind_monorepo", {}).get("severity", SEVERITY_INFO)
+        messages.append({
+            "level": severity,
+            "layer": "l2",
+            "text": "UI 版本低於 monorepo（正常）"
+        })
+    else:  # L2 = L1
+        messages.append({
+            "level": SEVERITY_SUCCESS,
+            "layer": "l2",
+            "text": "UI 版本與 monorepo 版本一致"
+        })
+
+    return messages
+
+
+# ============================================================================
+# 新增函式 4.2：Helper — _check_l3_status
+# ============================================================================
+
+def _check_l3_status(config: dict) -> Tuple[bool, List[dict]]:
+    """
+    檢查 L3 (Server) 版本狀態。
+
+    Args:
+        config: 配置字典
+
+    Returns:
+        (l3_has_version, messages list)
+    """
+    messages = []
+    server_config = config.get("versions", {}).get("server", {})
+    server_source = server_config.get("source")
+    l3_has_version = server_source is not None
+
+    if server_source is None:
+        messages.append({
+            "level": SEVERITY_INFO,
+            "layer": "l3",
+            "text": "server/go.mod 無版本欄位，由 monorepo 版本決定"
+        })
+
+    return l3_has_version, messages
+
+
+# ============================================================================
 # 新增函式 4：check_monorepo_version_sync
 # ============================================================================
 
@@ -727,13 +858,12 @@ def check_monorepo_version_sync(version: str, config: dict) -> dict:
         }
     """
     messages = []
-    l2_version = None
-    l3_has_version = False
 
     # [檢查 L1]
     if not version:
         messages.append({
             "level": SEVERITY_ERROR,
+            "layer": "l1",
             "text": "L1 monorepo 版本為空"
         })
         return {
@@ -745,75 +875,24 @@ def check_monorepo_version_sync(version: str, config: dict) -> dict:
             "summary": "失敗（L1 monorepo 版本為空）"
         }
 
-    # [檢查 L2 - 讀取]
+    # [檢查 L2]
     root = get_project_root()
-    ui_config = config.get("versions", {}).get("ui", {})
-    ui_source = ui_config.get("source")
-    l2_path = root / ui_source if ui_source else None
+    l2_version, l2_messages = _read_l2_version(root, config)
+    messages.extend(l2_messages)
 
-    if not l2_path or not l2_path.exists():
-        messages.append({
-            "level": SEVERITY_INFO,
-            "text": f"{ui_source} 不存在，跳過 L2 檢查"
-        })
-    else:
-        try:
-            with open(l2_path, encoding='utf-8') as f:
-                l2_data = yaml.safe_load(f)
-
-            if isinstance(l2_data, dict):
-                ui_key = ui_config.get("key", "version")
-                l2_version = l2_data.get(ui_key)
-
-                if l2_version and not isinstance(l2_version, str):
-                    l2_version = str(l2_version)
-
-                # [檢查 L2 - 版本比對]
-                if l2_version:
-                    # 去除 build number（"1.0.0+1" → "1.0.0"）
-                    l2_main = l2_version.split("+")[0]
-
-                    cmp_result = compare_semantic_versions(l2_main, version)
-
-                    if cmp_result > 0:  # L2 > L1
-                        severity = config.get("sync_rules", {}).get("conflict_detection", {}).get("ui_ahead_of_monorepo", {}).get("severity", SEVERITY_WARNING)
-                        messages.append({
-                            "level": severity,
-                            "text": "UI 版本大於 monorepo，確認是否故意？"
-                        })
-                    elif cmp_result < 0:  # L2 < L1
-                        severity = config.get("sync_rules", {}).get("conflict_detection", {}).get("ui_behind_monorepo", {}).get("severity", SEVERITY_INFO)
-                        messages.append({
-                            "level": severity,
-                            "text": "UI 版本低於 monorepo（正常）"
-                        })
-                    else:  # L2 = L1
-                        messages.append({
-                            "level": SEVERITY_SUCCESS,
-                            "text": "UI 版本與 monorepo 版本一致"
-                        })
-        except Exception:
-            messages.append({
-                "level": SEVERITY_INFO,
-                "text": f"讀取 {ui_source} 失敗，跳過 L2 檢查"
-            })
+    if l2_version:
+        l2_cmp_messages = _compare_l2_version(version, l2_version, config)
+        messages.extend(l2_cmp_messages)
 
     # [檢查 L3]
-    server_config = config.get("versions", {}).get("server", {})
-    server_source = server_config.get("source")
-    if server_source is None:
-        l3_has_version = False
-        messages.append({
-            "level": SEVERITY_INFO,
-            "text": "server/go.mod 無版本欄位，由 monorepo 版本決定"
-        })
+    l3_has_version, l3_messages = _check_l3_status(config)
+    messages.extend(l3_messages)
 
     # [最終判定]
     has_error = any(m["level"] == SEVERITY_ERROR for m in messages)
     passed = not has_error
-
-    # [生成結論]
     has_warning = any(m["level"] == SEVERITY_WARNING for m in messages)
+
     if passed and not has_warning:
         summary = "通過（版本策略符合 monorepo 三層架構）"
     elif passed and has_warning:
@@ -866,9 +945,9 @@ def print_version_sync_report(sync_result: dict):
         print("|-- L2 ui/pubspec.yaml: 未偵測到")
     else:
         print(f"|-- L2 ui/pubspec.yaml: {l2}")
-        # 輸出 L2 相關的訊息
+        # 輸出 L2 相關的訊息（基於 layer 欄位）
         for msg in sync_result.get("messages", []):
-            if "ui" in msg.get("text", "").lower() or "UI" in msg.get("text", ""):
+            if msg.get("layer") == "l2":
                 level_marker = f"[{msg['level'].upper()}]" if msg['level'] != SEVERITY_SUCCESS else "[OK]"
                 print(f"|   +-- {level_marker} {msg['text']}")
 
