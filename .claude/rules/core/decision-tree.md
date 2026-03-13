@@ -287,9 +287,24 @@ Skill 是預建的專用工具，優先於代理人派發。
 
 **驗收方式確認（AskUserQuestion）**：complete 前必須確認驗收方式（標準/簡化/先完成後補）。
 
+**主動勾選驗收條件（強制）**：確認驗收方式後、執行 complete 前，PM **必須**主動勾選驗收條件，禁止依賴 CLI 擋回才補勾。
+
+```
+Step 1: 確認驗收方式（AskUserQuestion #1）
+    |
+    v
+Step 2: 逐條確認驗收條件已滿足
+    |
+    v
+Step 3: ticket track check-acceptance <id>
+    |
+    v
+Step 4: ticket track complete <id>
+```
+
 **下一步選擇（AskUserQuestion）**：有多個後續 Ticket 可選時，必須讓使用者選擇。
 
-> Ticket 生命週期和驗收流程：.claude/rules/flows/ticket-lifecycle.md
+> 驗收流程詳細規則：.claude/rules/flows/ticket-lifecycle.md（Complete 前主動勾選驗收條件章節）
 
 ---
 
@@ -393,4 +408,4 @@ Level 5: TDD 階段代理人 + thyme-python-developer
 ---
 
 **Last Updated**: 2026-03-13
-**Version**: 7.25.0 - 第負一層複雜度判斷邏輯去重：改為引用 parallel-dispatch.md（TD-021, 0.1.0-W50-007）
+**Version**: 7.26.0 - 第七層新增 complete 前主動勾選驗收條件步驟（0.1.0-W51-001）
