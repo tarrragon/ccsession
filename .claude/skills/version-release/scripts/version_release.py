@@ -306,13 +306,37 @@ def normalize_version(version: Optional[str]) -> str:
         raise ValueError(f"版本格式不正確: {version} (應為 X.Y 或 X.Y.Z)")
 
 
+def extract_major_minor(version: str) -> str:
+    """
+    從語義版本號提取主版本和次版本號。
+
+    從 X.Y.Z 格式的版本號中提取 X.Y 部分，
+    用於版本系列識別（如 v0.19、v0.20）。
+
+    Args:
+        version: 完整版本號字串（例如 "0.19.8"、"0.1"）
+
+    Returns:
+        主版本.次版本 格式的字串（例如 "0.19"、"0.1"）
+
+    Examples:
+        >>> extract_major_minor("0.19.8")
+        "0.19"
+        >>> extract_major_minor("0.1")
+        "0.1"
+        >>> extract_major_minor("1.2.3")
+        "1.2"
+    """
+    return ".".join(version.split(".")[:2])
+
+
 def check_worklog_completed(version: str) -> Tuple[bool, List[str]]:
     """檢查工作日誌是否完成"""
     root = get_project_root()
     worklog_dir = root / "docs" / "work-logs"
 
     errors = []
-    major_minor = ".".join(version.split(".")[:2])  # v0.19 from v0.19.8
+    major_minor = extract_major_minor(version)
 
     # 查詢相關的工作日誌
     worklog_files = []
@@ -367,7 +391,7 @@ def check_technical_debt_status(version: str) -> Dict:
         }
     """
     root = get_project_root()
-    major_minor = ".".join(version.split(".")[:2])  # 0.20
+    major_minor = extract_major_minor(version)
     version_series = f"v{major_minor}"  # v0.20
 
     # 掃描版本系列的票目錄
@@ -472,7 +496,7 @@ def check_technical_debt(version: str) -> Tuple[bool, List[str]]:
 
         # 檢查 tickets 清單中的 pending 狀態 TD
         tickets = data.get('tickets', [])
-        major_minor = ".".join(version.split(".")[:2])
+        major_minor = extract_major_minor(version)
 
         pending_tds = []
         for ticket in tickets:
@@ -1034,7 +1058,7 @@ def check_version_sync(version: str) -> Tuple[bool, List[str]]:
         )
         if result.returncode == 0:
             current_branch = result.stdout.strip()
-            major_minor = ".".join(version.split(".")[:2])
+            major_minor = extract_major_minor(version)
             expected_branch = f"feature/v{major_minor}"
             if current_branch != expected_branch:
                 print_warning(
@@ -1101,7 +1125,7 @@ def preflight_check(version: str) -> Tuple[bool, Dict[str, Tuple[bool, List[str]
             # 提供修復建議
             print_info("\n解決方式:", 1)
             print_info("  1. 處理這些技術債務後再發布", 2)
-            major_minor = ".".join(version.split(".")[:2])
+            major_minor = extract_major_minor(version)
             next_version = f"{int(major_minor.split('.')[1]) + 1}"
             next_major_minor = f"{major_minor.split('.')[0]}.{next_version}"
             print_info(
@@ -1146,7 +1170,7 @@ def preflight_check(version: str) -> Tuple[bool, Dict[str, Tuple[bool, List[str]
 def extract_changelog_section(version: str) -> Optional[str]:
     """從工作日誌提取 CHANGELOG 區塊"""
     root = get_project_root()
-    major_minor = ".".join(version.split(".")[:2])
+    major_minor = extract_major_minor(version)
     worklog_dir = root / "docs" / "work-logs"
 
     # 查找相關的工作日誌
@@ -1251,7 +1275,7 @@ def defer_technical_debts(version: str, defer_to_version: str, dry_run: bool = F
         True 如果成功，False 如果失敗
     """
     root = get_project_root()
-    major_minor = ".".join(version.split(".")[:2])
+    major_minor = extract_major_minor(version)
 
     # 掃描版本系列的票目錄
     worklog_dir = root / "docs" / "work-logs"
@@ -1385,7 +1409,7 @@ def update_todolist(version: str, dry_run: bool = False) -> bool:
         with open(todolist_path, encoding="utf-8") as f:
             content = f.read()
 
-        major_minor = ".".join(version.split(".")[:2])
+        major_minor = extract_major_minor(version)
 
         # 同時支援「0.31.0」和「0.31」兩種版本格式
         version_candidates = [version, major_minor]
@@ -1566,7 +1590,7 @@ def git_merge_and_push(version: str, dry_run: bool = False) -> bool:
     print_section("Step 3: Git Operations")
 
     root = get_project_root()
-    major_minor = ".".join(version.split(".")[:2])
+    major_minor = extract_major_minor(version)
     feature_branch = f"feature/v{major_minor}"
     tag_name = f"v{version}-final"
 
