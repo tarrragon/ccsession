@@ -26,7 +26,7 @@ from typing import Optional, Tuple
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from hook_utils import setup_hook_logging, run_hook_safely
+from hook_utils import setup_hook_logging, run_hook_safely, is_subagent_environment
 from lib.hook_messages import (
     AskUserQuestionMessages,
     ProcessSkipMessages,
@@ -170,6 +170,11 @@ def main() -> int:
     try:
         input_data = json.load(sys.stdin)
     except json.JSONDecodeError:
+        return EXIT_SUCCESS
+
+    # 偵測 subagent 環境：agent_id 僅在 subagent 中出現
+    if is_subagent_environment(input_data):
+        logger.info("偵測到 subagent 環境（agent_id=%s），跳過流程省略提醒", input_data.get("agent_id"))
         return EXIT_SUCCESS
 
     user_input = input_data.get("prompt", "")
