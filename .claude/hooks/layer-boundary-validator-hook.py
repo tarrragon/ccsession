@@ -505,14 +505,14 @@ def main() -> int:
     try:
         logger.info("Layer 1/2 邊界驗證 Hook 啟動")
 
+        # 讀取輸入
+        input_data = read_json_from_stdin(logger)
+
         # 檢測 subagent 環境
-        if is_subagent_environment(logger):
+        if is_subagent_environment(input_data):
             logger.debug("在 subagent 環境中執行，跳過檢查")
             _output_success()
             return EXIT_SUCCESS
-
-        # 讀取輸入
-        input_data = read_json_from_stdin(logger)
 
         # 驗證輸入
         valid, file_path = _validate_input(input_data, logger)
