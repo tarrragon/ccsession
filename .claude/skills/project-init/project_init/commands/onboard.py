@@ -57,6 +57,59 @@ class OnboardResult:
     """待辦項目數量."""
 
 
+def _run_detection_checks(project_root: Path) -> tuple:
+    """執行偵測和檢查步驟.
+
+    Returns:
+        tuple: (language_info, hook_classification, 其他檢查結果)
+    """
+    language_info = detect_project_language(project_root)
+    language = language_info.language
+
+    hook_config_path = (
+        project_root / ".claude" / "config" / "hook-language-classification.yaml"
+    )
+    hook_classification = parse_hook_classification(hook_config_path)
+
+    claude_md_info = check_claude_md(project_root)
+    template_info = check_language_template(project_root, language)
+    settings_info = check_settings_local_json(project_root)
+    hook_completeness = check_hook_completeness(project_root)
+
+    return (language_info, hook_classification, claude_md_info, template_info,
+            settings_info, hook_completeness, language)
+
+
+def _run_structure_checks(project_root: Path) -> tuple:
+    """執行結構檢查和自動建立步驟.
+
+    Returns:
+        tuple: (docs_structure, gitignore_info, claude_dir_info, hook_config_info, config_dir_info)
+    """
+    docs_structure = check_docs_structure(project_root)
+    _create_missing_docs_structure(project_root, docs_structure)
+    docs_structure = check_docs_structure(project_root)
+
+    gitignore_info = check_gitignore_completeness(project_root)
+    claude_dir_info = check_claude_directory_structure(project_root)
+    hook_config_info = check_hook_configurations(project_root)
+    config_dir_info = check_claude_config_directory(project_root)
+
+    return (docs_structure, gitignore_info, claude_dir_info, hook_config_info,
+            config_dir_info)
+
+
+def _run_final_checks(project_root: Path, language: str) -> tuple:
+    """執行最終檢查步驟.
+
+    Returns:
+        tuple: (readme_info, language_standards_info)
+    """
+    readme_info = check_readme_md(project_root)
+    language_standards_info = check_language_standards(project_root, language)
+    return (readme_info, language_standards_info)
+
+
 def run_onboard(project_root: Path) -> OnboardResult:
     """執行 onboard 引導流程.
 
@@ -66,56 +119,18 @@ def run_onboard(project_root: Path) -> OnboardResult:
     Returns:
         OnboardResult: onboard 流程結果。同時輸出格式化文字到 stdout。
     """
-    # Step 1: 偵測專案語言
-    language_info = detect_project_language(project_root)
-    language = language_info.language
+    # 執行偵測檢查
+    (language_info, hook_classification, claude_md_info, template_info,
+     settings_info, hook_completeness, language) = _run_detection_checks(project_root)
 
-    # Step 2: 讀取 Hook 語言分類
-    hook_config_path = (
-        project_root / ".claude" / "config" / "hook-language-classification.yaml"
-    )
-    hook_classification = parse_hook_classification(hook_config_path)
+    # 執行結構檢查
+    (docs_structure, gitignore_info, claude_dir_info, hook_config_info,
+     config_dir_info) = _run_structure_checks(project_root)
 
-    # Step 3: 檢查 CLAUDE.md
-    claude_md_info = check_claude_md(project_root)
+    # 執行最終檢查
+    readme_info, language_standards_info = _run_final_checks(project_root, language)
 
-    # Step 4: 檢查語言模板
-    template_info = check_language_template(project_root, language)
-
-    # Step 5: 檢查 settings.local.json
-    settings_info = check_settings_local_json(project_root)
-
-    # Step 6: 檢查 Hook 完整性
-    hook_completeness = check_hook_completeness(project_root)
-
-    # Step 7: 檢查 docs 目錄結構
-    docs_structure = check_docs_structure(project_root)
-
-    # Step 8: 自動建立缺失的 docs 結構
-    _create_missing_docs_structure(project_root, docs_structure)
-
-    # Step 8.5: 重新檢查 docs 結構（建立完成後）
-    docs_structure = check_docs_structure(project_root)
-
-    # Step 9: 檢查 .gitignore 完整性（MUST 項）
-    gitignore_info = check_gitignore_completeness(project_root)
-
-    # Step 10: 檢查 .claude 核心目錄結構（MUST 項）
-    claude_dir_info = check_claude_directory_structure(project_root)
-
-    # Step 11: 檢查 Hook 配置檔（MUST 項）
-    hook_config_info = check_hook_configurations(project_root)
-
-    # Step 12: 檢查 .claude/config 目錄（MUST 項）
-    config_dir_info = check_claude_config_directory(project_root)
-
-    # Step 13: 檢查 README.md（SHOULD 項）
-    readme_info = check_readme_md(project_root)
-
-    # Step 14: 檢查語言規範文件（SHOULD 項）
-    language_standards_info = check_language_standards(project_root, language)
-
-    # Step 15: 彙整待辦清單
+    # 彙整待辦清單
     todo_items = _collect_todo_items(
         language,
         claude_md_info,
@@ -365,6 +380,37 @@ def _print_onboard_result(
     _print_todolist_section(result)
 
 
+def _print_section_header(title: str) -> None:
+    """輸出區段標題.
+
+    Args:
+        title: 區段標題文字。
+    """
+    print(f"[{title}]")
+
+
+def _print_status_line(status: str, message: str, indent: int = 2) -> None:
+    """輸出狀態行（含 [OK]/[TODO] 標記）.
+
+    Args:
+        status: 狀態標記（STATUS_OK, STATUS_TODO 等）。
+        message: 訊息文字。
+        indent: 縮排空格數（預設 2）。
+    """
+    print(f"{' ' * indent}{status} {message}")
+
+
+def _print_hint_line(hint: str, indent: int = 2) -> None:
+    """輸出提示行.
+
+    Args:
+        hint: 提示文字。
+        indent: 縮排空格數（預設 2）。
+    """
+    if hint:
+        print(f"{' ' * indent}→ {hint}")
+
+
 def _print_header() -> None:
     """輸出頁頭."""
     print(SEPARATOR)
@@ -523,92 +569,97 @@ def _format_todo_count(count: int) -> str:
 
 def _print_gitignore_section(gitignore_info) -> None:
     """輸出 .gitignore 檢查部分."""
-    print("[.gitignore 框架規則]")
+    _print_section_header(".gitignore 框架規則")
     if gitignore_info.exists:
         if gitignore_info.all_required_complete:
-            print("  [OK] 包含所有必須的框架排除規則")
+            _print_status_line(STATUS_OK, "包含所有必須的框架排除規則")
         else:
-            print("  [TODO] 缺失以下規則:")
+            _print_status_line(STATUS_TODO, "缺失以下規則:")
             for rule in gitignore_info.missing_rules:
-                print(f"    - {rule}")
+                print(f"      - {rule}")
     else:
-        print("  [TODO] 檔案不存在")
+        _print_status_line(STATUS_TODO, "檔案不存在")
     print()
 
 
 def _print_claude_directory_section(claude_dir_info) -> None:
     """輸出 .claude 目錄結構檢查部分."""
-    print("[.claude 核心目錄結構]")
+    _print_section_header(".claude 核心目錄結構")
     if claude_dir_info.exists:
         if claude_dir_info.all_required_complete:
-            print(f"  [OK] 所有 {claude_dir_info.directory_count} 個必須目錄存在")
+            _print_status_line(STATUS_OK, f"所有 {claude_dir_info.directory_count} 個必須目錄存在")
         else:
-            print(f"  [TODO] 缺失 {len(claude_dir_info.missing_directories)} 個目錄:")
+            _print_status_line(STATUS_TODO, f"缺失 {len(claude_dir_info.missing_directories)} 個目錄:")
             for directory in claude_dir_info.missing_directories:
-                print(f"    - {directory}")
+                print(f"      - {directory}")
     else:
-        print("  [TODO] .claude 目錄不存在")
+        _print_status_line(STATUS_TODO, ".claude 目錄不存在")
     print()
 
 
 def _print_hook_config_section(hook_config_info) -> None:
     """輸出 Hook 配置檔檢查部分."""
-    print("[Hook 配置檔]")
+    _print_section_header("Hook 配置檔")
     if not hook_config_info.config_dir_exists:
-        print("  [TODO] .claude/config 目錄不存在")
+        _print_status_line(STATUS_TODO, ".claude/config 目錄不存在")
     elif hook_config_info.all_required_complete:
-        print("  [OK] 所有配置檔都存在且格式有效")
+        _print_status_line(STATUS_OK, "所有配置檔都存在且格式有效")
+        if hook_config_info.yaml_permission_info:
+            perms = hook_config_info.yaml_permission_info
+            perm_str = f"(讀: {perms.can_read}, 寫: {perms.can_write}, 執: {perms.can_execute})"
+            print(f"    YAML 權限: {perm_str}")
     else:
         if hook_config_info.missing_files:
-            print("  [TODO] 缺失以下檔案:")
+            _print_status_line(STATUS_TODO, "缺失以下檔案:")
             for file in hook_config_info.missing_files:
-                print(f"    - {file}")
+                print(f"      - {file}")
         if hook_config_info.format_errors:
-            print("  [TODO] 格式錯誤:")
+            _print_status_line(STATUS_TODO, "格式錯誤:")
             for error in hook_config_info.format_errors:
-                print(f"    - {error}")
+                print(f"      - {error}")
     print()
 
 
 def _print_config_directory_section(config_dir_info) -> None:
     """輸出 .claude/config 目錄檢查部分."""
-    print("[.claude/config 目錄]")
+    _print_section_header(".claude/config 目錄")
     if config_dir_info.exists:
         if config_dir_info.is_directory:
-            print("  [OK] 目錄存在且可讀")
-            print(f"  包含 {config_dir_info.config_file_count} 個檔案")
+            _print_status_line(STATUS_OK, "目錄存在且可讀")
+            print(f"    包含 {config_dir_info.config_file_count} 個檔案")
         else:
-            print("  [TODO] 存在但不是目錄")
+            _print_status_line(STATUS_TODO, "存在但不是目錄")
     else:
-        print("  [TODO] 目錄不存在")
+        _print_status_line(STATUS_TODO, "目錄不存在")
     print()
 
 
 def _print_readme_section(readme_info) -> None:
     """輸出 README.md 檢查部分."""
-    print("[README.md（推薦）]")
+    _print_section_header("README.md（推薦）")
     if readme_info.exists:
         if readme_info.is_nonempty:
-            print(f"  [OK] 檔案存在且非空（{readme_info.size_bytes} 位元組）")
+            _print_status_line(STATUS_OK, f"檔案存在且非空（{readme_info.size_bytes} 位元組）")
         else:
-            print("  [WARN] 檔案存在但為空")
+            _print_status_line("[WARN]", "檔案存在但為空")
     else:
-        print("  [SKIP] 檔案不存在（推薦建立）")
+        _print_status_line(STATUS_SKIP, "檔案不存在（推薦建立）")
     print()
 
 
 def _print_language_standards_section(language_standards_info) -> None:
     """輸出語言規範文件檢查部分."""
-    print("[語言規範文件（推薦）]")
+    _print_section_header("語言規範文件（推薦）")
     if language_standards_info.detected_language == "unknown":
-        print("  [SKIP] 無法確認語言")
+        _print_status_line(STATUS_SKIP, "無法確認語言")
     elif language_standards_info.exists:
-        print(f"  [OK] {language_standards_info.expected_standard_file} 存在")
+        _print_status_line(STATUS_OK, f"{language_standards_info.expected_standard_file} 存在")
     else:
-        print(f"  [SKIP] {language_standards_info.expected_standard_file} 不存在（推薦建立）")
+        _print_status_line(STATUS_SKIP, f"{language_standards_info.expected_standard_file} 不存在（推薦建立）")
 
     if language_standards_info.standard_files_available:
-        print(f"  可用的規範檔: {', '.join(language_standards_info.standard_files_available)}")
+        files_str = ", ".join(language_standards_info.standard_files_available)
+        print(f"    可用的規範檔: {files_str}")
     print()
 
 
