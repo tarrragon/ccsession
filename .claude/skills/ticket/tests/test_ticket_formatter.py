@@ -421,6 +421,23 @@ class TestFormatTicketStats:
         assert "[被阻塞]: 0" in result
         assert "總計 4" in result
 
+    def test_format_stats_backward_compatible_concluded(self):
+        """測試向後相容性 — 舊格式輸入時正確計算已結案數"""
+        # 舊格式可能沒有 superseded/closed 欄位
+        stats = {
+            "pending": 1,
+            "in_progress": 1,
+            "completed": 1,
+            "blocked": 1,
+            "superseded": 0,
+            "closed": 0,
+            "total": 4,
+        }
+        result = format_ticket_stats(stats)
+        # 驗證已結案 (superseded + closed) = 0 + 0 = 0
+        assert "[已結案]: 0" in result
+        assert "總計 4" in result
+
     def test_all_zero_stats(self):
         """測試全為 0 的統計"""
         stats = {

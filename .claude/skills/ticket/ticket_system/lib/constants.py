@@ -15,12 +15,16 @@ STATUS_PENDING: str = "pending"
 STATUS_IN_PROGRESS: str = "in_progress"
 STATUS_COMPLETED: str = "completed"
 STATUS_BLOCKED: str = "blocked"
+STATUS_SUPERSEDED: str = "superseded"
+STATUS_CLOSED: str = "closed"
 
 TICKET_STATUS: Dict[str, str] = {
     "PENDING": STATUS_PENDING,
     "IN_PROGRESS": STATUS_IN_PROGRESS,
     "COMPLETED": STATUS_COMPLETED,
     "BLOCKED": STATUS_BLOCKED,
+    "SUPERSEDED": STATUS_SUPERSEDED,
+    "CLOSED": STATUS_CLOSED,
 }
 
 # 狀態的中文描述
@@ -29,6 +33,8 @@ STATUS_LABELS: Dict[str, str] = {
     STATUS_IN_PROGRESS: "進行中",
     STATUS_COMPLETED: "已完成",
     STATUS_BLOCKED: "被阻塞",
+    STATUS_SUPERSEDED: "已取代",
+    STATUS_CLOSED: "已關閉",
 }
 
 # ============================================================
