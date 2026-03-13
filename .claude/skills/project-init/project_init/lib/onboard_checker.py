@@ -459,6 +459,25 @@ def check_docs_structure(project_root: Path) -> DocsStructureInfo:
     )
 
 
+def _check_file_read_permission(file_path: Path) -> bool:
+    """檢查檔案讀取權限."""
+    try:
+        file_path.read_bytes()
+        return True
+    except (OSError, PermissionError):
+        return False
+
+
+def _check_file_write_permission(file_path: Path) -> bool:
+    """檢查檔案寫入權限."""
+    try:
+        with file_path.open('a'):
+            pass
+        return True
+    except (OSError, PermissionError):
+        return False
+
+
 def _check_file_permissions(file_path: Path) -> PermissionInfo:
     """檢查檔案的讀/寫/執行權限.
 
@@ -468,29 +487,17 @@ def _check_file_permissions(file_path: Path) -> PermissionInfo:
     Returns:
         PermissionInfo: 權限資訊。
     """
+    if not file_path.exists():
+        return PermissionInfo(
+            can_read=False,
+            can_write=False,
+            can_execute=False,
+            error_message="檔案不存在"
+        )
+
     try:
-        if not file_path.exists():
-            return PermissionInfo(
-                can_read=False,
-                can_write=False,
-                can_execute=False,
-                error_message="檔案不存在"
-            )
-
-        # 檢查讀取權限
-        can_read = True
-        try:
-            file_path.read_bytes()
-        except (OSError, PermissionError) as e:
-            can_read = False
-
-        # 檢查寫入權限
-        can_write = True
-        try:
-            # 嘗試開啟檔案測試寫入權限（不實際寫入）
-            file_path.open('a').close()
-        except (OSError, PermissionError):
-            can_write = False
+        can_read = _check_file_read_permission(file_path)
+        can_write = _check_file_write_permission(file_path)
 
         # 檢查執行權限
         file_mode = file_path.stat().st_mode
@@ -501,7 +508,7 @@ def _check_file_permissions(file_path: Path) -> PermissionInfo:
             can_write=can_write,
             can_execute=can_execute
         )
-    except (OSError, Exception) as e:
+    except Exception as e:
         return PermissionInfo(
             can_read=False,
             can_write=False,

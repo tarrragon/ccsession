@@ -110,65 +110,146 @@ def _run_final_checks(project_root: Path, language: str) -> tuple:
     return (readme_info, language_standards_info)
 
 
-def run_onboard(project_root: Path) -> OnboardResult:
-    """執行 onboard 引導流程.
-
-    Args:
-        project_root: 專案根目錄。
-
-    Returns:
-        OnboardResult: onboard 流程結果。同時輸出格式化文字到 stdout。
-    """
-    # 執行偵測檢查
-    (language_info, hook_classification, claude_md_info, template_info,
-     settings_info, hook_completeness, language) = _run_detection_checks(project_root)
-
-    # 執行結構檢查
-    (docs_structure, gitignore_info, claude_dir_info, hook_config_info,
-     config_dir_info) = _run_structure_checks(project_root)
-
-    # 執行最終檢查
-    readme_info, language_standards_info = _run_final_checks(project_root, language)
-
-    # 彙整待辦清單
-    todo_items = _collect_todo_items(
-        language,
-        claude_md_info,
-        template_info,
-        settings_info,
-        hook_completeness,
-        docs_structure,
-        gitignore_info,
-        claude_dir_info,
-        hook_config_info,
-        config_dir_info,
-        readme_info,
-        language_standards_info,
-    )
-
-    result = OnboardResult(
+def _build_onboard_result(language: str, todo_items: list[TodoItem]) -> OnboardResult:
+    """建立 onboard 結果物件."""
+    return OnboardResult(
         language=language,
         all_ok=len(todo_items) == 0,
         todo_items=todo_items,
         todo_count=len(todo_items),
     )
 
-    # 輸出格式化結果
-    _print_onboard_result(
-        result,
-        language_info,
-        hook_classification,
-        hook_completeness,
-        docs_structure,
-        gitignore_info,
-        claude_dir_info,
-        hook_config_info,
-        config_dir_info,
-        readme_info,
-        language_standards_info,
-    )
+
+def run_onboard(project_root: Path) -> OnboardResult:
+    """執行 onboard 引導流程."""
+    # 執行檢查
+    lang_info, hook_class, claude_md, template, settings, hook_comp, lang = (
+        _run_detection_checks(project_root))
+    docs, gitignore, claude_dir, hook_cfg, cfg_dir = _run_structure_checks(project_root)
+    readme, lang_standards = _run_final_checks(project_root, lang)
+
+    # 彙整結果
+    todo_items = _collect_todo_items(
+        lang, claude_md, template, settings, hook_comp, docs, gitignore,
+        claude_dir, hook_cfg, cfg_dir, readme, lang_standards)
+
+    result = _build_onboard_result(lang, todo_items)
+
+    # 輸出
+    _print_onboard_result(result, lang_info, hook_class, hook_comp, docs,
+        gitignore, claude_dir, hook_cfg, cfg_dir, readme, lang_standards)
 
     return result
+
+
+def _collect_gitignore_items(gitignore_info) -> list[TodoItem]:
+    """彙整 gitignore 相關待辦項目."""
+    items = []
+    if not gitignore_info.all_required_complete:
+        missing_rules = ", ".join(gitignore_info.missing_rules[:3])
+        hint = f"缺失: {missing_rules}{'...' if len(gitignore_info.missing_rules) > 3 else ''} — 新增到 .gitignore"
+        items.append(TodoItem(description=".gitignore 缺失必須的框架規則", hint=hint))
+    return items
+
+
+def _collect_claude_dir_items(claude_dir_info) -> list[TodoItem]:
+    """彙整 .claude 目錄相關待辦項目."""
+    items = []
+    if not claude_dir_info.all_required_complete:
+        missing_dirs = ", ".join(claude_dir_info.missing_directories[:3])
+        hint = f"缺失: {missing_dirs}{'...' if len(claude_dir_info.missing_directories) > 3 else ''} — 建立目錄"
+        items.append(TodoItem(description=".claude 核心目錄結構缺失", hint=hint))
+    return items
+
+
+def _collect_hook_config_items(hook_config_info) -> list[TodoItem]:
+    """彙整 Hook 配置檔相關待辦項目."""
+    items = []
+    if not hook_config_info.all_required_complete:
+        if hook_config_info.missing_files:
+            missing = ", ".join(hook_config_info.missing_files[:2])
+            hint = f"缺失: {missing} — 新增或複製配置檔"
+        elif hook_config_info.format_errors:
+            error = hook_config_info.format_errors[0][:80]
+            hint = f"格式錯誤: {error} — 修復檔案格式"
+        else:
+            hint = "檢查配置檔"
+        items.append(TodoItem(description="Hook 配置檔不完整或格式錯誤", hint=hint))
+    return items
+
+
+def _collect_config_dir_items(config_dir_info) -> list[TodoItem]:
+    """彙整 .claude/config 目錄項目."""
+    items = []
+    if not config_dir_info.exists:
+        items.append(
+            TodoItem(
+                description=".claude/config 目錄不存在",
+                hint="建立 .claude/config 目錄並放入配置檔",
+            )
+        )
+    return items
+
+
+def _collect_claude_md_items(claude_md_info) -> list[TodoItem]:
+    """彙整 CLAUDE.md 項目."""
+    items = []
+    if not claude_md_info.exists:
+        items.append(
+            TodoItem(
+                description="CLAUDE.md 不存在",
+                hint="從 .claude/templates/CLAUDE-template.md 複製",
+            )
+        )
+    return items
+
+
+def _collect_template_items(template_info, language) -> list[TodoItem]:
+    """彙整語言模板項目."""
+    items = []
+    if language == "flutter" and not template_info.exists:
+        items.append(
+            TodoItem(
+                description=f"{language.upper()} 模板不存在",
+                hint="檢查或複製 .claude/project-templates/FLUTTER.md",
+            )
+        )
+    return items
+
+
+def _collect_settings_items(settings_info) -> list[TodoItem]:
+    """彙整 settings.local.json 項目."""
+    items = []
+    if not settings_info.exists:
+        items.append(
+            TodoItem(
+                description="settings.local.json 不存在",
+                hint="根據 settings.json 建立並調整語言特定權限",
+            )
+        )
+    return items
+
+
+def _collect_core_file_items(
+    claude_md_info, template_info, settings_info, config_dir_info, language
+) -> list[TodoItem]:
+    """彙整核心檔案相關待辦項目."""
+    items = []
+    items.extend(_collect_config_dir_items(config_dir_info))
+    items.extend(_collect_claude_md_items(claude_md_info))
+    items.extend(_collect_template_items(template_info, language))
+    items.extend(_collect_settings_items(settings_info))
+    return items
+
+
+def _collect_hook_completeness_items(hook_completeness) -> list[TodoItem]:
+    """彙整 Hook 完整性相關待辦項目."""
+    items = []
+    if not hook_completeness.completeness_ok:
+        unregistered_list = ", ".join(sorted(hook_completeness.unregistered_hooks)[:3])
+        hint = f"未登記: {unregistered_list}{'...' if len(hook_completeness.unregistered_hooks) > 3 else ''} — 檢查是否需要在 settings.json 註冊或新增到 hook-exclude-list.json"
+        items.append(TodoItem(description=f"有 {len(hook_completeness.unregistered_hooks)} 個未登記的 Hook", hint=hint))
+    return items
 
 
 def _collect_must_items(
@@ -182,82 +263,14 @@ def _collect_must_items(
     hook_config_info,
     config_dir_info,
 ) -> list[TodoItem]:
-    """彙整 MUST 強制檢查項目.
-
-    Args:
-        language: 偵測到的語言。
-        claude_md_info: CLAUDE.md 檢查結果。
-        template_info: 語言模板檢查結果。
-        settings_info: settings.local.json 檢查結果。
-        hook_completeness: Hook 完整性檢查結果。
-        gitignore_info: .gitignore 檢查結果。
-        claude_dir_info: .claude 目錄結構檢查結果。
-        hook_config_info: Hook 配置檔檢查結果。
-        config_dir_info: .claude/config 目錄檢查結果。
-
-    Returns:
-        list[TodoItem]: 強制檢查待辦項目。
-    """
+    """彙整 MUST 強制檢查項目."""
     items = []
-
-    if not gitignore_info.all_required_complete:
-        missing_rules = ", ".join(gitignore_info.missing_rules[:3])
-        hint = f"缺失: {missing_rules}{'...' if len(gitignore_info.missing_rules) > 3 else ''} — 新增到 .gitignore"
-        items.append(TodoItem(description=".gitignore 缺失必須的框架規則", hint=hint))
-
-    if not claude_dir_info.all_required_complete:
-        missing_dirs = ", ".join(claude_dir_info.missing_directories[:3])
-        hint = f"缺失: {missing_dirs}{'...' if len(claude_dir_info.missing_directories) > 3 else ''} — 建立目錄"
-        items.append(TodoItem(description=".claude 核心目錄結構缺失", hint=hint))
-
-    if not hook_config_info.all_required_complete:
-        if hook_config_info.missing_files:
-            missing = ", ".join(hook_config_info.missing_files[:2])
-            hint = f"缺失: {missing} — 新增或複製配置檔"
-        elif hook_config_info.format_errors:
-            error = hook_config_info.format_errors[0][:80]
-            hint = f"格式錯誤: {error} — 修復檔案格式"
-        else:
-            hint = "檢查配置檔"
-        items.append(TodoItem(description="Hook 配置檔不完整或格式錯誤", hint=hint))
-
-    if not config_dir_info.exists:
-        items.append(
-            TodoItem(
-                description=".claude/config 目錄不存在",
-                hint="建立 .claude/config 目錄並放入配置檔",
-            )
-        )
-
-    if not claude_md_info.exists:
-        items.append(
-            TodoItem(
-                description="CLAUDE.md 不存在",
-                hint="從 .claude/templates/CLAUDE-template.md 複製",
-            )
-        )
-
-    if language == "flutter" and not template_info.exists:
-        items.append(
-            TodoItem(
-                description=f"{language.upper()} 模板不存在",
-                hint="檢查或複製 .claude/project-templates/FLUTTER.md",
-            )
-        )
-
-    if not settings_info.exists:
-        items.append(
-            TodoItem(
-                description="settings.local.json 不存在",
-                hint="根據 settings.json 建立並調整語言特定權限",
-            )
-        )
-
-    if not hook_completeness.completeness_ok:
-        unregistered_list = ", ".join(sorted(hook_completeness.unregistered_hooks)[:3])
-        hint = f"未登記: {unregistered_list}{'...' if len(hook_completeness.unregistered_hooks) > 3 else ''} — 檢查是否需要在 settings.json 註冊或新增到 hook-exclude-list.json"
-        items.append(TodoItem(description=f"有 {len(hook_completeness.unregistered_hooks)} 個未登記的 Hook", hint=hint))
-
+    items.extend(_collect_gitignore_items(gitignore_info))
+    items.extend(_collect_claude_dir_items(claude_dir_info))
+    items.extend(_collect_hook_config_items(hook_config_info))
+    items.extend(_collect_core_file_items(
+        claude_md_info, template_info, settings_info, config_dir_info, language))
+    items.extend(_collect_hook_completeness_items(hook_completeness))
     return items
 
 
@@ -306,45 +319,45 @@ def _collect_todo_items(
     readme_info,
     language_standards_info,
 ) -> list[TodoItem]:
-    """彙整待辦項目.
-
-    分別收集 MUST（強制）和 SHOULD（推薦）項目，然後合併。
-
-    Args:
-        language: 偵測到的語言。
-        claude_md_info: CLAUDE.md 檢查結果。
-        template_info: 語言模板檢查結果。
-        settings_info: settings.local.json 檢查結果。
-        hook_completeness: Hook 完整性檢查結果。
-        docs_structure: docs 目錄結構檢查結果。
-        gitignore_info: .gitignore 檢查結果。
-        claude_dir_info: .claude 目錄結構檢查結果。
-        hook_config_info: Hook 配置檔檢查結果。
-        config_dir_info: .claude/config 目錄檢查結果。
-        readme_info: README.md 檢查結果。
-        language_standards_info: 語言規範檔檢查結果。
-
-    Returns:
-        list[TodoItem]: 待辦項目清單。
-    """
+    """彙整待辦項目（MUST + SHOULD）."""
     must_items = _collect_must_items(
-        language,
-        claude_md_info,
-        template_info,
-        settings_info,
-        hook_completeness,
-        gitignore_info,
-        claude_dir_info,
-        hook_config_info,
-        config_dir_info,
-    )
+        language, claude_md_info, template_info, settings_info,
+        hook_completeness, gitignore_info, claude_dir_info,
+        hook_config_info, config_dir_info)
 
-    should_items = _collect_should_items(
-        readme_info,
-        language_standards_info,
-    )
-
+    should_items = _collect_should_items(readme_info, language_standards_info)
     return must_items + should_items
+
+
+def _print_core_sections(result: OnboardResult, language_info, hook_classification,
+                         hook_completeness) -> None:
+    """輸出核心區段."""
+    print()
+    _print_header()
+    print()
+    _print_language_section(language_info)
+    _print_hook_classification_section(hook_classification)
+    _print_hook_completeness_section(hook_completeness)
+
+
+def _print_framework_sections(result: OnboardResult, docs_structure,
+                              gitignore_info, claude_dir_info) -> None:
+    """輸出框架檔案區段."""
+    _print_claude_md_section(result)
+    _print_language_template_section(result)
+    _print_settings_local_section(result)
+    _print_docs_structure_section(docs_structure)
+    _print_gitignore_section(gitignore_info)
+    _print_claude_directory_section(claude_dir_info)
+
+
+def _print_config_sections(hook_config_info, config_dir_info,
+                          readme_info, language_standards_info) -> None:
+    """輸出配置和推薦區段."""
+    _print_hook_config_section(hook_config_info)
+    _print_config_directory_section(config_dir_info)
+    _print_readme_section(readme_info)
+    _print_language_standards_section(language_standards_info)
 
 
 def _print_onboard_result(
@@ -361,22 +374,9 @@ def _print_onboard_result(
     language_standards_info,
 ) -> None:
     """輸出格式化的 onboard 結果到 stdout."""
-    print()
-    _print_header()
-    print()
-    _print_language_section(language_info)
-    _print_hook_classification_section(hook_classification)
-    _print_hook_completeness_section(hook_completeness)
-    _print_claude_md_section(result)
-    _print_language_template_section(result)
-    _print_settings_local_section(result)
-    _print_docs_structure_section(docs_structure)
-    _print_gitignore_section(gitignore_info)
-    _print_claude_directory_section(claude_dir_info)
-    _print_hook_config_section(hook_config_info)
-    _print_config_directory_section(config_dir_info)
-    _print_readme_section(readme_info)
-    _print_language_standards_section(language_standards_info)
+    _print_core_sections(result, language_info, hook_classification, hook_completeness)
+    _print_framework_sections(result, docs_structure, gitignore_info, claude_dir_info)
+    _print_config_sections(hook_config_info, config_dir_info, readme_info, language_standards_info)
     _print_todolist_section(result)
 
 
