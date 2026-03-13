@@ -415,20 +415,87 @@ def generate_hook_output(
 # ============================================================================
 
 
+def _validate_input(input_data: Dict[str, Any], logger) -> Tuple[bool, Optional[str]]:
+    """
+    驗證輸入並提取檔案路徑
+
+    Args:
+        input_data: 原始輸入 JSON 資料
+        logger: Logger 實例
+
+    Returns:
+        Tuple[bool, Optional[str]] - (驗證成功, 檔案路徑)
+    """
+    if not validate_hook_input(input_data, logger, ("tool_input",)):
+        logger.debug("輸入格式不完整，跳過檢查")
+        return False, None
+
+    tool_input = input_data.get("tool_input", {})
+    file_path = tool_input.get("file_path", "")
+    return True, file_path
+
+
+def _load_file_content(file_path: str, logger) -> Tuple[bool, Optional[str]]:
+    """
+    讀取檔案內容
+
+    Args:
+        file_path: 檔案路徑
+        logger: Logger 實例
+
+    Returns:
+        Tuple[bool, Optional[str]] - (成功狀態, 檔案內容)
+    """
+    try:
+        content = Path(file_path).read_text(encoding="utf-8")
+        logger.debug(f"讀取檔案成功，共 {len(content)} 字符")
+        return True, content
+    except FileNotFoundError:
+        logger.error(f"檔案不存在: {file_path}")
+        return False, None
+    except UnicodeDecodeError as e:
+        logger.error(f"編碼錯誤: {file_path} - {e}")
+        return False, None
+
+
+def _output_error(file_path: str, error_msg: str) -> None:
+    """
+    輸出錯誤結果
+
+    Args:
+        file_path: 檔案路徑
+        error_msg: 錯誤訊息
+    """
+    print(
+        json.dumps(
+            {
+                "hookSpecificOutput": {
+                    "hookEventName": "PostToolUse",
+                    "additionalContext": error_msg,
+                }
+            },
+            ensure_ascii=False,
+        )
+    )
+
+
+def _output_success() -> None:
+    """輸出空白成功結果（無違規）"""
+    print(json.dumps({"hookSpecificOutput": {"hookEventName": "PostToolUse"}}, ensure_ascii=False))
+
+
 def main() -> int:
     """
     主入口點
 
     執行流程:
     1. 初始化 logger
-    2. 讀取 JSON 輸入
-    3. 驗證輸入格式
+    2. 驗證環境（subagent）
+    3. 讀取並驗證輸入
     4. 判斷是否為 Layer 1 檔案
     5. 讀取檔案內容
-    6. 構建排除規則
-    7. 掃描禁止項
-    8. 生成和輸出警告訊息
-    9. 保存日誌
+    6. 掃描禁止項
+    7. 生成並輸出結果
 
     Returns:
         int - Exit code (0=success, 1=error)
@@ -436,86 +503,55 @@ def main() -> int:
     logger = setup_hook_logging("layer-boundary-validator")
 
     try:
-        # 步驟 1: 讀取 JSON 輸入
         logger.info("Layer 1/2 邊界驗證 Hook 啟動")
 
         # 檢測 subagent 環境
         if is_subagent_environment(logger):
             logger.debug("在 subagent 環境中執行，跳過檢查")
-            print(json.dumps({"hookSpecificOutput": {"hookEventName": "PostToolUse"}}, ensure_ascii=False))
+            _output_success()
             return EXIT_SUCCESS
 
+        # 讀取輸入
         input_data = read_json_from_stdin(logger)
 
-        # 步驟 2: 驗證輸入格式
-        if not validate_hook_input(input_data, logger, ("tool_input",)):
-            logger.debug("輸入格式不完整，跳過檢查")
-            print(json.dumps({"hookSpecificOutput": {"hookEventName": "PostToolUse"}}, ensure_ascii=False))
+        # 驗證輸入
+        valid, file_path = _validate_input(input_data, logger)
+        if not valid:
+            _output_success()
             return EXIT_SUCCESS
-
-        tool_input = input_data.get("tool_input", {})
-        file_path = tool_input.get("file_path", "")
 
         logger.info(f"檢查檔案: {file_path}")
 
-        # 步驟 3: 判斷是否為 Layer 1 檔案
+        # 判斷是否為 Layer 1 檔案
         if not is_layer1_file(file_path, logger):
             logger.debug("非 Layer 1 檔案，跳過檢查")
-            print(json.dumps({"hookSpecificOutput": {"hookEventName": "PostToolUse"}}, ensure_ascii=False))
+            _output_success()
             return EXIT_SUCCESS
 
         logger.info(f"檢測到 Layer 1 檔案: {file_path}")
 
-        # 步驟 4: 讀取檔案內容
-        try:
-            content = Path(file_path).read_text(encoding="utf-8")
-            logger.debug(f"讀取檔案成功，共 {len(content)} 字符")
-        except FileNotFoundError:
-            logger.error(f"檔案不存在: {file_path}")
-            print(
-                json.dumps(
-                    {
-                        "hookSpecificOutput": {
-                            "hookEventName": "PostToolUse",
-                            "additionalContext": f"無法讀取檔案: {file_path}",
-                        }
-                    },
-                    ensure_ascii=False,
-                )
-            )
+        # 讀取檔案內容
+        success, content = _load_file_content(file_path, logger)
+        if not success:
+            _output_error(file_path, f"無法讀取檔案: {file_path}")
             return EXIT_ERROR
-        except UnicodeDecodeError as e:
-            logger.error(f"編碼錯誤: {file_path} - {e}")
-            print(
-                json.dumps(
-                    {
-                        "hookSpecificOutput": {
-                            "hookEventName": "PostToolUse",
-                            "additionalContext": f"檔案編碼錯誤: {file_path}",
-                        }
-                    },
-                    ensure_ascii=False,
-                )
-            )
-            return EXIT_SUCCESS
 
-        # 步驟 5: 構建排除規則
+        # 掃描禁止項
         exclusions = extract_exclusions(content, logger)
-
-        # 步驟 6: 掃描禁止項
         violations = scan_prohibited_items(content, exclusions, logger)
 
-        # 步驟 7: 生成警告訊息
+        # 生成結果
         warning_msg = format_warning_message(violations, file_path)
-        hook_output = generate_hook_output(len(violations) > 0, file_path, warning_msg if warning_msg else None)
+        hook_output = generate_hook_output(
+            len(violations) > 0, file_path, warning_msg if warning_msg else None
+        )
 
-        # 步驟 8: 輸出結果
+        # 輸出結果
         print(json.dumps(hook_output, ensure_ascii=False, indent=2))
-
         if warning_msg:
             print(warning_msg, file=sys.stderr)
 
-        # 步驟 9: 保存日誌
+        # 保存日誌
         log_entry = f"""[{datetime.now().isoformat()}]
   FilePath: {file_path}
   Violations: {len(violations)}
