@@ -339,10 +339,11 @@ A: W43-005 分析發現 22 個非標準檔案。W44-003 實作的擴充正是為
 | `.claude/skills/ticket/ticket_system/lib/ticket_loader.py` | Ticket 載入與去重 |
 | `.claude/hooks/ticket-id-validator-hook.py` | Hook 驗證邏輯（寬鬆模式） |
 | `.claude/rules/core/quality-python.md` | Python 常數管理規範 |
+| `.claude/references/ticket-id-existing-suffixes.md` | 現存後綴範例清單（第 4 節外放） |
 
 ---
 
-**Last Updated**: 2026-03-12
+**Last Updated**: 2026-03-13
 **Status**: Published (Phase 3b 實作完成)
 **Related Ticket**: 0.1.0-W44-003 (ID 解析包容性擴充)
-**Version**: 1.0.0
+**Version**: 1.1.0 - 第 4 節例外清單外放至 references/（0.1.0-W48-004）
