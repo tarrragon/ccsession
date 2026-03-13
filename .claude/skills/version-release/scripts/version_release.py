@@ -24,10 +24,98 @@ import sys
 import re
 import json
 import subprocess
+import logging
 from pathlib import Path
 from datetime import datetime
 from typing import Optional, List, Tuple, Dict
 import yaml
+
+
+# ============================================================================
+# Phase 3b 新增：版本同步檢查（Monorepo 三層架構）
+# ============================================================================
+
+# 配置檔路徑
+VERSION_RELEASE_CONFIG_FILE = ".version-release.yaml"
+
+# 三層版本來源
+MONOREPO_VERSION_SOURCE = "docs/todolist.yaml"
+MONOREPO_VERSION_KEY = "current_version"
+UI_VERSION_SOURCE = "ui/pubspec.yaml"
+SERVER_VERSION_SOURCE = "server/go.mod"
+
+# 同步策略類型
+SYNC_POLICY_REQUIRED = "required"
+SYNC_POLICY_OPTIONAL = "optional"
+SYNC_POLICY_IMPLICIT = "implicit"
+
+# 衝突嚴重程度
+SEVERITY_ERROR = "error"
+SEVERITY_WARNING = "warning"
+SEVERITY_INFO = "info"
+SEVERITY_SUCCESS = "success"
+
+# 預設配置
+DEFAULT_VERSION_RELEASE_CONFIG = {
+    "versions": {
+        "monorepo": {
+            "source": MONOREPO_VERSION_SOURCE,
+            "key": MONOREPO_VERSION_KEY,
+            "semantic_version": True,
+            "description": "整個專案的發布版本（用於 Ticket、Wave、發布計劃）"
+        },
+        "ui": {
+            "source": UI_VERSION_SOURCE,
+            "key": "version",
+            "semantic_version": True,
+            "independent": True,
+            "description": "Flutter 應用版本（用於 App Store）",
+            "sync_policy": SYNC_POLICY_OPTIONAL,
+            "sync_recommendation": "保持主版本號一致（如都是 v0.x.0）"
+        },
+        "server": {
+            "source": None,
+            "semantic_version": False,
+            "independent": False,
+            "description": "Go Server 版本由 monorepo 版本決定",
+            "sync_policy": SYNC_POLICY_IMPLICIT
+        }
+    },
+    "sync_rules": {
+        "on_release": {
+            "monorepo": {"required": True},
+            "ui": {"required": False},
+            "server": {"required": False}
+        },
+        "on_development": {
+            "allow_version_mismatch": True
+        },
+        "conflict_detection": {
+            "ui_ahead_of_monorepo": {
+                "severity": SEVERITY_WARNING,
+                "message": "UI 版本大於 monorepo，確認是否故意？"
+            },
+            "ui_behind_monorepo": {
+                "severity": SEVERITY_INFO,
+                "message": "UI 版本低於 monorepo（正常）"
+            }
+        }
+    },
+    "detection": {
+        "version_files": [
+            {"path": UI_VERSION_SOURCE, "type": "yaml", "key": "version", "context": "Flutter 應用版本"},
+            {"path": SERVER_VERSION_SOURCE, "type": "toml", "key": None, "context": "Go module（無版本欄位）"},
+            {"path": MONOREPO_VERSION_SOURCE, "type": "yaml", "key": MONOREPO_VERSION_KEY, "context": "權威的 monorepo 版本來源"}
+        ]
+    },
+    "preflight_checks": {
+        "version_sync": {
+            "enabled": True,
+            "fail_on_error": False,
+            "warn_on_mismatch": True
+        }
+    }
+}
 
 
 # 版本檔配置：(相對路徑, 解析方式)
@@ -218,13 +306,37 @@ def normalize_version(version: Optional[str]) -> str:
         raise ValueError(f"版本格式不正確: {version} (應為 X.Y 或 X.Y.Z)")
 
 
+def extract_major_minor(version: str) -> str:
+    """
+    從語義版本號提取主版本和次版本號。
+
+    從 X.Y.Z 格式的版本號中提取 X.Y 部分，
+    用於版本系列識別（如 v0.19、v0.20）。
+
+    Args:
+        version: 完整版本號字串（例如 "0.19.8"、"0.1"）
+
+    Returns:
+        主版本.次版本 格式的字串（例如 "0.19"、"0.1"）
+
+    Examples:
+        >>> extract_major_minor("0.19.8")
+        "0.19"
+        >>> extract_major_minor("0.1")
+        "0.1"
+        >>> extract_major_minor("1.2.3")
+        "1.2"
+    """
+    return ".".join(version.split(".")[:2])
+
+
 def check_worklog_completed(version: str) -> Tuple[bool, List[str]]:
     """檢查工作日誌是否完成"""
     root = get_project_root()
     worklog_dir = root / "docs" / "work-logs"
 
     errors = []
-    major_minor = ".".join(version.split(".")[:2])  # v0.19 from v0.19.8
+    major_minor = extract_major_minor(version)
 
     # 查詢相關的工作日誌
     worklog_files = []
@@ -279,7 +391,7 @@ def check_technical_debt_status(version: str) -> Dict:
         }
     """
     root = get_project_root()
-    major_minor = ".".join(version.split(".")[:2])  # 0.20
+    major_minor = extract_major_minor(version)
     version_series = f"v{major_minor}"  # v0.20
 
     # 掃描版本系列的票目錄
@@ -384,7 +496,7 @@ def check_technical_debt(version: str) -> Tuple[bool, List[str]]:
 
         # 檢查 tickets 清單中的 pending 狀態 TD
         tickets = data.get('tickets', [])
-        major_minor = ".".join(version.split(".")[:2])
+        major_minor = extract_major_minor(version)
 
         pending_tds = []
         for ticket in tickets:
@@ -467,10 +579,447 @@ def check_previous_versions_completed(version: str) -> Tuple[bool, List[str]]:
     return len(errors) == 0, errors
 
 
+# ============================================================================
+# 新增函式 1：load_version_release_config
+# ============================================================================
+
+def load_version_release_config(root: Path) -> dict:
+    """
+    讀取 .version-release.yaml 配置檔。
+
+    需求：功能 1 配置檔讀取
+    邊界條件：
+    - 配置檔不存在 -> 回傳 DEFAULT_VERSION_RELEASE_CONFIG
+    - 配置檔格式錯誤 -> 輸出 warning，回傳 DEFAULT_VERSION_RELEASE_CONFIG
+    - 部分欄位缺漏 -> dict.get() 帶預設值
+
+    Args:
+        root: 專案根目錄（Path 物件）
+
+    Returns:
+        配置字典，結構與 .version-release.yaml 一致
+        保證回傳值不為 None
+    """
+    config_path = root / VERSION_RELEASE_CONFIG_FILE
+
+    if not config_path.exists():
+        return DEFAULT_VERSION_RELEASE_CONFIG
+
+    try:
+        with open(config_path, encoding='utf-8') as f:
+            config = yaml.safe_load(f)
+
+        if config is None or not isinstance(config, dict):
+            return DEFAULT_VERSION_RELEASE_CONFIG
+
+        # 補充缺漏欄位（深層 merge）
+        for key in ["versions", "sync_rules", "detection", "preflight_checks"]:
+            if key not in config:
+                config[key] = DEFAULT_VERSION_RELEASE_CONFIG.get(key, {})
+
+        return config
+
+    except yaml.YAMLError as e:
+        print(f"[WARNING] .version-release.yaml 格式錯誤，使用內建預設配置", file=sys.stderr)
+        print(f"         錯誤：{e}", file=sys.stderr)
+        logger = logging.getLogger(__name__)
+        logger.warning(f"YAML 解析失敗: {e}", exc_info=True)
+        return DEFAULT_VERSION_RELEASE_CONFIG
+
+    except Exception as e:
+        logger = logging.getLogger(__name__)
+        logger.error(f"讀取 {config_path} 失敗: {e}", exc_info=True)
+        return DEFAULT_VERSION_RELEASE_CONFIG
+
+
+# ============================================================================
+# 新增函式 2：get_monorepo_version
+# ============================================================================
+
+def get_monorepo_version(root: Path) -> Optional[str]:
+    """
+    從 docs/todolist.yaml 讀取 L1 monorepo 版本。
+
+    需求：三層版本中 L1 為唯一權威來源
+    邊界條件：
+    - todolist.yaml 不存在 -> 回傳 None
+    - current_version 欄位不存在 -> 回傳 None
+    - 版本格式非 X.Y.Z -> 原樣回傳（不強制正規化）
+
+    Args:
+        root: 專案根目錄
+
+    Returns:
+        版本字串（例如 "0.1.1"）或 None
+    """
+    todolist_path = root / MONOREPO_VERSION_SOURCE
+
+    if not todolist_path.exists():
+        return None
+
+    try:
+        with open(todolist_path, encoding='utf-8') as f:
+            data = yaml.safe_load(f)
+
+        if not isinstance(data, dict):
+            return None
+
+        version = data.get(MONOREPO_VERSION_KEY)
+
+        if version is None:
+            return None
+
+        if not isinstance(version, str):
+            version = str(version)
+
+        return version
+
+    except Exception as e:
+        logger = logging.getLogger(__name__)
+        logger.debug(f"讀取 monorepo 版本失敗: {e}")
+        return None
+
+
+# ============================================================================
+# Helper：compare_semantic_versions
+# ============================================================================
+
+def compare_semantic_versions(v1: str, v2: str) -> int:
+    """
+    語義版本比較（返回 -1/0/1）。
+
+    Args:
+        v1, v2: 版本字串（格式 "X.Y.Z"）
+
+    Returns:
+        -1 (v1<v2), 0 (v1=v2), 1 (v1>v2)
+    """
+    try:
+        parts1 = [int(x) for x in v1.split(".")[:3]]
+        parts2 = [int(x) for x in v2.split(".")[:3]]
+
+        # 補齊缺漏部分（如 "0.1" → [0, 1, 0]）
+        while len(parts1) < 3:
+            parts1.append(0)
+        while len(parts2) < 3:
+            parts2.append(0)
+
+        # 逐位比較
+        for i in range(3):
+            if parts1[i] > parts2[i]:
+                return 1
+            if parts1[i] < parts2[i]:
+                return -1
+
+        return 0  # 相等
+
+    except (ValueError, AttributeError):
+        # 版本格式無效，使用字符串比較
+        if v1 > v2:
+            return 1
+        elif v1 < v2:
+            return -1
+        else:
+            return 0
+
+
+# ============================================================================
+# 新增函式 4：Helper — _read_l2_version
+# ============================================================================
+
+def _read_l2_version(root: Path, config: dict) -> Tuple[Optional[str], List[dict]]:
+    """
+    讀取 L2 (UI) 版本。
+
+    Args:
+        root: 專案根目錄
+        config: 配置字典
+
+    Returns:
+        (l2_version or None, messages list)
+    """
+    messages = []
+    l2_version = None
+    ui_config = config.get("versions", {}).get("ui", {})
+    ui_source = ui_config.get("source")
+    l2_path = root / ui_source if ui_source else None
+
+    if not l2_path or not l2_path.exists():
+        messages.append({
+            "level": SEVERITY_INFO,
+            "layer": "l2",
+            "text": f"{ui_source} 不存在，跳過 L2 檢查"
+        })
+        return l2_version, messages
+
+    try:
+        with open(l2_path, encoding='utf-8') as f:
+            l2_data = yaml.safe_load(f)
+
+        if isinstance(l2_data, dict):
+            ui_key = ui_config.get("key", "version")
+            l2_version = l2_data.get(ui_key)
+
+            if l2_version and not isinstance(l2_version, str):
+                l2_version = str(l2_version)
+
+    except Exception as e:
+        logger = logging.getLogger(__name__)
+        logger.debug(f"讀取 {ui_source} 失敗: {e}")
+        messages.append({
+            "level": SEVERITY_INFO,
+            "layer": "l2",
+            "text": f"讀取 {ui_source} 失敗，跳過 L2 檢查"
+        })
+
+    return l2_version, messages
+
+
+# ============================================================================
+# 新增函式 4.1：Helper — _compare_l2_version
+# ============================================================================
+
+def _compare_l2_version(l1_version: str, l2_version: str, config: dict) -> List[dict]:
+    """
+    比對 L2 版本與 L1 版本，生成訊息。
+
+    Args:
+        l1_version: L1 monorepo 版本
+        l2_version: L2 UI 版本（含 build number）
+        config: 配置字典
+
+    Returns:
+        訊息清單
+    """
+    messages = []
+
+    # 去除 build number（"1.0.0+1" → "1.0.0"）
+    l2_main = l2_version.split("+")[0]
+    cmp_result = compare_semantic_versions(l2_main, l1_version)
+
+    conflict_cfg = config.get("sync_rules", {}).get("conflict_detection", {})
+
+    if cmp_result > 0:  # L2 > L1
+        severity = conflict_cfg.get("ui_ahead_of_monorepo", {}).get("severity", SEVERITY_WARNING)
+        messages.append({
+            "level": severity,
+            "layer": "l2",
+            "text": "UI 版本大於 monorepo，確認是否故意？"
+        })
+    elif cmp_result < 0:  # L2 < L1
+        severity = conflict_cfg.get("ui_behind_monorepo", {}).get("severity", SEVERITY_INFO)
+        messages.append({
+            "level": severity,
+            "layer": "l2",
+            "text": "UI 版本低於 monorepo（正常）"
+        })
+    else:  # L2 = L1
+        messages.append({
+            "level": SEVERITY_SUCCESS,
+            "layer": "l2",
+            "text": "UI 版本與 monorepo 版本一致"
+        })
+
+    return messages
+
+
+# ============================================================================
+# 新增函式 4.2：Helper — _check_l3_status
+# ============================================================================
+
+def _check_l3_status(config: dict) -> Tuple[bool, List[dict]]:
+    """
+    檢查 L3 (Server) 版本狀態。
+
+    Args:
+        config: 配置字典
+
+    Returns:
+        (l3_has_version, messages list)
+    """
+    messages = []
+    server_config = config.get("versions", {}).get("server", {})
+    server_source = server_config.get("source")
+    l3_has_version = server_source is not None
+
+    if server_source is None:
+        messages.append({
+            "level": SEVERITY_INFO,
+            "layer": "l3",
+            "text": "server/go.mod 無版本欄位，由 monorepo 版本決定"
+        })
+
+    return l3_has_version, messages
+
+
+# ============================================================================
+# 新增函式 4：check_monorepo_version_sync
+# ============================================================================
+
+def check_monorepo_version_sync(version: str, config: dict) -> dict:
+    """
+    執行三層版本同步檢查。
+
+    需求：功能 2 三層版本對比
+    邊界條件：
+    - L2 版本不存在 -> 跳過 L2 檢查
+    - L3 source 為 null -> 顯示 Server 版本由 monorepo 決定
+    - L2 版本大於 L1 -> 輸出 warning（severity: "warning"）
+    - L2 版本小於 L1 -> 輸出 info（severity: "info"）
+
+    Args:
+        version: L1 monorepo 版本（例如 "0.1.1"）
+        config: load_version_release_config() 回傳的配置字典
+
+    Returns:
+        {
+            "passed": bool,
+            "l1_version": str,
+            "l2_version": Optional[str],
+            "l3_has_version": bool,
+            "messages": List[dict],
+            "summary": str
+        }
+    """
+    messages = []
+
+    # [檢查 L1]
+    if not version:
+        messages.append({
+            "level": SEVERITY_ERROR,
+            "layer": "l1",
+            "text": "L1 monorepo 版本為空"
+        })
+        return {
+            "passed": False,
+            "l1_version": version,
+            "l2_version": None,
+            "l3_has_version": False,
+            "messages": messages,
+            "summary": "失敗（L1 monorepo 版本為空）"
+        }
+
+    # [檢查 L2]
+    root = get_project_root()
+    l2_version, l2_messages = _read_l2_version(root, config)
+    messages.extend(l2_messages)
+
+    if l2_version:
+        l2_cmp_messages = _compare_l2_version(version, l2_version, config)
+        messages.extend(l2_cmp_messages)
+
+    # [檢查 L3]
+    l3_has_version, l3_messages = _check_l3_status(config)
+    messages.extend(l3_messages)
+
+    # [最終判定]
+    has_error = any(m["level"] == SEVERITY_ERROR for m in messages)
+    passed = not has_error
+    has_warning = any(m["level"] == SEVERITY_WARNING for m in messages)
+
+    if passed and not has_warning:
+        summary = "通過（版本策略符合 monorepo 三層架構）"
+    elif passed and has_warning:
+        summary = "通過（附警告）"
+    else:
+        summary = "失敗（version 檢查未通過）"
+
+    return {
+        "passed": passed,
+        "l1_version": version,
+        "l2_version": l2_version,
+        "l3_has_version": l3_has_version,
+        "messages": messages,
+        "summary": summary
+    }
+
+
+# ============================================================================
+# 新增函式 5：print_version_sync_report
+# ============================================================================
+
+def print_version_sync_report(sync_result: dict):
+    """
+    輸出三層版本對比報告（樹狀結構）。
+
+    需求：功能 2 CLI 輸出格式
+    邊界條件：
+    - 無 L2 版本 -> 顯示 "ui/pubspec.yaml: 未偵測到"
+    - 無 L3 版本 -> 顯示 "server/go.mod: 無版本欄位（正常）"
+
+    Args:
+        sync_result: check_monorepo_version_sync() 的回傳值
+
+    Side effects:
+        打印到 stdout
+    """
+    width = 60
+    print(f"\n{Colors.BOLD}{'━' * width}{Colors.RESET}")
+    print(f"{Colors.BOLD}版本同步檢查（Monorepo 三層架構）{Colors.RESET}")
+    print(f"{Colors.BOLD}{'━' * width}{Colors.RESET}\n")
+
+    # [打印 L1]
+    l1 = sync_result.get("l1_version", "未知")
+    print(f"L1 monorepo 版本: {l1} (docs/todolist.yaml)")
+    print("|")
+
+    # [打印 L2]
+    l2 = sync_result.get("l2_version")
+    if l2 is None:
+        print("|-- L2 ui/pubspec.yaml: 未偵測到")
+    else:
+        print(f"|-- L2 ui/pubspec.yaml: {l2}")
+        # 輸出 L2 相關的訊息（基於 layer 欄位）
+        for msg in sync_result.get("messages", []):
+            if msg.get("layer") == "l2":
+                level_marker = f"[{msg['level'].upper()}]" if msg['level'] != SEVERITY_SUCCESS else "[OK]"
+                print(f"|   +-- {level_marker} {msg['text']}")
+
+    print("|")
+
+    # [打印 L3]
+    l3_has = sync_result.get("l3_has_version", False)
+    if not l3_has:
+        print("+-- L3 server/go.mod: 無版本欄位（正常）")
+        print("    理由：Go module 無自身版本，由 monorepo 版本決定")
+
+    # [打印所有訊息]
+    print()
+    for msg in sync_result.get("messages", []):
+        level = msg.get("level", SEVERITY_INFO)
+        text = msg.get("text", "")
+
+        if level == SEVERITY_ERROR:
+            print_error(text)
+        elif level == SEVERITY_WARNING:
+            print_warning(text)
+        elif level == SEVERITY_INFO:
+            print_info(text)
+        elif level == SEVERITY_SUCCESS:
+            print_success(text)
+
+    # [打印結論]
+    print()
+    summary = sync_result.get("summary", "未知")
+    if "失敗" in summary:
+        print_error(f"結論：{summary}")
+    elif "警告" in summary:
+        print_warning(f"結論：{summary}")
+    else:
+        print_success(f"結論：{summary}")
+    print()
+
+
 def check_version_sync(version: str) -> Tuple[bool, List[str]]:
-    """檢查版本號同步"""
+    """檢查版本號同步（包括 Monorepo 三層架構）"""
     root = get_project_root()
     errors = []
+
+    # [新增] 檢查 Monorepo 三層版本（優先於傳統檢查）
+    print_info("  檢查 Monorepo 版本同步...")
+    config = load_version_release_config(root)
+    sync_result = check_monorepo_version_sync(version, config)
+    print_version_sync_report(sync_result)
 
     # 偵測版本檔案（動態，語言感知）
     version_files = detect_version_files(root)
@@ -509,7 +1058,7 @@ def check_version_sync(version: str) -> Tuple[bool, List[str]]:
         )
         if result.returncode == 0:
             current_branch = result.stdout.strip()
-            major_minor = ".".join(version.split(".")[:2])
+            major_minor = extract_major_minor(version)
             expected_branch = f"feature/v{major_minor}"
             if current_branch != expected_branch:
                 print_warning(
@@ -576,7 +1125,7 @@ def preflight_check(version: str) -> Tuple[bool, Dict[str, Tuple[bool, List[str]
             # 提供修復建議
             print_info("\n解決方式:", 1)
             print_info("  1. 處理這些技術債務後再發布", 2)
-            major_minor = ".".join(version.split(".")[:2])
+            major_minor = extract_major_minor(version)
             next_version = f"{int(major_minor.split('.')[1]) + 1}"
             next_major_minor = f"{major_minor.split('.')[0]}.{next_version}"
             print_info(
@@ -621,7 +1170,7 @@ def preflight_check(version: str) -> Tuple[bool, Dict[str, Tuple[bool, List[str]
 def extract_changelog_section(version: str) -> Optional[str]:
     """從工作日誌提取 CHANGELOG 區塊"""
     root = get_project_root()
-    major_minor = ".".join(version.split(".")[:2])
+    major_minor = extract_major_minor(version)
     worklog_dir = root / "docs" / "work-logs"
 
     # 查找相關的工作日誌
@@ -726,7 +1275,7 @@ def defer_technical_debts(version: str, defer_to_version: str, dry_run: bool = F
         True 如果成功，False 如果失敗
     """
     root = get_project_root()
-    major_minor = ".".join(version.split(".")[:2])
+    major_minor = extract_major_minor(version)
 
     # 掃描版本系列的票目錄
     worklog_dir = root / "docs" / "work-logs"
@@ -860,7 +1409,7 @@ def update_todolist(version: str, dry_run: bool = False) -> bool:
         with open(todolist_path, encoding="utf-8") as f:
             content = f.read()
 
-        major_minor = ".".join(version.split(".")[:2])
+        major_minor = extract_major_minor(version)
 
         # 同時支援「0.31.0」和「0.31」兩種版本格式
         version_candidates = [version, major_minor]
@@ -1041,7 +1590,7 @@ def git_merge_and_push(version: str, dry_run: bool = False) -> bool:
     print_section("Step 3: Git Operations")
 
     root = get_project_root()
-    major_minor = ".".join(version.split(".")[:2])
+    major_minor = extract_major_minor(version)
     feature_branch = f"feature/v{major_minor}"
     tag_name = f"v{version}-final"
 
