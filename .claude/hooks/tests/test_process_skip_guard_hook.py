@@ -27,23 +27,25 @@ spec.loader.exec_module(process_skip_guard_hook)
 # 匯入必要的函式
 detect_skip_intent = process_skip_guard_hook.detect_skip_intent
 generate_skip_reminder = process_skip_guard_hook.generate_skip_reminder
-generate_hook_output = process_skip_guard_hook.generate_hook_output
 main = process_skip_guard_hook.main
+
+# 從 hook_utils 匯入 generate_hook_output
+from hook_utils import generate_hook_output
 
 
 class TestDetectSkipIntent:
     """測試省略意圖偵測"""
 
     def test_detect_skip_phase4(self):
-        """偵測 Phase 4 跳過意圖"""
-        user_input = "我的程式碼已經完美，不需要跳過 phase 4 評估"
+        """偵測 Phase 4 跳過意圖（肯定陳述）"""
+        user_input = "跳過 phase 4，程式碼已經完美"
         skip_type, pattern_info = detect_skip_intent(user_input)
         assert skip_type == "SKIP_PHASE4"
         assert pattern_info is not None
 
     def test_detect_skip_agent_dispatch(self):
-        """偵測派發跳過意圖"""
-        user_input = "我想自行處理這個問題，不需要派發代理人"
+        """偵測派發跳過意圖（肯定陳述）"""
+        user_input = "我想自行處理這個問題，不派發代理人"
         skip_type, pattern_info = detect_skip_intent(user_input)
         assert skip_type == "SKIP_AGENT_DISPATCH"
         assert pattern_info is not None
@@ -62,6 +64,26 @@ class TestDetectSkipIntent:
         assert skip_type is None
         assert pattern_info is None
 
+    def test_avoid_negative_statements(self):
+        """避免使用負面陳述表達省略意圖
+
+        已知限制（TD-019）：當前實作無法區分「跳過」和「不需要跳過」，
+        因此負面陳述（如「不需要跳過」）會被誤判為省略意圖。
+
+        用戶應避免使用負面陳述，改用肯定陳述（如「跳過」）來表達省略意圖。
+        此測試記錄此已知行為。
+        """
+        # 負面陳述 - 目前會被誤判（已知限制）
+        negative_input = "我的程式碼已經完美，不需要跳過 phase 4 評估"
+        skip_type_neg, _ = detect_skip_intent(negative_input)
+        # 此行為是已知限制，會在後續 Ticket 中改進
+        assert skip_type_neg == "SKIP_PHASE4"  # 實際行為（不理想但已知）
+
+        # 肯定陳述 - 正確被偵測
+        positive_input = "跳過 phase 4 評估，程式碼已經完美"
+        skip_type_pos, _ = detect_skip_intent(positive_input)
+        assert skip_type_pos == "SKIP_PHASE4"  # 正確被偵測
+
     def test_empty_input(self):
         """空輸入"""
         skip_type, pattern_info = detect_skip_intent("")
@@ -70,40 +92,52 @@ class TestDetectSkipIntent:
 
     def test_case_insensitive(self):
         """不區分大小寫"""
-        user_input = "我想自行處理，不需要派發"
+        user_input = "自行處理，不派發"
         skip_type, pattern_info = detect_skip_intent(user_input)
         assert skip_type == "SKIP_AGENT_DISPATCH"
 
 
 class TestGenerateHookOutput:
-    """測試 Hook 輸出生成"""
+    """測試 Hook 輸出生成（來自 hook_utils）"""
 
-    def test_no_skip_detected(self):
-        """未偵測到省略意圖的輸出"""
-        output = generate_hook_output(False)
+    def test_basic_output(self):
+        """基本輸出（無額外上下文）"""
+        output = generate_hook_output("UserPromptSubmit")
         assert output["hookSpecificOutput"]["hookEventName"] == "UserPromptSubmit"
         assert "additionalContext" not in output["hookSpecificOutput"]
 
-    def test_skip_detected_with_reminder(self):
-        """偵測到省略意圖的輸出"""
+    def test_output_with_context(self):
+        """帶額外上下文的輸出"""
         reminder_msg = "警告：偵測到流程省略意圖"
-        output = generate_hook_output(True, reminder_msg)
+        output = generate_hook_output("UserPromptSubmit", reminder_msg)
         assert output["hookSpecificOutput"]["hookEventName"] == "UserPromptSubmit"
         assert output["hookSpecificOutput"]["additionalContext"] == reminder_msg
 
-    def test_skip_detected_without_reminder(self):
-        """偵測到省略意圖但無提醒訊息"""
-        output = generate_hook_output(True, None)
+    def test_output_with_none_context(self):
+        """額外上下文為 None 時不添加"""
+        output = generate_hook_output("UserPromptSubmit", None)
+        assert output["hookSpecificOutput"]["hookEventName"] == "UserPromptSubmit"
+        assert "additionalContext" not in output["hookSpecificOutput"]
+
+    def test_output_with_empty_context(self):
+        """額外上下文為空字符串時不添加"""
+        output = generate_hook_output("UserPromptSubmit", "")
         assert output["hookSpecificOutput"]["hookEventName"] == "UserPromptSubmit"
         assert "additionalContext" not in output["hookSpecificOutput"]
 
     def test_output_is_json_serializable(self):
         """輸出可序列化為 JSON"""
-        output = generate_hook_output(True, "test reminder")
+        output = generate_hook_output("UserPromptSubmit", "test reminder")
         json_str = json.dumps(output, ensure_ascii=False)
         parsed = json.loads(json_str)
         assert parsed["hookSpecificOutput"]["hookEventName"] == "UserPromptSubmit"
         assert parsed["hookSpecificOutput"]["additionalContext"] == "test reminder"
+
+    def test_different_hook_event_names(self):
+        """支援不同的 Hook 事件名稱"""
+        for event_name in ["UserPromptSubmit", "PreToolUse", "PostToolUse"]:
+            output = generate_hook_output(event_name)
+            assert output["hookSpecificOutput"]["hookEventName"] == event_name
 
 
 class TestMainFunction:
