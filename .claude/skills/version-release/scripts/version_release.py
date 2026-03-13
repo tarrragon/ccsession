@@ -476,26 +476,29 @@ def check_version_sync(version: str) -> Tuple[bool, List[str]]:
     version_files = detect_version_files(root)
 
     if version_files:
-        # 檢查所有偵測到的版本檔
+        # 檢查所有偵測到的版本檔（僅警告，不阻塞）
+        # Monorepo 場景：專案管理版本與子專案版本可能獨立管理
         for file_path, parser_type in version_files:
             try:
                 file_version = extract_version_from_file(file_path, parser_type)
                 if file_version:
                     if file_version != version:
-                        errors.append(
+                        print_warning(
                             f"{file_path.name} 版本不匹配: {file_version} vs {version}"
+                            "（monorepo 場景下此為預期行為）"
                         )
+                    else:
+                        print_success(f"{file_path.name} 版本一致: {version}")
                 else:
-                    errors.append(f"{file_path.name} 找不到 version 欄位")
+                    print_warning(f"{file_path.name} 找不到 version 欄位")
             except Exception as e:
-                errors.append(f"讀取 {file_path.name} 失敗: {e}")
+                print_warning(f"讀取 {file_path.name} 失敗: {e}")
     else:
         # 沒有找到版本檔（純規格版本或其他情況）
-        # 輸出警告但不加入 errors（不阻塞檢查）
         print_warning("未偵測到版本檔案（pubspec.yaml/package.json/pyproject.toml）")
-        print_info("  此可能是純規格版本或其他非程式碼專案", 1)
+        print_info("  此可能是純規格版本或其他非程式碼專案")
 
-    # 檢查當前分支
+    # 檢查當前分支（僅警告，不同專案可能有不同分支命名慣例）
     try:
         result = subprocess.run(
             ["git", "branch", "--show-current"],
@@ -509,11 +512,11 @@ def check_version_sync(version: str) -> Tuple[bool, List[str]]:
             major_minor = ".".join(version.split(".")[:2])
             expected_branch = f"feature/v{major_minor}"
             if current_branch != expected_branch:
-                errors.append(
-                    f"當前分支不正確: {current_branch} (應為 {expected_branch})"
+                print_warning(
+                    f"當前分支: {current_branch} (慣例為 {expected_branch})"
                 )
     except Exception as e:
-        errors.append(f"檢查 git 分支失敗: {e}")
+        print_warning(f"檢查 git 分支失敗: {e}")
 
     # 檢查工作目錄是否乾淨
     try:
@@ -934,7 +937,7 @@ def verify_version_files(version: str) -> bool:
         print_info("  此可能是純規格版本", 1)
         return True  # 不阻塞發布流程
 
-    all_ok = True
+    # Monorepo 場景：版本不匹配為警告，不阻塞發布
     for file_path, parser_type in version_files:
         try:
             file_version = extract_version_from_file(file_path, parser_type)
@@ -942,18 +945,16 @@ def verify_version_files(version: str) -> bool:
                 if file_version == version:
                     print_success(f"{file_path.name} 版本正確: {version}")
                 else:
-                    print_error(
+                    print_warning(
                         f"{file_path.name} 版本不匹配: {file_version} vs {version}"
+                        "（monorepo 場景下此為預期行為）"
                     )
-                    all_ok = False
             else:
-                print_error(f"{file_path.name} 找不到 version 欄位")
-                all_ok = False
+                print_warning(f"{file_path.name} 找不到 version 欄位")
         except Exception as e:
-            print_error(f"讀取 {file_path.name} 失敗: {e}")
-            all_ok = False
+            print_warning(f"讀取 {file_path.name} 失敗: {e}")
 
-    return all_ok
+    return True
 
 
 def update_documents(version: str, dry_run: bool = False) -> bool:
