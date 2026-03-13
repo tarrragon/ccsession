@@ -69,7 +69,7 @@ PM 需要用戶做任何決策時（包含多選路由和二元 yes/no 確認）
 | 5 | 優先級確認 | 多任務排序 | 決策樹第負一層 | prompt-submit-hook |
 | 6 | 任務拆分確認 | 認知負擔 > 10 | 決策樹第負一層 | prompt-submit-hook |
 | 7 | 派發方式選擇 | Task subagent / Agent Teams / 序列 | 決策樹第負一層 | askuserquestion-reminder-hook |
-| 8 | 執行方向確認 | 並行/序列、先後順序 | 決策樹第負一層 | - |
+| 8 | 執行方向確認 | 並行/序列、先後順序 | 決策樹第負一層 | prompt-submit-hook |
 | 9 | Handoff 方向選擇 | 多個兄弟/子任務可選 | ticket-lifecycle 完成階段 | - |
 | 10 | 開始/收尾確認 | 確認是否開始執行 | 決策樹第負一層 | - |
 | 11a | Commit 後 Context 刷新 Handoff（情境 A） | ticket 仍 in_progress | 決策樹第八層 Checkpoint 2 | commit-handoff-hook |
@@ -108,7 +108,7 @@ PM 需要用戶做任何決策時（包含多選路由和二元 yes/no 確認）
 | Hook | 觸發時機 | 覆蓋場景 |
 |------|---------|---------|
 | parallel-suggestion-hook | 繼續請求但無 pending Ticket | #3 Wave 收尾 + #15 批量備份 |
-| prompt-submit-hook | 用戶提問含決策關鍵字 | #4 方案 + #5 優先級 + #6 拆分 |
+| prompt-submit-hook | 用戶提問含決策關鍵字 | #4 方案 + #5 優先級 + #6 拆分 + #8 執行方向 |
 | askuserquestion-reminder-hook | Task 派發含多個 Ticket ID | #7 派發方式 |
 | commit-handoff-hook | git commit 成功後 | #11 Commit Handoff + #16 錯誤學習 |
 | process-skip-guard-hook | 用戶輸入含省略關鍵字 | #12 流程省略 |
