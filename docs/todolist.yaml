@@ -120,3 +120,43 @@ tech_debt:
     risk: 低
     priority: P3
     status: pending
+
+  - id: TD-017
+    description: "generate_hook_output() 在 20+ Hook 中重複實作，應統一到 hook_utils"
+    source_version: v0.1.0
+    source_ticket: 0.1.0-W49-002
+    risk: 中
+    priority: P2
+    status: pending
+
+  - id: TD-018
+    description: "ticket_formatter.py 狀態常數（superseded/closed 等）缺乏集中管理，應在 constants.py 定義"
+    source_version: v0.1.0
+    source_ticket: 0.1.0-W49-004
+    risk: 低
+    priority: P2
+    status: pending
+
+  - id: TD-019
+    description: "process-skip-guard-hook 測試語義誤導：否定語句被當正確偵測，skip pair 易誤觸"
+    source_version: v0.1.0
+    source_ticket: 0.1.0-W49-002
+    risk: 低
+    priority: P2
+    status: pending
+
+  - id: TD-020
+    description: "test_ticket_formatter.py 缺少向後相容測試（舊格式輸入時 [已結案]: 0 的斷言）"
+    source_version: v0.1.0
+    source_ticket: 0.1.0-W49-004
+    risk: 低
+    priority: P2
+    status: pending
+
+  - id: TD-021
+    description: "decision-tree.md 和 parallel-dispatch.md 之間複雜度判斷邏輯重複，應改為引用關係"
+    source_version: v0.1.0
+    source_ticket: 0.1.0-W49-005
+    risk: 低
+    priority: P3
+    status: pending
