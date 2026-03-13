@@ -64,7 +64,7 @@ PM 需要用戶做任何決策時（包含多選路由和二元 yes/no 確認）
 |---|------|---------|--------|-----------|
 | 1 | 驗收方式確認 | ticket track complete 前（P0 優先級時觸發；DOC/ANA/非 P0 IMP 自動決定，不觸發） | ticket-lifecycle 驗收階段 | acceptance-gate-hook |
 | 2 | Complete 後下一步 | ticket track complete 後 | ticket-lifecycle 完成階段 | acceptance-gate-hook |
-| 3 | Wave/任務收尾確認 | 當前 Wave 無 pending Ticket（情境 C1：版本仍有其他 Wave pending） | ticket-lifecycle 收尾 | parallel-suggestion-hook |
+| 3 | Wave/任務收尾確認 | 當前 Wave 無 pending Ticket（前置：強制 /parallel-evaluation Wave 審查；情境 C1：有其他 Wave → #3a；情境 C2：全完成 → 技術債整理 + /version-release check） | ticket-lifecycle 收尾 | parallel-suggestion-hook |
 | 4 | 方案選擇 | 多個技術方案 | 決策樹第負一層 | prompt-submit-hook |
 | 5 | 優先級確認 | 多任務排序 | 決策樹第負一層 | prompt-submit-hook |
 | 6 | 任務拆分確認 | 認知負擔 > 10 | 決策樹第負一層 | prompt-submit-hook |

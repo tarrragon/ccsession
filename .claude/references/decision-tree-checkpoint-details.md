@@ -137,9 +137,17 @@ AskUserQuestion #3a（Wave 收尾 + 開始下一 Wave）
 #### 情境 C2：版本無任何待處理任務（版本全部完成）
 
 ```
+[強制] 版本收尾技術債整理
+    → 檢查 todolist.yaml 未排程項目
+    → 有技術債 → /ticket batch-create 歸入下一版本
+    → 無技術債 → 繼續
+    |
+    v
 [強制] /version-release check
 → AskUserQuestion #13（版本推進確認）
 ```
+
+> 技術債整理流程：.claude/rules/flows/version-progression.md（版本收尾技術債整理流程章節）
 
 ---
 
@@ -252,5 +260,5 @@ ticket handoff --gc --execute
 
 ---
 
-**Last Updated**: 2026-03-09
-**Version**: 1.3.0 - 情境 C 新增強制 /parallel-evaluation Wave 完成審查步驟（0.1.0-W25-012）
+**Last Updated**: 2026-03-13
+**Version**: 1.4.0 - 情境 C2 新增版本收尾技術債整理步驟（0.1.0-W50-008）
