@@ -1039,9 +1039,18 @@ def check_version_sync(version: str) -> Tuple[bool, List[str]]:
     if version_files:
         # 檢查所有偵測到的版本檔（僅警告，不阻塞）
         # Monorepo 場景：專案管理版本與子專案版本可能獨立管理
+        # 優化：複用 sync_result 中已讀取的 L2 版本，避免重複讀取 ui/pubspec.yaml
+        l2_version = sync_result.get("l2_version")
+        ui_pubspec_path = root / "ui" / "pubspec.yaml"
+
         for file_path, parser_type in version_files:
             try:
-                file_version = extract_version_from_file(file_path, parser_type)
+                # 優化：若是 ui/pubspec.yaml 且已有 L2 版本，複用已讀版本
+                if file_path == ui_pubspec_path and l2_version is not None:
+                    file_version = l2_version
+                else:
+                    file_version = extract_version_from_file(file_path, parser_type)
+
                 if file_version:
                     if file_version != version:
                         print_warning(
