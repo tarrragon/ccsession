@@ -176,6 +176,20 @@ def print_info(message: str, indent: int = 0):
     print(f"{prefix}{message}")
 
 
+def parse_ticket_frontmatter(content: str) -> Optional[str]:
+    """
+    從 Markdown 內容提取 YAML frontmatter。
+
+    Args:
+        content: 完整的 Markdown 檔案內容
+
+    Returns:
+        frontmatter 字串（去除 --- 邊界符），或 None 如果沒有找到
+    """
+    match = re.search(r"^---\n(.*?)\n---", content, re.DOTALL)
+    return match.group(1) if match else None
+
+
 def get_project_root() -> Path:
     """取得專案根目錄"""
     return Path(__file__).parent.parent.parent.parent.parent
@@ -422,11 +436,9 @@ def check_technical_debt_status(version: str) -> Dict:
                 content = f.read()
 
             # 解析 frontmatter
-            match = re.search(r"^---\n(.*?)\n---", content, re.DOTALL)
-            if not match:
+            frontmatter = parse_ticket_frontmatter(content)
+            if not frontmatter:
                 continue
-
-            frontmatter = match.group(1)
 
             # 提取關鍵欄位
             ticket_id_match = re.search(r"ticket_id:\s+(.+)", frontmatter)
@@ -551,10 +563,10 @@ def check_previous_versions_completed(version: str) -> Tuple[bool, List[str]]:
             try:
                 with open(ticket_file, encoding="utf-8") as f:
                     content = f.read()
-                fm_match = re.search(r"^---\n(.*?)\n---", content, re.DOTALL)
-                if not fm_match:
+                frontmatter = parse_ticket_frontmatter(content)
+                if not frontmatter:
                     continue
-                status_match = re.search(r"status:\s+(\S+)", fm_match.group(1))
+                status_match = re.search(r"status:\s+(\S+)", frontmatter)
                 if not status_match:
                     continue
                 status = status_match.group(1).strip()
@@ -1295,11 +1307,9 @@ def defer_technical_debts(version: str, defer_to_version: str, dry_run: bool = F
                 content = f.read()
 
             # 解析 frontmatter
-            match = re.search(r"^---\n(.*?)\n---", content, re.DOTALL)
-            if not match:
+            frontmatter = parse_ticket_frontmatter(content)
+            if not frontmatter:
                 continue
-
-            frontmatter = match.group(1)
 
             # 提取關鍵欄位
             status_match = re.search(r"status:\s+(.+)", frontmatter)
