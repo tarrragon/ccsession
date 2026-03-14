@@ -231,17 +231,43 @@ def _check_via_pip(package_name: str) -> Optional[InstalledInfo]:
         return None
 
 
+def resolve_source_module_dir(source_dir: Path, installed_dir: Path) -> Path:
+    """從 skill 根目錄定位到與 installed 對應的模組子目錄.
+
+    當 source_dir 是 skill 根目錄（含 pyproject.toml、tests/ 等），
+    而 installed_dir 是 site-packages 下的模組目錄時，
+    兩者的掃描範圍不對齊。此函式定位到 source_dir 下
+    與 installed_dir 同名的模組子目錄，確保比較範圍一致。
+
+    Args:
+        source_dir: 原始碼目錄（skill 根目錄或模組子目錄）。
+        installed_dir: 已安裝目錄（site-packages 下的模組目錄）。
+
+    Returns:
+        Path: 對齊後的 source 模組目錄。若無法定位則回傳原 source_dir。
+    """
+    if (source_dir / "pyproject.toml").exists():
+        module_subdir = source_dir / installed_dir.name
+        if module_subdir.exists() and module_subdir.is_dir():
+            return module_subdir
+    return source_dir
+
+
 def compare_versions(
     source_dir: Path, installed_dir: Path
 ) -> VersionCompareResult:
-    """使用 SHA256 比對原始碼和已安裝版本.
+    """使用 SHA256 比對兩個對等模組目錄.
 
     計算兩個目錄下所有 .py 檔案的 SHA256 雜湊，並比較。
     忽略 __pycache__ 和 .venv 目錄。
 
+    兩個目錄應為對等的模組目錄（相同的檔案結構）。
+    若需要從 skill 根目錄定位到模組子目錄，
+    請先使用 resolve_source_module_dir()。
+
     Args:
-        source_dir: 原始碼目錄。
-        installed_dir: 已安裝目錄。
+        source_dir: 原始碼模組目錄。
+        installed_dir: 已安裝模組目錄。
 
     Returns:
         VersionCompareResult: 版本比對結果。

@@ -9,4 +9,15 @@ previous_version: 0.1.0
 ## 技術債務追蹤
 ## TD-003~021 已排程至 W50（0.1.0-W50-001~007），從此清單移除
 
-tech_debt: []
+tech_debt:
+  - id: TD-022
+    description: "scan_skill_packages (Hook) vs scan_custom_packages (CLI) 跨模組 pyproject.toml 掃描邏輯重複"
+    source: "0.1.0-W8-002 parallel-evaluation Reuse 視角"
+    priority: P2
+    note: "Hook 無法直接 import project_init 套件，需評估提取共用掃描模組或讓 Hook 依賴 CLI"
+
+  - id: TD-023
+    description: "_locate_module_subdir 概念可從 resolve_source_module_dir 和 _find_uv_tool_site_packages 提取共用函式"
+    source: "0.1.0-W8-002 parallel-evaluation Reuse 視角"
+    priority: P2
+    note: "目前只有 2 處使用，下次修改 package_manager.py 時順帶重構"

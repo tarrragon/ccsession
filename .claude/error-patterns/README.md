@@ -166,6 +166,13 @@ Error Patterns 是五重文件系統的核心組件之一，用於：
 | IMP-024 | phase-completion-gate-hook 在編輯 tdd_phase 欄位時誤觸 Phase 3b 完成警告 | 低 | v0.1.0 |
 | IMP-025 | 新模組引入 except Exception: pass 靜默吞掉異常 | 中 | v0.1.0 |
 | IMP-026 | 新建 Hook 檔案後未設定執行權限（+x） | 高 | v0.1.1 |
+| IMP-027 | 跨 Context 函式庫與 Hook 邏輯重複 | 低 | v0.1.0 |
+| IMP-028 | Hook 提前返回與 API 簽名漂移 | 中 | v0.1.0 |
+| IMP-029 | 強制 logger 參數破壞共用工具重用性 | 中 | v0.1.0 |
+| IMP-030 | Agent 測試 importlib 缺少 exec_module | 中 | v0.1.0 |
+| IMP-031 | Agent 部分完成後偽報告成功 | 中 | v0.1.0 |
+| IMP-032 | Hook 傳遞 CLI 不支援的參數 | 中 | v0.1.1 |
+| IMP-033 | 版本比對時 source 掃描範圍與 installed 不對齊 | 中 | v0.1.1 |
 
 ### 流程合規 (PC)
 
