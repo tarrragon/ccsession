@@ -45,8 +45,23 @@ try:
         is_in_worktree,
     )
 except ImportError as e:
-    print(f"[Hook Import Error] {Path(__file__).name}: {e}", file=sys.stderr)
-    sys.exit(1)
+    # #11 修復：ImportError 不應 exit(1) 阻斷整個 session
+    # 應該優雅降級為靜默（Hook 失敗應記錄但不阻塞主程式）
+    print(f"[Hook Import Warning] {Path(__file__).name}: {e}", file=sys.stderr)
+    # 定義最小化的 fallback 函式以支援優雅降級
+    def setup_hook_logging(name):
+        import logging
+        return logging.getLogger(name)
+    def hook_output(msg, level):
+        pass  # 靜默
+    def get_current_branch():
+        return None
+    def is_in_worktree():
+        return False
+    def is_allowed_branch(branch):
+        return False
+    def is_protected_branch(branch):
+        return branch in ["main", "master", "develop"]
 
 
 def main():

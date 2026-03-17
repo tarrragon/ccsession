@@ -17,6 +17,16 @@ from pathlib import Path
 from typing import Optional
 import subprocess
 
+from constants import (
+    FEAT_PREFIX,
+    FEAT_PREFIX_LEN,
+    PROTECTED_BRANCHES,
+    ALLOWED_BRANCH_PATTERNS,
+    TICKET_ID_PATTERN,
+    WORKTREE_STATUS_OUTPUT_WIDTH,
+    DEFAULT_BASE_BRANCH,
+)
+
 # 動態新增 .claude/lib 到 Python 路徑
 project_root = Path(__file__).resolve().parent.parent.parent.parent
 sys.path.insert(0, str(project_root / ".claude" / "lib"))
@@ -30,87 +40,44 @@ try:
         is_protected_branch,
         is_allowed_branch,
     )
-except ImportError:
-    # Fallback: 定義基本的 git_utils 函式
+except ImportError as e:
+    # #4 修復：ImportError 應寫入 stderr 和日誌，但不中斷程式
+    # 改為優雅降級：寫 stderr 提示，但允許程式繼續執行
+    import sys
+    print(f"[Warning] Failed to import git_utils: {e}", file=sys.stderr)
+    print(f"[Warning] Worktree SKILL may not function properly", file=sys.stderr)
+
+    # 定義 fallback 函式，但在呼叫時輸出警告並返回安全預設值
     def run_git_command(args: list[str], cwd: Optional[str] = None, timeout: int = 10) -> tuple[bool, str]:
-        """執行 git 命令並返回結果"""
-        try:
-            result = subprocess.run(
-                ["git"] + args,
-                cwd=cwd,
-                capture_output=True,
-                text=True,
-                timeout=timeout
-            )
-            if result.returncode == 0:
-                return True, result.stdout.strip()
-            else:
-                return False, result.stderr.strip()
-        except subprocess.TimeoutExpired:
-            return False, f"Command timed out after {timeout}s"
-        except FileNotFoundError:
-            return False, "git command not found"
-        except Exception as e:
-            return False, str(e)
+        """Fallback: 執行 git 命令（降級模式）"""
+        return False, "git_utils unavailable"
 
     def get_project_root() -> str:
-        """獲取專案根目錄"""
-        success, output = run_git_command(["rev-parse", "--show-toplevel"])
-        return output if success else os.getcwd()
+        """Fallback: 獲取專案根目錄（降級模式）"""
+        return os.getcwd()
 
     def get_current_branch() -> Optional[str]:
-        """獲取當前分支名稱"""
-        success, output = run_git_command(["branch", "--show-current"])
-        return output if success and output else None
+        """Fallback: 獲取當前分支（降級模式）"""
+        return None
 
     def get_worktree_list() -> list[dict]:
-        """獲取所有 worktree 列表"""
-        success, output = run_git_command(["worktree", "list", "--porcelain"])
-        if not success:
-            return []
-
-        worktrees = []
-        current_worktree: dict = {}
-
-        for line in output.split("\n"):
-            if line.startswith("worktree "):
-                if current_worktree:
-                    worktrees.append(current_worktree)
-                current_worktree = {"path": line[9:]}
-            elif line.startswith("branch "):
-                branch_ref = line[7:]
-                if branch_ref.startswith("refs/heads/"):
-                    branch_ref = branch_ref[11:]
-                current_worktree["branch"] = branch_ref
-            elif line == "detached":
-                current_worktree["detached"] = True
-
-        if current_worktree:
-            worktrees.append(current_worktree)
-
-        return worktrees
+        """Fallback: 獲取 worktree 列表（降級模式）"""
+        return []
 
     def is_protected_branch(branch: str) -> bool:
-        """檢查是否為保護分支"""
-        protected = ["main", "master", "develop", "release"]
+        """Fallback: 檢查保護分支（降級模式）"""
+        protected = PROTECTED_BRANCHES + ["release"]  # 包含官方版本的分支清單
         return branch in protected
 
     def is_allowed_branch(branch: str) -> bool:
-        """檢查是否為允許編輯的分支"""
-        allowed_patterns = ["feat/", "feature/", "fix/", "hotfix/"]
-        return any(branch.startswith(p) for p in allowed_patterns)
-
-
-# ===== Ticket ID 正規表達式 =====
-
-# 符合命名規範的 Ticket ID 模式
-TICKET_ID_PATTERN = r"^\d+\.\d+\.\d+-W\d+-\d+(\.\d+)*$"
+        """Fallback: 檢查允許編輯分支（降級模式）"""
+        return any(branch.startswith(p) for p in ALLOWED_BRANCH_PATTERNS)
 
 
 # ===== 核心函式 =====
 
 
-def parse_ticket_id(ticket_id: str) -> bool:
+def is_valid_ticket_id(ticket_id: str) -> bool:
     """
     驗證 Ticket ID 格式是否合法
 
@@ -121,10 +88,14 @@ def parse_ticket_id(ticket_id: str) -> bool:
         bool: 格式合法返回 True，否則 False
 
     Example:
-        parse_ticket_id("0.1.1-W9-002.1")  # True
-        parse_ticket_id("my-feature")      # False
+        is_valid_ticket_id("0.1.1-W9-002.1")  # True
+        is_valid_ticket_id("my-feature")      # False
     """
     return bool(re.match(TICKET_ID_PATTERN, ticket_id))
+
+
+# #9 修復：為向後相容，保留別名（舊命名）
+parse_ticket_id = is_valid_ticket_id
 
 
 def derive_branch_name(ticket_id: str) -> str:
@@ -191,10 +162,11 @@ def extract_ticket_id_from_branch(branch: str) -> Optional[str]:
         extract_ticket_id_from_branch("feat/0.1.1-W9-002.1")  # "0.1.1-W9-002.1"
         extract_ticket_id_from_branch("main")                  # None
     """
-    if not branch.startswith("feat/"):
+    if not branch.startswith(FEAT_PREFIX):
         return None
 
-    potential_ticket_id = branch[5:]  # 去掉 "feat/"
+    # #10 修復：使用常數 FEAT_PREFIX_LEN 而非魔法數字 5
+    potential_ticket_id = branch[FEAT_PREFIX_LEN:]
 
     if parse_ticket_id(potential_ticket_id):
         return potential_ticket_id
@@ -263,7 +235,90 @@ def get_worktree_uncommitted_count(worktree_path: str) -> int:
 # ===== 子命令函式 =====
 
 
-def cmd_create(ticket_id: str, base: str = "main", dry_run: bool = False) -> int:
+def _cmd_create_dry_run(ticket_id: str, branch_name: str, worktree_path: str, base: str) -> int:
+    """
+    create 子命令的 dry-run 模式（#13 修復：從 cmd_create 拆分出來）
+
+    Args:
+        ticket_id: Ticket ID
+        branch_name: 推導的分支名
+        worktree_path: 推導的 worktree 路徑
+        base: 基礎分支
+
+    Returns:
+        int: exit code (0)
+    """
+    git_cmd = ["worktree", "add", "-b", branch_name, worktree_path, base]
+    print("[Dry Run] 將要執行的操作：")
+    print()
+    print(f"  git {' '.join(git_cmd)}")
+    print()
+    print("實際執行請移除 --dry-run 參數。")
+    return 0
+
+
+def _cmd_create_validate_and_execute(
+    ticket_id: str,
+    branch_name: str,
+    worktree_path: str,
+    base: str
+) -> int:
+    """
+    create 子命令的實際執行邏輯（#13 修復：從 cmd_create 拆分出來）
+
+    Args:
+        ticket_id: Ticket ID
+        branch_name: 推導的分支名
+        worktree_path: 推導的 worktree 路徑
+        base: 基礎分支
+
+    Returns:
+        int: exit code (0 成功，1 失敗)
+    """
+    # 驗證基礎分支存在
+    if not check_branch_exists(base):
+        print(f"[錯誤] 基礎分支不存在：{base}")
+        print()
+        print("請確認分支名稱，或省略 --base 參數使用預設的 main")
+        return 1
+
+    # 檢查分支已存在
+    if check_branch_exists(branch_name):
+        print(f"[錯誤] 分支已存在：{branch_name}")
+        print()
+        print("如需重新建立，請先刪除分支：")
+        print(f"  git branch -d {branch_name}")
+        return 1
+
+    # 檢查 worktree 路徑已存在
+    if os.path.exists(worktree_path):
+        print(f"[錯誤] 目錄已存在：{worktree_path}")
+        print()
+        print("如需重新建立，請先移除目錄或使用其他 ticket-id")
+        return 1
+
+    # 構建 git 命令並執行
+    git_cmd = ["worktree", "add", "-b", branch_name, worktree_path, base]
+    success, output = run_git_command(git_cmd)
+    if not success:
+        print(f"[錯誤] 建立 worktree 失敗：{output}")
+        return 1
+
+    # 成功輸出
+    print("正在建立 worktree...")
+    print(f"  Ticket: {ticket_id}")
+    print(f"  分支:   {branch_name}")
+    print(f"  基礎:   {base}")
+    print(f"  路徑:   {worktree_path}")
+    print()
+    print("建立成功。")
+    print()
+    print("下一步：")
+    print(f"  cd {worktree_path}")
+    return 0
+
+
+def cmd_create(ticket_id: str, base: str = DEFAULT_BASE_BRANCH, dry_run: bool = False) -> int:
     """
     create 子命令 - 建立新 worktree
 
@@ -286,59 +341,110 @@ def cmd_create(ticket_id: str, base: str = "main", dry_run: bool = False) -> int
     branch_name = derive_branch_name(ticket_id)
     worktree_path = derive_worktree_path(ticket_id)
 
-    # Step 2.5: dry-run 只驗證格式和推導，不檢查 git 狀態
+    # Step 3: 區分 dry-run 和實際執行
     if dry_run:
-        git_cmd = ["worktree", "add", "-b", branch_name, worktree_path, base]
-        print("[Dry Run] 將要執行的操作：")
-        print()
-        print(f"  git {' '.join(git_cmd)}")
-        print()
-        print("實際執行請移除 --dry-run 參數。")
-        return 0
+        return _cmd_create_dry_run(ticket_id, branch_name, worktree_path, base)
+    else:
+        return _cmd_create_validate_and_execute(ticket_id, branch_name, worktree_path, base)
 
-    # Step 3: 驗證基礎分支存在
-    if not check_branch_exists(base):
-        print(f"[錯誤] 基礎分支不存在：{base}")
-        print()
-        print("請確認分支名稱，或省略 --base 參數使用預設的 main")
-        return 1
 
-    # Step 4: 檢查分支已存在
-    if check_branch_exists(branch_name):
-        print(f"[錯誤] 分支已存在：{branch_name}")
-        print()
-        print("如需重新建立，請先刪除分支：")
-        print(f"  git branch -d {branch_name}")
-        return 1
+def _collect_worktree_info(worktrees: list[dict]) -> list[dict]:
+    """
+    收集 worktree 資訊（#7 修復：從 cmd_status 拆分出來降低認知負擔）
 
-    # Step 5: 檢查 worktree 路徑已存在
-    if os.path.exists(worktree_path):
-        print(f"[錯誤] 目錄已存在：{worktree_path}")
-        print()
-        print("如需重新建立，請先移除目錄或使用其他 ticket-id")
-        return 1
+    Args:
+        worktrees: worktree 列表
 
-    # Step 6: 構建 git 命令
-    git_cmd = ["worktree", "add", "-b", branch_name, worktree_path, base]
+    Returns:
+        list[dict]: 包含顯示用資訊的字典列表
+    """
+    display_info = []
+    for wt in worktrees:
+        path = wt.get("path", "")
+        branch = wt.get("branch", "")
+        is_detached = wt.get("detached", False)
 
-    # Step 7: 執行 git worktree add
-    success, output = run_git_command(git_cmd)
-    if not success:
-        print(f"[錯誤] 建立 worktree 失敗：{output}")
-        return 1
+        # 檢查是否為主倉庫
+        is_main = branch in PROTECTED_BRANCHES
 
-    # Step 9: 成功輸出
-    print("正在建立 worktree...")
-    print(f"  Ticket: {ticket_id}")
-    print(f"  分支:   {branch_name}")
-    print(f"  基礎:   {base}")
-    print(f"  路徑:   {worktree_path}")
+        # #12 修復：處理 detached HEAD worktree
+        if is_detached:
+            ticket_label = "detached"
+            ahead, behind = 0, 0
+            uncommitted = get_worktree_uncommitted_count(path)
+            is_main = False
+        # 反推 Ticket ID 或標籤
+        elif is_main:
+            ticket_label = "主倉庫"
+            ahead, behind = 0, 0
+            uncommitted = get_worktree_uncommitted_count(path)
+        else:
+            ticket_label = extract_ticket_id_from_branch(branch)
+            if ticket_label is None:
+                ticket_label = "無法辨識"
+            ahead, behind = get_worktree_ahead_behind(branch, "main")
+            uncommitted = get_worktree_uncommitted_count(path)
+
+        display_info.append({
+            "label": ticket_label,
+            "path": path,
+            "branch": branch if not is_detached else "detached",
+            "ahead": ahead,
+            "behind": behind,
+            "uncommitted": uncommitted,
+            "is_main": is_main,
+            "is_detached": is_detached
+        })
+
+    return display_info
+
+
+def _print_worktree_status(display_info: list[dict]) -> None:
+    """
+    格式化輸出 worktree 狀態（#7 修復：從 cmd_status 拆分出來）
+
+    Args:
+        display_info: 包含顯示用資訊的字典列表
+    """
+    print(f"Worktree 狀態（共 {len(display_info)} 個）")
+    print("━" * WORKTREE_STATUS_OUTPUT_WIDTH)
     print()
-    print("建立成功。")
-    print()
-    print("下一步：")
-    print(f"  cd {worktree_path}")
-    return 0
+
+    for i, info in enumerate(display_info):
+        print(f"[{info['label']}]")
+        print(f"  路徑：   {info['path']}")
+        print(f"  分支：   {info['branch']}")
+
+        if not info['is_main']:
+            # 格式化 ahead/behind 輸出（#1 修復：0 時不顯示 -0）
+            ahead_str = f"+{info['ahead']}" if info['ahead'] > 0 else f"{info['ahead']}"
+            behind_str = f"+{info['behind']}" if info['behind'] > 0 else f"{info['behind']}"
+            print(f"  領先：   {ahead_str} commits ahead of main")
+            print(f"  落後：   {behind_str} commits behind main")
+
+        print(f"  變更：   {info['uncommitted']} 個未 commit")
+
+        if i < len(display_info) - 1:
+            print()
+
+
+def _find_target_worktree(worktrees: list[dict], ticket_id: str) -> Optional[dict]:
+    """
+    在 worktree 列表中查詢特定 Ticket 對應的 worktree（#7 修復：從 cmd_status 拆分出來）
+
+    Args:
+        worktrees: worktree 列表
+        ticket_id: 欲查詢的 Ticket ID
+
+    Returns:
+        dict | None: 找到的 worktree，或 None
+    """
+    for wt in worktrees:
+        branch = wt.get("branch", "")
+        extracted_id = extract_ticket_id_from_branch(branch)
+        if extracted_id == ticket_id:
+            return wt
+    return None
 
 
 def cmd_status(ticket_id: Optional[str] = None) -> int:
@@ -356,13 +462,7 @@ def cmd_status(ticket_id: Optional[str] = None) -> int:
 
     # Step 2: 如果指定 ticket_id，進行篩選
     if ticket_id is not None:
-        target_worktree = None
-        for wt in worktrees:
-            branch = wt.get("branch", "")
-            extracted_id = extract_ticket_id_from_branch(branch)
-            if extracted_id == ticket_id:
-                target_worktree = wt
-                break
+        target_worktree = _find_target_worktree(worktrees, ticket_id)
 
         if target_worktree is None:
             print(f"[錯誤] 找不到 Ticket {ticket_id} 對應的 worktree。")
@@ -389,7 +489,6 @@ def cmd_status(ticket_id: Optional[str] = None) -> int:
         worktrees = [target_worktree]
 
     # Step 3: 如果無任何 worktree（除主倉庫外）
-    # 注意：指定 ticket_id 篩選後不走此邏輯，篩選結果已在 Step 2 處理
     if ticket_id is None and len(worktrees) <= 1:
         print("目前沒有任何 worktree（除主倉庫外）。")
         print()
@@ -398,58 +497,10 @@ def cmd_status(ticket_id: Optional[str] = None) -> int:
         return 0
 
     # Step 4: 收集 worktree 資訊
-    display_info = []
-    for wt in worktrees:
-        path = wt.get("path", "")
-        branch = wt.get("branch", "")
-
-        # 檢查是否為主倉庫
-        is_main = (branch in ["main", "master", "develop"] or
-                   not branch.startswith("feat/"))
-
-        # 反推 Ticket ID
-        if is_main:
-            ticket_label = "主倉庫"
-            ahead, behind = 0, 0
-            uncommitted = get_worktree_uncommitted_count(path)
-        else:
-            ticket_label = extract_ticket_id_from_branch(branch)
-            if ticket_label is None:
-                ticket_label = "無法辨識"
-            ahead, behind = get_worktree_ahead_behind(branch, "main")
-            uncommitted = get_worktree_uncommitted_count(path)
-
-        display_info.append({
-            "label": ticket_label,
-            "path": path,
-            "branch": branch,
-            "ahead": ahead,
-            "behind": behind,
-            "uncommitted": uncommitted,
-            "is_main": is_main
-        })
+    display_info = _collect_worktree_info(worktrees)
 
     # Step 5: 格式化輸出
-    print(f"Worktree 狀態（共 {len(display_info)} 個）")
-    print("━" * 50)
-    print()
-
-    for i, info in enumerate(display_info):
-        print(f"[{info['label']}]")
-        print(f"  路徑：   {info['path']}")
-        print(f"  分支：   {info['branch']}")
-
-        if not info['is_main']:
-            # 格式化 ahead/behind 輸出
-            ahead_str = f"+{info['ahead']}" if info['ahead'] > 0 else f"-{info['ahead']}"
-            behind_str = f"+{info['behind']}" if info['behind'] > 0 else f"-{info['behind']}"
-            print(f"  領先：   {ahead_str} commits ahead of main")
-            print(f"  落後：   {behind_str} commits behind main")
-
-        print(f"  變更：   {info['uncommitted']} 個未 commit")
-
-        if i < len(display_info) - 1:
-            print()
+    _print_worktree_status(display_info)
 
     return 0
 

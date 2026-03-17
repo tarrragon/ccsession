@@ -238,7 +238,7 @@ wheels = [
 [[package]]
 name = "worktree-skill"
 version = "1.0.0"
-source = { virtual = "." }
+source = { editable = "." }
 
 [package.optional-dependencies]
 dev = [

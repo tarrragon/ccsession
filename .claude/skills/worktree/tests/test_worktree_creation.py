@@ -89,3 +89,42 @@ class TestCreateCommand:
 
         captured = capsys.readouterr()
         assert "develop" in captured.out
+
+    @patch('worktree_manager.run_git_command')
+    @patch('worktree_manager.check_branch_exists')
+    @patch('worktree_manager.os.path.exists')
+    def test_create_success_valid_ticket(self, mock_path_exists, mock_check_branch, mock_run_git, capsys):
+        """場景 5.5：成功建立 worktree（#5 修復：補充成功路徑測試）"""
+        # 模擬檢查：base 分支存在，feat 分支不存在
+        mock_check_branch.side_effect = [True, False]
+        # 模擬路徑不存在
+        mock_path_exists.return_value = False
+        # 模擬 git worktree add 成功
+        mock_run_git.return_value = (True, "正在建立 worktree")
+
+        result = cmd_create("0.1.1-W9-002.1")
+        assert result == 0
+
+        captured = capsys.readouterr()
+        assert "建立成功" in captured.out
+        assert "0.1.1-W9-002.1" in captured.out
+        assert "feat/0.1.1-W9-002.1" in captured.out
+
+    @patch('worktree_manager.run_git_command')
+    @patch('worktree_manager.check_branch_exists')
+    @patch('worktree_manager.os.path.exists')
+    def test_create_success_with_custom_base(self, mock_path_exists, mock_check_branch, mock_run_git, capsys):
+        """場景 5.6：成功建立 worktree（自訂 base 分支）"""
+        # 模擬檢查：develop 分支存在，feat 分支不存在
+        mock_check_branch.side_effect = [True, False]
+        # 模擬路徑不存在
+        mock_path_exists.return_value = False
+        # 模擬 git worktree add 成功
+        mock_run_git.return_value = (True, "")
+
+        result = cmd_create("0.1.1-W9-002.1", base="develop")
+        assert result == 0
+
+        captured = capsys.readouterr()
+        assert "建立成功" in captured.out
+        assert "develop" in captured.out

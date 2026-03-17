@@ -1,3 +1,8 @@
+# #8 修復：新增 build-system 宣告
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "worktree-skill"
 version = "1.0.0"
