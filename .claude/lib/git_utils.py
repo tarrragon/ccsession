@@ -204,6 +204,51 @@ def is_allowed_branch(branch: str) -> bool:
     return False
 
 
+def is_in_worktree() -> bool:
+    """
+    檢查當前工作目錄是否在 git worktree（非主倉庫）中
+
+    在 worktree 中，git rev-parse --git-dir 返回的路徑會是
+    /path/to/.git/worktrees/name，而 --git-common-dir 返回 /path/to/.git
+    兩者不同即表示在 worktree 中。
+
+    在主倉庫中，兩者都返回 /path/to/.git（相同）
+
+    Returns:
+        bool: True 表示在 worktree 中，False 表示在主倉庫或非 git 環境
+
+    Example:
+        if is_in_worktree():
+            print("Currently in a feature worktree")
+        else:
+            print("Currently in the main repository")
+    """
+    try:
+        # 取得主 .git 目錄路徑
+        success_common, git_common_dir = run_git_command(["rev-parse", "--git-common-dir"])
+        if not success_common:
+            return False
+
+        # 取得當前 .git 目錄路徑
+        success_dir, git_dir = run_git_command(["rev-parse", "--git-dir"])
+        if not success_dir:
+            return False
+
+        # 正規化路徑以便正確比較（移除相對路徑等）
+        git_common_dir = os.path.abspath(git_common_dir)
+        git_dir = os.path.abspath(git_dir)
+
+        # 比較兩者
+        # 在 worktree 中：不同（git_dir 包含 /worktrees/ 路徑）
+        # 在主倉庫中：相同
+        return git_common_dir != git_dir
+
+    except Exception:
+        # 錯誤時保守預設為主倉庫
+        return False
+
+
+
 def generate_worktree_info() -> str:
     """
     生成 worktree 資訊字串（用於顯示）
