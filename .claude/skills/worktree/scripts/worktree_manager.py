@@ -286,6 +286,16 @@ def cmd_create(ticket_id: str, base: str = "main", dry_run: bool = False) -> int
     branch_name = derive_branch_name(ticket_id)
     worktree_path = derive_worktree_path(ticket_id)
 
+    # Step 2.5: dry-run 只驗證格式和推導，不檢查 git 狀態
+    if dry_run:
+        git_cmd = ["worktree", "add", "-b", branch_name, worktree_path, base]
+        print("[Dry Run] 將要執行的操作：")
+        print()
+        print(f"  git {' '.join(git_cmd)}")
+        print()
+        print("實際執行請移除 --dry-run 參數。")
+        return 0
+
     # Step 3: 驗證基礎分支存在
     if not check_branch_exists(base):
         print(f"[錯誤] 基礎分支不存在：{base}")
@@ -311,16 +321,7 @@ def cmd_create(ticket_id: str, base: str = "main", dry_run: bool = False) -> int
     # Step 6: 構建 git 命令
     git_cmd = ["worktree", "add", "-b", branch_name, worktree_path, base]
 
-    # Step 7: 檢查是否為 dry-run
-    if dry_run:
-        print("[Dry Run] 將要執行的操作：")
-        print()
-        print(f"  git {' '.join(git_cmd)}")
-        print()
-        print("實際執行請移除 --dry-run 參數。")
-        return 0
-
-    # Step 8: 執行 git worktree add
+    # Step 7: 執行 git worktree add
     success, output = run_git_command(git_cmd)
     if not success:
         print(f"[錯誤] 建立 worktree 失敗：{output}")
@@ -388,7 +389,8 @@ def cmd_status(ticket_id: Optional[str] = None) -> int:
         worktrees = [target_worktree]
 
     # Step 3: 如果無任何 worktree（除主倉庫外）
-    if len(worktrees) <= 1:
+    # 注意：指定 ticket_id 篩選後不走此邏輯，篩選結果已在 Step 2 處理
+    if ticket_id is None and len(worktrees) <= 1:
         print("目前沒有任何 worktree（除主倉庫外）。")
         print()
         print("建立新的 worktree：")
