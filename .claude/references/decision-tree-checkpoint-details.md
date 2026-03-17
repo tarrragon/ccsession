@@ -51,6 +51,42 @@
 
 ---
 
+## Checkpoint 1.8：合併回 main（強制）
+
+**觸發時機**：Checkpoint 1.5 完成後，進入 Checkpoint 2 之前
+
+**背景**：開發工作在獨立分支進行（branch-worktree-guardian 規則）。任務完成並 commit 後，必須將變更合併回 main，確保 main 保持最新狀態，讓其他 session 或後續 Wave 能基於最新 main 開發。
+
+**判斷規則**：
+
+| 情況 | 路由 |
+|------|------|
+| 當前在開發分支上 | 合併回 main → 刪除開發分支 → 繼續 Checkpoint 2 |
+| 當前已在 main 上 | 跳過，直接進入 Checkpoint 2 |
+
+**執行步驟**：
+
+```bash
+# 1. 切換到 main
+git checkout main
+
+# 2. 合併開發分支（保留合併記錄）
+git merge {branch-name} --no-ff -m "merge: {branch-name} → main ({ticket-id} 完成)"
+
+# 3. 刪除已合併的開發分支
+git branch -d {branch-name}
+```
+
+**禁止行為**：
+
+| 禁止 | 說明 |
+|------|------|
+| 跳過合併直接 Handoff | main 不是最新狀態，後續 session 基於舊 main 開發 |
+| 使用 fast-forward merge | 必須用 `--no-ff` 保留合併記錄 |
+| 不刪除已合併分支 | 避免分支堆積 |
+
+---
+
 ## Checkpoint 2：Commit 後情境評估
 
 **觸發時機**：每次 git commit 成功後
@@ -260,5 +296,5 @@ ticket handoff --gc --execute
 
 ---
 
-**Last Updated**: 2026-03-13
-**Version**: 1.4.0 - 情境 C2 新增版本收尾技術債整理步驟（0.1.0-W50-008）
+**Last Updated**: 2026-03-17
+**Version**: 1.5.0 - 新增 Checkpoint 1.8 合併回 main 步驟

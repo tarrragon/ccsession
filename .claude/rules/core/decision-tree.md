@@ -319,6 +319,7 @@ Step 4: ticket track complete <id>
 | 0 建立後 Handoff | 可並行派發? | 是 → 留在 session 並行派發；否 → commit + handoff |
 | 1 變更狀態 | 有未提交變更? | 是 → commit；無 → 跳至 Checkpoint 3 |
 | 1.5 錯誤學習 | commit 成功後 | AskUserQuestion #16 |
+| 1.8 合併回 main | 在開發分支上? | 是 → merge --no-ff → main → 刪除開發分支；否 → 跳過 |
 | 2 情境評估 | [強制查詢] ticket track list | 情境 D/A/B/C（見下方） |
 | 3 後續路由 | 任務類型 | AskUserQuestion #13 |
 | 4 parallel-evaluation | 階段完成後 | AskUserQuestion #14 |
@@ -407,5 +408,5 @@ Level 5: TDD 階段代理人 + thyme-python-developer
 
 ---
 
-**Last Updated**: 2026-03-13
-**Version**: 7.26.0 - 第七層新增 complete 前主動勾選驗收條件步驟（0.1.0-W51-001）
+**Last Updated**: 2026-03-17
+**Version**: 7.27.0 - 第八層新增 Checkpoint 1.8 合併回 main 步驟
