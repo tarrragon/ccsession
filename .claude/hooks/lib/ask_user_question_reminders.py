@@ -141,7 +141,8 @@ PM 必須使用 AskUserQuestion 確認收尾動作。
   Handoff first，繼續 session 是例外，不是預設。
   Context 是有限資源，每次 Ticket 完成後 handoff 能保護下一個任務的思考品質。
 
-[第一步 - 強制] AskUserQuestion #16（錯誤學習確認）：
+[第一步 - 強制，不可跳過] AskUserQuestion #16（錯誤學習確認）：
+  即使非 Ticket 工作，commit 後仍必須執行。無「非正式任務」豁免（規則 4）。
   → ToolSearch("select:AskUserQuestion") 載入後使用
   → 選項：無需記錄 (Recommended) / 記錄錯誤學習
   → 選擇「記錄」→ /error-pattern add → 重新確認 #16 直到選擇「無需記錄」
