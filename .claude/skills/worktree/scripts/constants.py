@@ -42,3 +42,21 @@ TICKET_ID_PATTERN = r"^(\d+\.\d+\.\d+)-W(\d+)-(\d+(?:\.\d+)*)(-[a-z0-9][a-z0-9-]
 
 WORKTREE_STATUS_OUTPUT_WIDTH = 50  # 狀態輸出寬度（分隔線）
 DEFAULT_BASE_BRANCH = "main"  # create 子命令預設基礎分支
+
+
+# ===== merge 子命令常數 =====
+
+# ticket track 查詢超時秒數（避免 merge 流程卡住）
+TICKET_QUERY_TIMEOUT = 5
+
+# Ticket 已完成的狀態值
+TICKET_COMPLETED_STATUS = "completed"
+
+
+# ===== cleanup 子命令常數 =====
+
+# cleanup 輸出寬度（與 status 使用相同常數）
+CLEANUP_OUTPUT_WIDTH = WORKTREE_STATUS_OUTPUT_WIDTH
+
+# git branch -d 失敗時，提示使用者的強制刪除指令中的 flag
+BRANCH_FORCE_DELETE_FLAG = "-D"
