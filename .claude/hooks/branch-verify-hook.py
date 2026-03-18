@@ -22,6 +22,11 @@ Decision: "allow" (feature 分支) | "deny" (保護分支)
 - 將保護分支決策從 "ask" 改為 "deny"（預防 Edit 操作在保護分支上執行）
 - 優化 block 訊息，包含詳細的分支切換指引
 - 移除未使用的 worktree_info 變數
+
+修改紀錄 (0.1.1-W9-002.3):
+- 新增路徑豁免邏輯（.claude/, docs/, CLAUDE.md, README.md 在保護分支上允許編輯）
+- 新增 is_exempt_path_on_protected_branch() 函式
+- 在保護分支上，豁免路徑不阻止編輯
 """
 
 import sys
@@ -43,6 +48,49 @@ from hook_io import (
     create_pretooluse_output,
 )
 from hook_utils import setup_hook_logging, run_hook_safely
+
+
+def is_exempt_path_on_protected_branch(file_path: str) -> bool:
+    """
+    判斷此路徑是否在保護分支上被豁免（允許編輯）
+
+    適用場景：需要在 main 分支上更新規則、文件、Ticket 時
+
+    Args:
+        file_path: 要編輯的檔案路徑
+
+    Returns:
+        bool: True 表示豁免（允許編輯），False 表示不豁免（需要 deny）
+
+    Example:
+        if is_exempt_path_on_protected_branch(".claude/rules/core/decision-tree.md"):
+            print("Allowed to edit .claude/ files on main")
+    """
+    # 豁免的路徑字首
+    exempt_prefixes = [
+        ".claude/",
+        "docs/",
+    ]
+
+    # 豁免的精確路徑
+    exempt_exact = [
+        "CLAUDE.md",
+        "README.md",
+    ]
+
+    # 正規化路徑（移除開頭斜線）
+    normalized = file_path.lstrip("/")
+
+    # 檢查字首
+    for prefix in exempt_prefixes:
+        if normalized.startswith(prefix):
+            return True
+
+    # 檢查精確匹配
+    if normalized in exempt_exact:
+        return True
+
+    return False
 
 
 def main() -> int:
@@ -89,7 +137,17 @@ def main() -> int:
     if is_protected_branch(current_branch):
         file_path = tool_input.get("file_path", "unknown")
 
-        logger.info(f"在保護分支 '{current_branch}' 上嘗試編輯檔案 {file_path}，操作已阻止")
+        # 檢查是否為豁免路徑（在保護分支上允許編輯）
+        if is_exempt_path_on_protected_branch(file_path):
+            logger.info(f"在保護分支 '{current_branch}' 上編輯豁免路徑 {file_path}，允許")
+            output = create_pretooluse_output(
+                "allow",
+                f"在保護分支上編輯豁免路徑：{file_path}"
+            )
+            write_hook_output(output)
+            return 0
+
+        logger.info(f"在保護分支 '{current_branch}' 上嘗試編輯非豁免檔案 {file_path}，操作已阻止")
         output = create_pretooluse_output(
             "deny",
             f"""保護分支編輯被阻止
@@ -99,15 +157,15 @@ def main() -> int:
 
 保護分支用於穩定開發，需要在獨立分支上進行更改。
 
-建議的分支切換方式：
+建議的操作方式：
 
-1. 建立新 feature 分支並切換：
+1. 建立 feature worktree（推薦）：
+   /worktree create <ticket-id>
+
+2. 或手動建立分支：
    git checkout -b feat/your-feature
 
-2. 或使用 git worktree 建立獨立工作空間：
-   git worktree add ../book-feat feat/your-feature
-
-請先建立並切換到 feature 分支後再進行編輯。"""
+注意：.claude/ 和 docs/ 路徑在保護分支上允許直接編輯。"""
         )
         write_hook_output(output)
         return 0
