@@ -162,6 +162,12 @@ def is_allowed_path(file_path: str, logger) -> bool:
     Returns:
         bool - 是否為允許的路徑
     """
+    # Claude Code 官方 memory 系統路徑（在用戶 home 目錄下，不在專案內）
+    normalized_abs = file_path.replace("\\", "/")
+    if "/.claude/projects/" in normalized_abs and "/memory/" in normalized_abs:
+        logger.debug(f"檔案匹配 Claude Code memory 系統路徑: {normalized_abs}")
+        return True
+
     normalized_path = normalize_path(file_path)
 
     for pattern in ALLOWED_PATTERNS:
