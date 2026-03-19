@@ -2,20 +2,23 @@
 """
 Version Consistency Guard Hook
 
-Detects version inconsistencies and alerts on incomplete tasks in older versions.
+Detects version inconsistencies and alerts on incomplete tasks in older versions
+and version mismatches between current_version and work-logs directories.
 
 Hook Event: SessionStart (non-blocking warning)
 
 Purpose:
-    Prevents version number from advancing (current_version in todolist.yaml)
-    while older versions still have pending/in_progress/blocked Tickets.
+    1. Prevents version number from advancing (current_version in todolist.yaml)
+       while older versions still have pending/in_progress/blocked Tickets.
+    2. Alerts when current_version is lower than the highest version directory
+       in docs/work-logs/ (indicates todolist.yaml is out of sync).
 
 Logic:
     1. Read current_version from docs/todolist.yaml
     2. Scan all version directories in docs/work-logs/
-    3. Find versions older than current_version
-    4. Check tickets/ directories for incomplete Tickets (pending/in_progress/blocked)
-    5. If found, print clear warning message (non-blocking)
+    3. Check for incomplete Tickets in versions older than current_version
+    4. Check for version mismatch (current_version vs highest worklog version)
+    5. Print clear warning message(s) (non-blocking)
 
 Exit code:
     0 - Always (non-blocking warning, never prevents session start)
@@ -191,6 +194,52 @@ def find_older_versions_with_incomplete_tickets(
 # Output formatting
 # ============================================================================
 
+def find_highest_worklog_version(project_root: Path, logger) -> Optional[str]:
+    """Find the highest version directory in docs/work-logs/.
+
+    Args:
+        project_root: Project root path
+        logger: Logger instance
+
+    Returns:
+        Version string like '0.1.1', or None if no version directories found
+    """
+    work_logs_dir = project_root / "docs" / "work-logs"
+
+    if not work_logs_dir.exists():
+        return None
+
+    highest_version = None
+    highest_tuple = ()
+
+    try:
+        for version_dir in work_logs_dir.iterdir():
+            # Only process directories like v0.1.0
+            if not version_dir.is_dir():
+                continue
+
+            dir_name = version_dir.name
+            if not dir_name.startswith('v'):
+                continue
+
+            # Extract version from directory name
+            version_str = dir_name[1:]  # Remove 'v' prefix
+            version_tuple = parse_version_string(version_str)
+
+            if not version_tuple:
+                continue
+
+            # Check if this is the highest version so far
+            if not highest_tuple or not version_is_older(version_tuple, highest_tuple):
+                highest_version = version_str
+                highest_tuple = version_tuple
+
+    except Exception as e:
+        logger.warning(f"Error scanning work-logs for highest version: {e}")
+
+    return highest_version
+
+
 def print_warning(current_version: str, older_versions_info: Dict[str, List[Dict[str, str]]]) -> None:
     """Print warning message about incomplete tickets in older versions.
 
@@ -233,6 +282,35 @@ def print_warning(current_version: str, older_versions_info: Dict[str, List[Dict
     print()
     print("建議：使用 ticket track list --version {version} --status pending in_progress")
     print("      查看完整任務列表")
+    print()
+    print(separator)
+    print()
+
+
+def print_version_mismatch_warning(current_version: str, highest_version: str) -> None:
+    """Print warning message about version mismatch between current_version and highest worklog directory.
+
+    Args:
+        current_version: Current version from todolist.yaml
+        highest_version: Highest version directory found in docs/work-logs/
+    """
+    separator = "=" * 60
+
+    print()
+    print(separator)
+    print("[Version Consistency Guard] 發現版本號不一致")
+    print(separator)
+    print()
+    print(f"current_version (todolist.yaml): {current_version}")
+    print(f"最高目錄版本 (docs/work-logs/):  {highest_version}")
+    print()
+    print("版本號不一致可能導致：")
+    print("  - 新建立的 Ticket 版本號錯誤")
+    print("  - 工作日誌路徑錯誤")
+    print("  - 版本管理混亂")
+    print()
+    print("建議修正方式：")
+    print(f"  修改 docs/todolist.yaml，將 current_version 更新為 {highest_version}")
     print()
     print(separator)
     print()
@@ -305,6 +383,31 @@ def main() -> int:
         )
     else:
         logger.debug("No incomplete tickets in older versions")
+
+    # Check for version mismatch: current_version vs highest worklog version
+    highest_worklog_version = find_highest_worklog_version(project_root, logger)
+
+    if highest_worklog_version:
+        current_ver_tuple = parse_version_string(current_version)
+        highest_ver_tuple = parse_version_string(highest_worklog_version)
+
+        if current_ver_tuple and highest_ver_tuple:
+            # Check if current_version is older than highest_worklog_version
+            if version_is_older(current_ver_tuple, highest_ver_tuple):
+                print_version_mismatch_warning(current_version, highest_worklog_version)
+                logger.info(
+                    f"Version mismatch warning: current_version={current_version} "
+                    f"but highest worklog version={highest_worklog_version}"
+                )
+            else:
+                logger.debug(
+                    f"Version consistent: current_version={current_version}, "
+                    f"highest_worklog_version={highest_worklog_version}"
+                )
+        else:
+            logger.warning("Failed to parse versions for comparison")
+    else:
+        logger.debug("No version directories found in docs/work-logs/")
 
     return 0
 
