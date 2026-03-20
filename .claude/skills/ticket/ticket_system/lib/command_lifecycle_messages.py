@@ -253,6 +253,28 @@ class CreateMessages:
     RECOMMENDED_WAVE = "建議使用 Wave: {wave_num}"
     WAVE_CALCULATION_REASON = "原因: {reason}"
 
+    # decision_tree_path 驗證錯誤訊息（v0.1.1 新增）
+    DECISION_TREE_MISSING_ALL = (
+        "[ERROR] 缺少 decision_tree_path 必填欄位\n"
+        "       請提供以下三個參數：\n"
+        "         --decision-tree-entry    <進入決策樹的層級>\n"
+        "         --decision-tree-decision <做出的決策>\n"
+        "         --decision-tree-rationale <決策理由>\n"
+        "\n"
+        "       豁免條件（可省略）：子任務（--parent）或 DOC 類型（--type DOC）"
+    )
+
+    DECISION_TREE_MISSING_PARTIAL = (
+        "[ERROR] decision_tree_path 欄位不完整\n"
+        "       缺少：{missing_fields}\n"
+        "       三個子欄位必須同時提供或同時省略"
+    )
+
+    DECISION_TREE_EMPTY_VALUE = (
+        "[ERROR] decision_tree_path 欄位值不能為空字串\n"
+        "       欄位：{field_name}"
+    )
+
 
 class FieldsMessages:
     """fields.py 相關訊息"""

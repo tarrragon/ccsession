@@ -108,6 +108,9 @@ class TicketConfig(TypedDict, total=False):
     # 驗收條件（1 個欄位）
     acceptance: Optional[List[str]]  # 驗收條件清單
 
+    # 決策樹路徑（1 個欄位）
+    decision_tree_path: Optional[Dict[str, str]]  # {"entry_point": ..., "final_decision": ..., "rationale": ...}
+
 
 def get_default_acceptance_criteria(ticket_type: str) -> List[str]:
     """取得預設驗收條件（依 Ticket 類型）。
@@ -322,7 +325,7 @@ def create_ticket_frontmatter(config: TicketConfig) -> Dict[str, Any]:
     Returns:
         包含 frontmatter 資訊的字典
 
-    Frontmatter 欄位清單（27 個欄位）:
+    Frontmatter 欄位清單（28 個欄位）:
         - id: config["ticket_id"]
         - title: config["title"]
         - type: config["ticket_type"]
@@ -337,6 +340,7 @@ def create_ticket_frontmatter(config: TicketConfig) -> Dict[str, Any]:
         - spawned_tickets: []（空清單）
         - source_ticket: None
         - dispatch_reason: ""（空字串）
+        - decision_tree_path: config.get("decision_tree_path")（決策樹路徑，可選）
         - who: {"current": config["who"], "history": {}}
         - what: config["what"]
         - when: config["when"]
@@ -399,6 +403,7 @@ def create_ticket_frontmatter(config: TicketConfig) -> Dict[str, Any]:
         "spawned_tickets": [],
         "source_ticket": None,
         "dispatch_reason": "",
+        "decision_tree_path": config.get("decision_tree_path"),
         "who": {"current": config["who"], "history": {}},
         "what": config["what"],
         "when": config["when"],

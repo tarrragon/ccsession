@@ -53,6 +53,105 @@ from ticket_system.lib.ticket_builder import (
 from ticket_system.lib.ui_constants import SEPARATOR_PRIMARY
 
 
+def _build_decision_tree_path(
+    entry: Optional[str],
+    decision: Optional[str],
+    rationale: Optional[str],
+    is_child: bool,
+    ticket_type: str,
+) -> Optional[Dict[str, str]]:
+    """驗證並構建 decision_tree_path 字典。
+
+    邏輯：
+    1. 豁免條件：子任務（is_child=True）或 DOC 類型
+    2. 豁免時無參數 → 返回 None
+    3. 豁免時有完整參數 → 返回字典
+    4. 豁免時部分參數 → 返回 False（拒絕）
+    5. 非豁免時無參數 → 返回 False（拒絕）
+    6. 非豁免時有完整參數 → 返回字典
+    7. 非豁免時部分參數 → 返回 False（拒絕）
+    8. 任何情況下有空字串值 → 返回 False（拒絕）
+
+    Args:
+        entry: --decision-tree-entry 參數值
+        decision: --decision-tree-decision 參數值
+        rationale: --decision-tree-rationale 參數值
+        is_child: 是否為子任務（args.parent 非空）
+        ticket_type: Ticket 類型（args.type）
+
+    Returns:
+        - Dict[str, str]：包含 entry_point, final_decision, rationale 三個鍵
+        - None：豁免且無參數
+        - False：驗證失敗（拒絕建立）
+    """
+    # 判斷是否豁免
+    is_exempted = is_child or ticket_type == "DOC"
+
+    # 計算提供的參數個數
+    params = [entry, decision, rationale]
+    provided_count = sum(1 for p in params if p is not None)
+
+    # 判斷是否有空字串值
+    has_empty_value = any(p == "" for p in params if p is not None)
+
+    if has_empty_value:
+        # 找出空值欄位名稱
+        field_names = {entry: "entry_point", decision: "final_decision", rationale: "rationale"}
+        empty_field = next(name for p, name in field_names.items() if p == "")
+        print(format_error(
+            CreateMessages.DECISION_TREE_EMPTY_VALUE,
+            field_name=empty_field
+        ))
+        return False
+
+    if is_exempted:
+        # 豁免情況
+        if provided_count == 0:
+            # 豁免 + 無參數 → None
+            return None
+        elif provided_count == 3:
+            # 豁免 + 完整三參數 → Dict
+            return {
+                "entry_point": entry,
+                "final_decision": decision,
+                "rationale": rationale,
+            }
+        else:
+            # 豁免 + 部分參數 → False（保護一致性）
+            print(format_error(
+                "[ERROR] 豁免條件下三個參數必須全部提供或全部省略"
+            ))
+            return False
+    else:
+        # 非豁免情況
+        if provided_count == 0:
+            # 非豁免 + 無參數 → False
+            print(format_error(CreateMessages.DECISION_TREE_MISSING_ALL))
+            return False
+        elif provided_count == 3:
+            # 非豁免 + 完整三參數 → Dict
+            return {
+                "entry_point": entry,
+                "final_decision": decision,
+                "rationale": rationale,
+            }
+        else:
+            # 非豁免 + 部分參數 → False
+            missing_fields = []
+            if entry is None:
+                missing_fields.append("entry_point")
+            if decision is None:
+                missing_fields.append("final_decision")
+            if rationale is None:
+                missing_fields.append("rationale")
+
+            print(format_error(
+                CreateMessages.DECISION_TREE_MISSING_PARTIAL,
+                missing_fields=", ".join(missing_fields)
+            ))
+            return False
+
+
 def execute(args: argparse.Namespace) -> int:
     """執行 create 命令"""
     version = resolve_version(args.version)
@@ -126,6 +225,19 @@ def execute(args: argparse.Namespace) -> int:
     # 若有 TDD Phase 順序，取第一個 Phase 作為初始階段
     tdd_phase = tdd_result.phases[0] if tdd_result.phases else None
 
+    # 驗證決策樹路徑
+    decision_tree_path = _build_decision_tree_path(
+        entry=args.decision_tree_entry,
+        decision=args.decision_tree_decision,
+        rationale=args.decision_tree_rationale,
+        is_child=bool(args.parent),
+        ticket_type=ticket_type,
+    )
+
+    # 若驗證失敗，拒絕建立
+    if decision_tree_path is False:
+        return 1
+
     # 建立配置
     config: TicketConfig = {
         "ticket_id": ticket_id,
@@ -148,6 +260,7 @@ def execute(args: argparse.Namespace) -> int:
         "acceptance": acceptance,
         "tdd_phase": tdd_phase,
         "tdd_stage": tdd_result.phases,
+        "decision_tree_path": decision_tree_path,
     }
 
     # 建立 frontmatter
@@ -380,5 +493,8 @@ def register(subparsers: argparse._SubParsersAction) -> None:
     parser.add_argument("--blocked-by", help="依賴的 Ticket IDs（逗號分隔）")
     parser.add_argument("--related-to", help="相關的 Ticket IDs（逗號分隔，多對多關聯）")
     parser.add_argument("--acceptance", action="append", help="驗收條件（可多次指定或 | 分隔）")
+    parser.add_argument("--decision-tree-entry", help="進入決策樹的層級")
+    parser.add_argument("--decision-tree-decision", help="做出的決策")
+    parser.add_argument("--decision-tree-rationale", help="決策理由")
 
     parser.set_defaults(func=execute)
