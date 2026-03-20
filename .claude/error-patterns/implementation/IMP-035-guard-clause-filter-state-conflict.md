@@ -63,6 +63,96 @@ if ticket_id is None and len(worktrees) <= 1:
 
 **原則**：dry-run 應在「格式驗證後、副作用前」返回。如果 dry-run 需要真實外部狀態才能執行，它就不是真正的 dry-run。
 
+---
+
+## 防護措施
+
+### 設計時檢查清單（多模式函式 Guard Clause 審查，強制）
+
+> **觸發時機**：函式透過 optional 參數、flag、enum 等控制不同操作模式（全量/篩選/查詢/建立等），且函式內包含 guard clause 或 early return。
+
+**強制檢查清單**（設計或修改多模式函式時必須完成）：
+
+| 步驟 | 問題 | 驗證方式 |
+|------|------|---------|
+| 1 | 列出函式支援的所有操作模式（全量、篩選、查詢、建立等） | 檢查 optional 參數和分支邏輯 |
+| 2 | 列出函式內的所有 guard clause / early return | 搜尋 `if ... return`、`if ... raise`、`if ... print + return` |
+| 3 | 對每個 guard clause 逐一問：「這個條件在模式 X 下語義是否正確？」 | 逐模式交叉驗證 |
+| 4 | 若任一模式下語義不正確，guard clause 必須加入模式判斷條件 | 修改 guard clause 條件 |
+| 5 | 每個 guard clause 至少有「每種模式各一個」的測試案例 | 檢查測試覆蓋 |
+
+### 正確做法範例
+
+**錯誤**（guard clause 不區分模式）：
+
+```python
+def list_items(filter_id=None):
+    items = get_all_items()
+    if filter_id:
+        items = [i for i in items if i.id == filter_id]
+    # guard clause 只考慮全量場景
+    if len(items) == 0:
+        print("沒有任何項目")
+        return
+    # ... 顯示邏輯
+```
+
+**正確**（guard clause 區分模式）：
+
+```python
+def list_items(filter_id=None):
+    items = get_all_items()
+    if filter_id:
+        items = [i for i in items if i.id == filter_id]
+        if len(items) == 0:
+            print(f"找不到 ID 為 {filter_id} 的項目")
+            return
+    else:
+        if len(items) == 0:
+            print("沒有任何項目")
+            return
+    # ... 顯示邏輯
+```
+
+**最佳**（拆分為獨立函式）：
+
+```python
+def list_all_items():
+    items = get_all_items()
+    if len(items) == 0:
+        print("沒有任何項目")
+        return
+    # ... 顯示邏輯
+
+def get_item_by_id(item_id):
+    item = find_item(item_id)
+    if item is None:
+        print(f"找不到 ID 為 {item_id} 的項目")
+        return
+    # ... 顯示邏輯
+```
+
+### 禁止行為
+
+| 禁止行為 | 原因 |
+|---------|------|
+| 多模式函式中 guard clause 不區分模式 | 篩選結果會被全量模式的 guard clause 誤判（本錯誤模式核心問題） |
+| 只測試全量模式的 guard clause 路徑 | 篩選模式的邊界條件未覆蓋，無法發現衝突 |
+| guard clause 條件使用「共用閾值」而不考慮模式語義差異 | 同一數值在不同模式下可能有完全不同的含義（如 `len <= 1`） |
+
+### Code Review 檢查項目
+
+Code Review 時遇到多模式函式，必須確認以下項目：
+
+| # | 檢查項目 | 判定方式 |
+|---|---------|---------|
+| 1 | 函式是否有 optional 參數控制不同行為路徑？ | 檢查參數列表中的 `=None`、`=False`、`Optional` |
+| 2 | 函式內是否有 guard clause 或 early return？ | 搜尋 `if ... return` 模式 |
+| 3 | 每個 guard clause 的條件是否在所有模式下語義一致？ | 逐模式代入條件驗證 |
+| 4 | 測試是否覆蓋每個 guard clause 在每種模式下的行為？ | 檢查測試案例矩陣 |
+
+---
+
 ## 偵測方式
 
 - Code review 時搜尋「同一函式內有 optional 參數控制不同模式 + guard clause」的組合
@@ -71,4 +161,6 @@ if ticket_id is None and len(worktrees) <= 1:
 ---
 
 **記錄日期**: 2026-03-18
+**更新日期**: 2026-03-21
 **記錄者**: rosemary-project-manager
+**Version**: 1.1.0 - 補充防護措施章節（檢查清單、正確做法範例、Code Review 項目）（0.1.1-W12-008）

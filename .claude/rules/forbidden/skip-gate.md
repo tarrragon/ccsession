@@ -43,6 +43,8 @@ Skip-gate 防護機制分為多層級，對應不同的工作流程階段：
 
 ### 規則 2：主線程禁止直接修復
 
+> **適用對象**：rosemary-project-manager（主線程）。subagent 開發代理人不受此限制，其職責正是編輯程式碼和執行修復。
+
 主線程（rosemary-project-manager）在任何情況下**禁止**：
 
 | 禁止行為 | 說明 |
@@ -160,6 +162,8 @@ incident-responder 分析和分類
 
 ### 規則 5：主線程編輯限制（Level 3）
 
+> **適用對象**：rosemary-project-manager（主線程）。subagent 開發代理人不受此限制，可依派發任務編輯對應檔案。
+
 主線程（rosemary-project-manager）只能編輯以下檔案範圍：
 
 | 允許範圍 | 路徑模式 | 說明 |
@@ -270,8 +274,8 @@ incident-responder 分析和分類
 
 ---
 
-**Last Updated**: 2026-02-06
-**Version**: 2.4.0
+**Last Updated**: 2026-03-21
+**Version**: 2.5.0 - 規則 2/5 新增角色限定標註，明確 subagent 不受主線程限制（0.1.1-W12-007.1）
 **Purpose**: Skip-gate Prevention with Multi-Level Protection
 **Changes**:
 - v2.4.0 (2026-02-06): 精簡主檔案，外移參考內容

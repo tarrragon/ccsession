@@ -128,6 +128,8 @@ Skill 是預建的專用工具，優先於代理人派發。
 
 **主線程允許親自處理**：用戶溝通、任務拆分設計、Ticket 建立和指派、閱讀報告和最終決策、驗收結果。其餘一律派發代理人。
 
+> **適用對象**：上述「允許親自處理」和「其餘一律派發」的限制僅適用於 rosemary-project-manager（主線程）。被派發的 subagent 開發代理人應依據自身職責定義執行任務，不受主線程行為限制。
+
 **Subagent 禁止事項**：Subagent 遇到多方案選擇或路由決策時，**禁止**直接向用戶呈現選擇（禁止使用 AskUserQuestion），必須在產出物中標記「需 PM 決策」後回報主線程，由 PM 中轉。詳見：.claude/rules/core/askuserquestion-rules.md（使用對象限制章節）
 
 **派發方式判斷**：「Agent A 的發現會改變 Agent B 正在進行的工作嗎？」
@@ -481,5 +483,5 @@ Level 5: TDD 階段代理人 + thyme-python-developer
 
 ---
 
-**Last Updated**: 2026-03-20
-**Version**: 7.29.0 - 第負一層新增派發前複雜度關卡（Dispatch Complexity Gate），認知負擔 > 10 必須先拆分再派發（0.1.1-W15-004）
+**Last Updated**: 2026-03-21
+**Version**: 7.30.0 - 第負一層「主線程允許親自處理」段落新增角色限定標註，明確 subagent 不受主線程限制（0.1.1-W12-007.1）
