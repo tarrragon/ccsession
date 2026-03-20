@@ -30,6 +30,7 @@ from ticket_system.lib.ticket_builder import (
     create_ticket_frontmatter,
     create_ticket_body,
     update_parent_children,
+    get_default_acceptance_criteria,
 )
 from ticket_system.lib.ticket_loader import (
     get_tickets_dir,
@@ -212,6 +213,54 @@ class TestGetNextChildSeq:
         assert result == 2
 
 
+class TestGetDefaultAcceptanceCriteria:
+    """測試 get_default_acceptance_criteria() 函式"""
+
+    def test_get_default_acceptance_criteria_imp(self):
+        """Given: ticket_type = "IMP"
+        When: 呼叫 get_default_acceptance_criteria("IMP")
+        Then: 返回 ["任務實作完成", "相關測試通過", "無程式碼品質警告"]
+        """
+        result = get_default_acceptance_criteria("IMP")
+        assert result == ["任務實作完成", "相關測試通過", "無程式碼品質警告"]
+
+    def test_get_default_acceptance_criteria_ana(self):
+        """Given: ticket_type = "ANA"（分析 Ticket）
+        When: 呼叫 get_default_acceptance_criteria("ANA")
+        Then: 返回包含分析結論和防護 Ticket 相關項目的驗收條件：
+          - 分析報告完成
+          - 根因已識別
+          - 改善方案已提出
+          - [ ] 分析結論已建立修復 Ticket（症狀修復）
+          - [ ] 根因已建立防護 Ticket（機制防護）
+          - [ ] 後續 Ticket 已記錄在 children 或 spawned_tickets
+        """
+        result = get_default_acceptance_criteria("ANA")
+        assert "分析報告完成" in result
+        assert "根因已識別" in result
+        assert "改善方案已提出" in result
+        assert "[ ] 分析結論已建立修復 Ticket（症狀修復）" in result
+        assert "[ ] 根因已建立防護 Ticket（機制防護）" in result
+        assert "[ ] 後續 Ticket 已記錄在 children 或 spawned_tickets" in result
+
+    def test_get_default_acceptance_criteria_unknown_type(self):
+        """Given: ticket_type = "UNKNOWN"（未知類型）
+        When: 呼叫 get_default_acceptance_criteria("UNKNOWN")
+        Then: 返回預設值（IMP 類型的驗收條件）
+        """
+        result = get_default_acceptance_criteria("UNKNOWN")
+        assert result == get_default_acceptance_criteria("IMP")
+
+    def test_get_default_acceptance_criteria_doc(self):
+        """Given: ticket_type = "DOC"
+        When: 呼叫 get_default_acceptance_criteria("DOC")
+        Then: 返回文件類型的驗收條件
+        """
+        result = get_default_acceptance_criteria("DOC")
+        assert "文件內容完整" in result
+        assert "格式符合規範" in result
+
+
 class TestCreateTicketFrontmatter:
     """測試 create_ticket_frontmatter() 函式"""
 
@@ -360,6 +409,82 @@ class TestCreateTicketFrontmatter:
 
         frontmatter = create_ticket_frontmatter(config)
         assert frontmatter["relatedTo"] == []
+
+    def test_create_ticket_frontmatter_ana_type(self):
+        """Given: TicketConfig ticket_type = "ANA"（分析 Ticket），無自訂驗收條件
+        When: 呼叫 create_ticket_frontmatter(config)
+        Then: frontmatter["acceptance"] 應包含 ANA 類型的預設驗收條件：
+          - 分析報告完成、根因已識別、改善方案已提出（基礎驗收）
+          - [ ] 分析結論已建立修復 Ticket（症狀修復）
+          - [ ] 根因已建立防護 Ticket（機制防護）
+          - [ ] 後續 Ticket 已記錄在 children 或 spawned_tickets
+          （所有項目都以 [ ] 前綴開頭）
+        """
+        config: TicketConfig = {
+            "ticket_id": "0.31.0-W5-001",
+            "version": "0.31.0",
+            "wave": 5,
+            "title": "分析效能問題",
+            "ticket_type": "ANA",
+            "priority": "P1",
+            "who": "system-analyst",
+            "what": "分析系統效能問題",
+            "when": "立即",
+            "where_layer": "Infrastructure",
+            "where_files": ["server/main.go"],
+            "why": "用戶回報系統緩慢",
+            "how_task_type": "Analysis",
+            "how_strategy": "Profiling"
+        }
+
+        frontmatter = create_ticket_frontmatter(config)
+
+        # 驗證所有 ANA 預設驗收條件都以 [ ] 開頭
+        expected_items = [
+            "分析報告完成",
+            "根因已識別",
+            "改善方案已提出",
+            "分析結論已建立修復 Ticket（症狀修復）",
+            "根因已建立防護 Ticket（機制防護）",
+            "後續 Ticket 已記錄在 children 或 spawned_tickets"
+        ]
+
+        acceptance = frontmatter["acceptance"]
+        assert len(acceptance) >= len(expected_items)
+
+        # 驗證每個預期項目都在驗收條件中（以 [ ] 形式）
+        for item in expected_items:
+            assert any(item in ac for ac in acceptance), \
+                f"'{item}' 應該在驗收條件中，但未找到。驗收條件：{acceptance}"
+
+    def test_create_ticket_frontmatter_doc_type(self):
+        """Given: TicketConfig ticket_type = "DOC"（文件 Ticket）
+        When: 呼叫 create_ticket_frontmatter(config)
+        Then: frontmatter["acceptance"] 應為 DOC 類型的預設驗收條件
+        """
+        config: TicketConfig = {
+            "ticket_id": "0.31.0-W5-001",
+            "version": "0.31.0",
+            "wave": 5,
+            "title": "更新 README",
+            "ticket_type": "DOC",
+            "priority": "P2",
+            "who": "pm",
+            "what": "更新專案 README",
+            "when": "本 Wave 結束",
+            "where_layer": "Documentation",
+            "where_files": ["README.md"],
+            "why": "補充缺失的說明",
+            "how_task_type": "Documentation",
+            "how_strategy": "直接編寫"
+        }
+
+        frontmatter = create_ticket_frontmatter(config)
+
+        # 驗證 DOC 類型的驗收條件
+        acceptance = frontmatter["acceptance"]
+        assert any("文件內容完整" in ac for ac in acceptance)
+        assert any("格式符合規範" in ac for ac in acceptance)
 
 
 class TestCreateTicketBody:

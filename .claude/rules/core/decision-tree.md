@@ -285,11 +285,28 @@ Skill 是預建的專用工具，優先於代理人派發。
 
 ## 第七層：完成判斷流程
 
+**ANA Ticket 結論轉化檢查（強制）**：ANA 類型 Ticket 完成前，必須確認分析結論已轉化為後續 Ticket。
+
+> **來源**：PC-017 — ANA Ticket 完成時分析結論未轉化為後續 Ticket，導致分析成果無法落地。
+
 **驗收方式確認（AskUserQuestion）**：complete 前必須確認驗收方式（標準/簡化/先完成後補）。
 
 **主動勾選驗收條件（強制）**：確認驗收方式後、執行 complete 前，PM **必須**主動勾選驗收條件，禁止依賴 CLI 擋回才補勾。
 
 ```
+任務執行完成
+    |
+    v
+Ticket type == ANA?
+    |
+    +-- 是 → [強制] 確認分析結論已轉化為 Ticket
+    |         → children 或 spawned_tickets 非空?
+    |           +-- 是 → 繼續標準完成流程
+    |           +-- 否 → 建立修復+防護 Ticket 後再繼續
+    |
+    +-- 否 → 繼續標準完成流程
+    |
+    v
 Step 1: 確認驗收方式（AskUserQuestion #1）
     |
     v
@@ -301,6 +318,15 @@ Step 3: ticket track check-acceptance <id>
     v
 Step 4: ticket track complete <id>
 ```
+
+**ANA 結論轉化規則**：
+
+| 檢查項 | 說明 |
+|--------|------|
+| children 非空 | ANA Ticket 已建立子任務（修復/防護等） |
+| spawned_tickets 非空 | ANA Ticket 已衍生獨立 Ticket |
+| 任一滿足即通過 | 至少有一個後續 Ticket 追蹤分析結論 |
+| 均為空 | **阻塞完成**：必須先建立後續 Ticket（修復+防護）再繼續 |
 
 **下一步選擇（AskUserQuestion）**：有多個後續 Ticket 可選時，必須讓使用者選擇。
 
@@ -381,6 +407,7 @@ Level 5: TDD 階段代理人 + thyme-python-developer
 | Commit 後 | AskUserQuestion #16（錯誤學習）→ #11（Handoff 確認） |
 | 流程省略偵測 | AskUserQuestion #12（省略確認） |
 | **執行中發現技術債/問題/回歸/超範圍需求** | **`/ticket create` 建立 pending Ticket（立即，不詢問，不延後）** |
+| **ANA Ticket 完成前** | **確認 children 或 spawned_tickets 非空（PC-017）** |
 
 ---
 
@@ -393,6 +420,7 @@ Level 5: TDD 階段代理人 + thyme-python-developer
 | 跳過 SA 前置審查（新功能） | 停止，派發 SA |
 | 跳過 Phase 4 | 強制執行 Phase 4 |
 | 計畫執行中發現額外需求未立即建立 Ticket | 補建 Ticket，記錄遺漏原因 |
+| ANA Ticket 完成時無後續 Ticket（PC-017） | 阻塞完成，先建立修復+防護 Ticket |
 
 ---
 
@@ -408,5 +436,5 @@ Level 5: TDD 階段代理人 + thyme-python-developer
 
 ---
 
-**Last Updated**: 2026-03-17
-**Version**: 7.27.0 - 第八層新增 Checkpoint 1.8 合併回 main 步驟
+**Last Updated**: 2026-03-20
+**Version**: 7.28.0 - 第七層新增 ANA Ticket 完成前強制確認分析結論已轉化為後續 Ticket（PC-017）
