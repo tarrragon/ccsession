@@ -86,6 +86,8 @@ incident-responder 分析和分類
 
 ### 規則 4：開發命令執行前的驗證（Level 2）
 
+> **適用對象**：rosemary-project-manager（主線程）。subagent 開發代理人的開發行為由 Ticket 授權，不受此驗證約束。
+
 當主線程（rosemary-project-manager）接收到**開發/修改命令**時，**必須強制驗證**：
 
 | 開發命令特徵 | 識別方式 | 驗證要求 |
@@ -193,6 +195,8 @@ incident-responder 分析和分類
 
 ### 規則 6：外部查詢工作流規則
 
+> **適用對象**：rosemary-project-manager（主線程）。subagent 開發代理人在執行任務過程中可自行使用 WebFetch/WebSearch 查詢技術文件。
+
 外部資源查詢（WebFetch、WebSearch）應由 oregano-data-miner 專業代理人執行。
 
 | 禁止行為 | 說明 |
@@ -277,7 +281,7 @@ incident-responder 分析和分類
 ---
 
 **Last Updated**: 2026-03-21
-**Version**: 2.5.0 - 規則 2/5 新增角色限定標註，明確 subagent 不受主線程限制（0.1.1-W12-007.1）
+**Version**: 2.6.0 - 規則 4/6 新增適用對象角色標註，延續 W12-007.1 的角色限定模式（0.1.1-W13-005）
 **Purpose**: Skip-gate Prevention with Multi-Level Protection
 **Changes**:
 - v2.4.0 (2026-02-06): 精簡主檔案，外移參考內容

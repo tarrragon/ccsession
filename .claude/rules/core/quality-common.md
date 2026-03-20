@@ -204,7 +204,6 @@
 | 2 | 列出函式內的所有 guard clause / early return | 搜尋 `if ... return`、`if ... raise` |
 | 3 | 對每個 guard clause 逐一問：「這個條件在模式 X 下語義是否正確？」 | 逐模式交叉驗證 |
 | 4 | 若任一模式下語義不正確，加入模式判斷條件或拆分函式 | 修改 guard clause 或重構 |
-| 5 | 每個 guard clause 至少有「每種模式各一個」的測試案例 | 檢查測試覆蓋 |
 
 **設計優先原則**：如果模式間的 guard clause 語義差異大，**優先拆分為獨立函式**（如 `list_all()` 和 `get_by_id()`），而非在同一函式內用條件分支修補。
 
@@ -373,4 +372,4 @@
 ---
 
 **Last Updated**: 2026-03-21
-**Version**: 1.2.0 - 新增 1.2.5 多模式函式 Guard Clause 防護（IMP-035，0.1.1-W12-008）
+**Version**: 1.3.0 - 1.2.5 移除步驟 5（測試覆蓋指引屬 sage-test-architect 職責，超出函式設計範圍）（0.1.1-W13-006）
