@@ -38,6 +38,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from git_utils import (
     get_current_branch,
+    get_project_root,
     is_protected_branch,
     is_allowed_branch,
     generate_worktree_info,
@@ -78,8 +79,14 @@ def is_exempt_path_on_protected_branch(file_path: str) -> bool:
         "README.md",
     ]
 
-    # 正規化路徑（移除開頭斜線）
-    normalized = file_path.lstrip("/")
+    # 正規化路徑：將絕對路徑轉為相對於專案根目錄的路徑
+    # Edit 工具傳入絕對路徑（如 /Users/.../project/.claude/rules/...），
+    # 需轉為相對路徑（.claude/rules/...）才能正確比對豁免前綴
+    project_root = get_project_root()
+    if file_path.startswith(project_root):
+        normalized = file_path[len(project_root):].lstrip("/")
+    else:
+        normalized = file_path.lstrip("/")
 
     # 檢查字首
     for prefix in exempt_prefixes:
