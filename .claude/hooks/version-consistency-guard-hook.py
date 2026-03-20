@@ -173,6 +173,7 @@ def find_older_versions_with_incomplete_tickets(
 
             # Extract version from directory name
             version_str = dir_name[1:]  # Remove 'v' prefix
+
             version_tuple = parse_version_string(version_str)
 
             if not version_tuple:
@@ -194,27 +195,39 @@ def find_older_versions_with_incomplete_tickets(
 # Output formatting
 # ============================================================================
 
-def find_highest_worklog_version(project_root: Path, logger) -> Optional[str]:
-    """Find the highest version directory in docs/work-logs/.
+ACTIVE_STATUSES = {"in_progress", "blocked"}
+
+
+def find_higher_active_versions(
+    project_root: Path, current_version: str, logger
+) -> List[str]:
+    """Find version directories higher than current_version with active Tickets.
+
+    Only versions containing in_progress or blocked Tickets are considered
+    a real mismatch signal. Versions with only pending Tickets are normal
+    future planning and should not trigger a warning.
 
     Args:
         project_root: Project root path
+        current_version: Current version string from todolist.yaml
         logger: Logger instance
 
     Returns:
-        Version string like '0.1.1', or None if no version directories found
+        List of version strings higher than current_version with active Tickets
     """
     work_logs_dir = project_root / "docs" / "work-logs"
 
     if not work_logs_dir.exists():
-        return None
+        return []
 
-    highest_version = None
-    highest_tuple = ()
+    current_ver_tuple = parse_version_string(current_version)
+    if not current_ver_tuple:
+        return []
+
+    active_higher = []
 
     try:
         for version_dir in work_logs_dir.iterdir():
-            # Only process directories like v0.1.0
             if not version_dir.is_dir():
                 continue
 
@@ -222,22 +235,32 @@ def find_highest_worklog_version(project_root: Path, logger) -> Optional[str]:
             if not dir_name.startswith('v'):
                 continue
 
-            # Extract version from directory name
             version_str = dir_name[1:]  # Remove 'v' prefix
-            version_tuple = parse_version_string(version_str)
 
+            version_tuple = parse_version_string(version_str)
             if not version_tuple:
                 continue
 
-            # Check if this is the highest version so far
-            if not highest_tuple or not version_is_older(version_tuple, highest_tuple):
-                highest_version = version_str
-                highest_tuple = version_tuple
+            # Only check versions higher than current_version
+            if not version_is_older(current_ver_tuple, version_tuple):
+                continue
+
+            # Check if this higher version has active (in_progress/blocked) Tickets
+            tickets_dir = version_dir / "tickets"
+            if not tickets_dir.exists():
+                continue
+
+            for ticket_file in tickets_dir.glob("*.md"):
+                frontmatter = parse_ticket_frontmatter(ticket_file, logger)
+                status = frontmatter.get('status') if frontmatter else None
+                if status in ACTIVE_STATUSES:
+                    active_higher.append(version_str)
+                    break  # One active ticket is enough to flag this version
 
     except Exception as e:
-        logger.warning(f"Error scanning work-logs for highest version: {e}")
+        logger.warning(f"Error scanning work-logs for higher active versions: {e}")
 
-    return highest_version
+    return sorted(active_higher, key=lambda v: parse_version_string(v))
 
 
 def print_warning(current_version: str, older_versions_info: Dict[str, List[Dict[str, str]]]) -> None:
@@ -287,30 +310,28 @@ def print_warning(current_version: str, older_versions_info: Dict[str, List[Dict
     print()
 
 
-def print_version_mismatch_warning(current_version: str, highest_version: str) -> None:
-    """Print warning message about version mismatch between current_version and highest worklog directory.
+def print_version_mismatch_warning(current_version: str, active_version: str) -> None:
+    """Print warning about active development in a version higher than current_version.
 
     Args:
         current_version: Current version from todolist.yaml
-        highest_version: Highest version directory found in docs/work-logs/
+        active_version: Higher version with in_progress/blocked Tickets
     """
     separator = "=" * 60
 
     print()
     print(separator)
-    print("[Version Consistency Guard] 發現版本號不一致")
+    print("[Version Consistency Guard] 版本配置可能過期")
     print(separator)
     print()
     print(f"current_version (todolist.yaml): {current_version}")
-    print(f"最高目錄版本 (docs/work-logs/):  {highest_version}")
+    print(f"活躍開發版本 (docs/work-logs/):  {active_version}")
     print()
-    print("版本號不一致可能導致：")
-    print("  - 新建立的 Ticket 版本號錯誤")
-    print("  - 工作日誌路徑錯誤")
-    print("  - 版本管理混亂")
+    print(f"v{active_version} 中有 in_progress 或 blocked 的 Ticket，")
+    print(f"但 todolist.yaml 的 current_version 仍為 {current_version}。")
     print()
-    print("建議修正方式：")
-    print(f"  修改 docs/todolist.yaml，將 current_version 更新為 {highest_version}")
+    print("建議：")
+    print(f"  修改 docs/todolist.yaml current_version 為 {active_version}")
     print()
     print(separator)
     print()
@@ -384,30 +405,18 @@ def main() -> int:
     else:
         logger.debug("No incomplete tickets in older versions")
 
-    # Check for version mismatch: current_version vs highest worklog version
-    highest_worklog_version = find_highest_worklog_version(project_root, logger)
+    # Check for version mismatch: higher versions with active (in_progress/blocked) Tickets
+    higher_active = find_higher_active_versions(project_root, current_version, logger)
 
-    if highest_worklog_version:
-        current_ver_tuple = parse_version_string(current_version)
-        highest_ver_tuple = parse_version_string(highest_worklog_version)
-
-        if current_ver_tuple and highest_ver_tuple:
-            # Check if current_version is older than highest_worklog_version
-            if version_is_older(current_ver_tuple, highest_ver_tuple):
-                print_version_mismatch_warning(current_version, highest_worklog_version)
-                logger.info(
-                    f"Version mismatch warning: current_version={current_version} "
-                    f"but highest worklog version={highest_worklog_version}"
-                )
-            else:
-                logger.debug(
-                    f"Version consistent: current_version={current_version}, "
-                    f"highest_worklog_version={highest_worklog_version}"
-                )
-        else:
-            logger.warning("Failed to parse versions for comparison")
+    if higher_active:
+        for version in higher_active:
+            print_version_mismatch_warning(current_version, version)
+        logger.info(
+            f"Version mismatch warning: {len(higher_active)} higher version(s) "
+            f"with active Tickets: {', '.join(higher_active)}"
+        )
     else:
-        logger.debug("No version directories found in docs/work-logs/")
+        logger.debug("No higher versions with active Tickets")
 
     return 0
 
