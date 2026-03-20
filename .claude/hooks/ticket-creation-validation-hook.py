@@ -32,6 +32,7 @@ PostToolUse Hook: ticket-creation-validation-hook.py
 
 import sys
 import re
+import json
 import logging
 from pathlib import Path
 from typing import Optional, Dict, Any
@@ -213,23 +214,45 @@ def check_ticket_decision_tree_path(
 def main() -> int:
     """Hook 進入點。
 
-    環境變數：
-      - CLAUDE_TOOL: 工具名稱（應為 "Write"）
-      - CLAUDE_FILE_PATH: 寫入的檔案路徑
-      - CLAUDE_FILE_CONTENT: 寫入的檔案內容
+    標準 PostToolUse Hook 輸入格式（JSON from stdin）：
+      {
+        "tool_name": "Write",
+        "tool_input": {
+          "file_path": "...",
+          "content": "..."
+        }
+      }
 
     Returns:
         exit code 0（始終允許操作）
     """
     try:
-        # 從環境變數取得檔案路徑和內容
-        file_path_str = sys._getframe().f_locals.get("file_path")
-        content = sys._getframe().f_locals.get("content")
+        # 從 stdin 讀取 Hook 輸入 JSON
+        input_text = sys.stdin.read().strip()
 
-        # 若無法取得環境變數，嘗試從 argv 取得
-        if not file_path_str:
-            # 此 Hook 由系統呼叫，環境變數由系統設定
-            logger.debug("Hook called without explicit parameters")
+        # 空輸入（某些事件類型無輸入）
+        if not input_text:
+            logger.debug("Hook called with empty input")
+            return 0
+
+        try:
+            hook_input = json.loads(input_text)
+        except json.JSONDecodeError as e:
+            logger.error(f"JSON decode error: {e}")
+            return 0
+
+        # 驗證輸入格式
+        if not isinstance(hook_input, dict):
+            logger.error(f"Expected dict, got {type(hook_input).__name__}")
+            return 0
+
+        # 提取 Write 工具的輸入
+        tool_input = hook_input.get("tool_input", {})
+        file_path_str = tool_input.get("file_path")
+        content = tool_input.get("content")
+
+        if not file_path_str or not isinstance(content, str):
+            logger.debug("Missing required fields in tool_input")
             return 0
 
         file_path = Path(file_path_str)

@@ -53,6 +53,57 @@ from ticket_system.lib.ticket_builder import (
 from ticket_system.lib.ui_constants import SEPARATOR_PRIMARY
 
 
+def _validate_decision_tree_params(
+    entry: Optional[str],
+    decision: Optional[str],
+    rationale: Optional[str],
+) -> bool:
+    """驗證 decision_tree 參數值的基本正確性。
+
+    檢查內容：
+    1. 無空字串值
+
+    Args:
+        entry: entry_point 參數值
+        decision: final_decision 參數值
+        rationale: rationale 參數值
+
+    Returns:
+        True 如果驗證通過，False 如果有空字串或其他問題
+    """
+    params = [(entry, "entry_point"), (decision, "final_decision"), (rationale, "rationale")]
+    for value, name in params:
+        if value == "":  # 空字串值
+            print(format_error(
+                CreateMessages.DECISION_TREE_EMPTY_VALUE,
+                field_name=name
+            ))
+            return False
+    return True
+
+
+def _build_decision_tree_dict(
+    entry: str,
+    decision: str,
+    rationale: str,
+) -> Dict[str, str]:
+    """構建 decision_tree_path 字典。
+
+    Args:
+        entry: entry_point 值
+        decision: final_decision 值
+        rationale: rationale 值
+
+    Returns:
+        {'entry_point': ..., 'final_decision': ..., 'rationale': ...}
+    """
+    return {
+        "entry_point": entry,
+        "final_decision": decision,
+        "rationale": rationale,
+    }
+
+
 def _build_decision_tree_path(
     entry: Optional[str],
     decision: Optional[str],
@@ -65,12 +116,11 @@ def _build_decision_tree_path(
     邏輯：
     1. 豁免條件：子任務（is_child=True）或 DOC 類型
     2. 豁免時無參數 → 返回 None
-    3. 豁免時有完整參數 → 返回字典
+    3. 豁免時有完整參數 → 返回字典（驗證後）
     4. 豁免時部分參數 → 返回 False（拒絕）
     5. 非豁免時無參數 → 返回 False（拒絕）
-    6. 非豁免時有完整參數 → 返回字典
+    6. 非豁免時有完整參數 → 返回字典（驗證後）
     7. 非豁免時部分參數 → 返回 False（拒絕）
-    8. 任何情況下有空字串值 → 返回 False（拒絕）
 
     Args:
         entry: --decision-tree-entry 參數值
@@ -91,65 +141,39 @@ def _build_decision_tree_path(
     params = [entry, decision, rationale]
     provided_count = sum(1 for p in params if p is not None)
 
-    # 判斷是否有空字串值
-    has_empty_value = any(p == "" for p in params if p is not None)
-
-    if has_empty_value:
-        # 找出空值欄位名稱
-        field_names = {entry: "entry_point", decision: "final_decision", rationale: "rationale"}
-        empty_field = next(name for p, name in field_names.items() if p == "")
-        print(format_error(
-            CreateMessages.DECISION_TREE_EMPTY_VALUE,
-            field_name=empty_field
-        ))
-        return False
-
-    if is_exempted:
-        # 豁免情況
-        if provided_count == 0:
-            # 豁免 + 無參數 → None
+    # 使用 early return 簡化邏輯
+    if provided_count == 0:
+        # 無參數
+        if is_exempted:
             return None
-        elif provided_count == 3:
-            # 豁免 + 完整三參數 → Dict
-            return {
-                "entry_point": entry,
-                "final_decision": decision,
-                "rationale": rationale,
-            }
         else:
-            # 豁免 + 部分參數 → False（保護一致性）
-            print(format_error(
-                "[ERROR] 豁免條件下三個參數必須全部提供或全部省略"
-            ))
-            return False
-    else:
-        # 非豁免情況
-        if provided_count == 0:
-            # 非豁免 + 無參數 → False
             print(format_error(CreateMessages.DECISION_TREE_MISSING_ALL))
             return False
-        elif provided_count == 3:
-            # 非豁免 + 完整三參數 → Dict
-            return {
-                "entry_point": entry,
-                "final_decision": decision,
-                "rationale": rationale,
-            }
-        else:
-            # 非豁免 + 部分參數 → False
-            missing_fields = []
-            if entry is None:
-                missing_fields.append("entry_point")
-            if decision is None:
-                missing_fields.append("final_decision")
-            if rationale is None:
-                missing_fields.append("rationale")
 
-            print(format_error(
-                CreateMessages.DECISION_TREE_MISSING_PARTIAL,
-                missing_fields=", ".join(missing_fields)
-            ))
+    if provided_count == 3:
+        # 完整三參數 - 驗證後返回字典
+        if not _validate_decision_tree_params(entry, decision, rationale):
             return False
+        return _build_decision_tree_dict(entry, decision, rationale)
+
+    # 部分參數 - 全部拒絕
+    if is_exempted:
+        print(format_error(
+            "[ERROR] 豁免條件下三個參數必須全部提供或全部省略"
+        ))
+    else:
+        missing_fields = []
+        if entry is None:
+            missing_fields.append("entry_point")
+        if decision is None:
+            missing_fields.append("final_decision")
+        if rationale is None:
+            missing_fields.append("rationale")
+        print(format_error(
+            CreateMessages.DECISION_TREE_MISSING_PARTIAL,
+            missing_fields=", ".join(missing_fields)
+        ))
+    return False
 
 
 def execute(args: argparse.Namespace) -> int:
