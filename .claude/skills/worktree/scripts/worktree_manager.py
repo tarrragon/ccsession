@@ -179,13 +179,13 @@ def extract_ticket_id_from_branch(branch: str) -> Optional[str]:
     return None
 
 
-def get_worktree_ahead_behind(branch: str, base: str = "main") -> tuple[int, int]:
+def get_worktree_ahead_behind(branch: str, base: str = DEFAULT_BASE_BRANCH) -> tuple[int, int]:
     """
     計算分支相對於 base 的 ahead/behind commit 數
 
     Args:
         branch: 分支名稱（短名稱，如 "feat/0.1.1-W9-002.1"）
-        base: 基礎分支，預設 "main"
+        base: 基礎分支，預設為 DEFAULT_BASE_BRANCH
 
     Returns:
         tuple[int, int]: (ahead, behind)
@@ -206,7 +206,10 @@ def get_worktree_ahead_behind(branch: str, base: str = "main") -> tuple[int, int
         behind = int(behind_result[1]) if behind_result[0] else 0
 
         return (ahead, behind)
-    except Exception:
+    except Exception as e:
+        # H3 修復：加入 stderr 輸出符合 quality-baseline 規則 4 雙通道要求
+        # 原因：ahead/behind 計算失敗時仍降級返回 (0, 0) 是合理的（保守行為）
+        print(f"[Warning] Failed to calculate ahead/behind for {branch}: {e}", file=sys.stderr)
         return (0, 0)
 
 
@@ -233,7 +236,10 @@ def get_worktree_uncommitted_count(worktree_path: str) -> int:
 
         lines = output.strip().split('\n') if output.strip() else []
         return len([line for line in lines if line])
-    except Exception:
+    except Exception as e:
+        # H3 修復：加入 stderr 輸出符合 quality-baseline 規則 4 雙通道要求
+        # 原因：未 commit 計數失敗時仍降級返回 0 是合理的（保守行為，不影響流程）
+        print(f"[Warning] Failed to count uncommitted changes in {worktree_path}: {e}", file=sys.stderr)
         return 0
 
 
@@ -262,6 +268,64 @@ def _cmd_create_dry_run(ticket_id: str, branch_name: str, worktree_path: str, ba
     return 0
 
 
+def _cmd_create_validate_preconditions(
+    base: str,
+    branch_name: str,
+    worktree_path: str
+) -> tuple[bool, str]:
+    """
+    驗證 create 前置條件（M1 修復：從 _cmd_create_validate_and_execute 拆分）
+
+    Args:
+        base: 基礎分支
+        branch_name: 推導的分支名
+        worktree_path: 推導的 worktree 路徑
+
+    Returns:
+        tuple[bool, str]: (驗證通過, 錯誤訊息或空字串)
+    """
+    # 驗證基礎分支存在
+    if not check_branch_exists(base):
+        return False, f"[錯誤] 基礎分支不存在：{base}\n\n請確認分支名稱，或省略 --base 參數使用預設的 {DEFAULT_BASE_BRANCH}"
+
+    # 檢查分支已存在
+    if check_branch_exists(branch_name):
+        return False, f"[錯誤] 分支已存在：{branch_name}\n\n如需重新建立，請先刪除分支：\n  git branch -d {branch_name}"
+
+    # 檢查 worktree 路徑已存在
+    if os.path.exists(worktree_path):
+        return False, f"[錯誤] 目錄已存在：{worktree_path}\n\n如需重新建立，請先移除目錄或使用其他 ticket-id"
+
+    return True, ""
+
+
+def _cmd_create_print_success(
+    ticket_id: str,
+    branch_name: str,
+    base: str,
+    worktree_path: str
+) -> None:
+    """
+    輸出 worktree 建立成功訊息（M1 修復：從 _cmd_create_validate_and_execute 拆分）
+
+    Args:
+        ticket_id: Ticket ID
+        branch_name: 推導的分支名
+        base: 基礎分支
+        worktree_path: 推導的 worktree 路徑
+    """
+    print("正在建立 worktree...")
+    print(f"  Ticket: {ticket_id}")
+    print(f"  分支:   {branch_name}")
+    print(f"  基礎:   {base}")
+    print(f"  路徑:   {worktree_path}")
+    print()
+    print("建立成功。")
+    print()
+    print("下一步：")
+    print(f"  cd {worktree_path}")
+
+
 def _cmd_create_validate_and_execute(
     ticket_id: str,
     branch_name: str,
@@ -280,26 +344,10 @@ def _cmd_create_validate_and_execute(
     Returns:
         int: exit code (0 成功，1 失敗)
     """
-    # 驗證基礎分支存在
-    if not check_branch_exists(base):
-        print(f"[錯誤] 基礎分支不存在：{base}")
-        print()
-        print("請確認分支名稱，或省略 --base 參數使用預設的 main")
-        return 1
-
-    # 檢查分支已存在
-    if check_branch_exists(branch_name):
-        print(f"[錯誤] 分支已存在：{branch_name}")
-        print()
-        print("如需重新建立，請先刪除分支：")
-        print(f"  git branch -d {branch_name}")
-        return 1
-
-    # 檢查 worktree 路徑已存在
-    if os.path.exists(worktree_path):
-        print(f"[錯誤] 目錄已存在：{worktree_path}")
-        print()
-        print("如需重新建立，請先移除目錄或使用其他 ticket-id")
+    # 驗證前置條件
+    passed, error_msg = _cmd_create_validate_preconditions(base, branch_name, worktree_path)
+    if not passed:
+        print(error_msg)
         return 1
 
     # 構建 git 命令並執行
@@ -310,16 +358,7 @@ def _cmd_create_validate_and_execute(
         return 1
 
     # 成功輸出
-    print("正在建立 worktree...")
-    print(f"  Ticket: {ticket_id}")
-    print(f"  分支:   {branch_name}")
-    print(f"  基礎:   {base}")
-    print(f"  路徑:   {worktree_path}")
-    print()
-    print("建立成功。")
-    print()
-    print("下一步：")
-    print(f"  cd {worktree_path}")
+    _cmd_create_print_success(ticket_id, branch_name, base, worktree_path)
     return 0
 
 
@@ -337,9 +376,7 @@ def cmd_create(ticket_id: str, base: str = DEFAULT_BASE_BRANCH, dry_run: bool = 
     """
     # Step 1: 驗證 Ticket ID 格式
     if not parse_ticket_id(ticket_id):
-        print(f"[錯誤] 無效的 Ticket ID 格式：\"{ticket_id}\"")
-        print()
-        print("Ticket ID 格式應為 X.X.X-WN-NNN（如：0.1.1-W9-002.1）")
+        print(CommonMessages.INVALID_TICKET_ID_FORMAT.format(ticket_id=ticket_id))
         return 1
 
     # Step 2: 推導分支名和 worktree 路徑
@@ -369,6 +406,9 @@ def _collect_worktree_info(worktrees: list[dict]) -> list[dict]:
         branch = wt.get("branch", "")
         is_detached = wt.get("detached", False)
 
+        # M3 修復：前置計算 uncommitted，消除三處重複呼叫
+        uncommitted = get_worktree_uncommitted_count(path)
+
         # 檢查是否為主倉庫
         is_main = branch in PROTECTED_BRANCHES
 
@@ -376,19 +416,16 @@ def _collect_worktree_info(worktrees: list[dict]) -> list[dict]:
         if is_detached:
             ticket_label = "detached"
             ahead, behind = 0, 0
-            uncommitted = get_worktree_uncommitted_count(path)
             is_main = False
         # 反推 Ticket ID 或標籤
         elif is_main:
             ticket_label = "主倉庫"
             ahead, behind = 0, 0
-            uncommitted = get_worktree_uncommitted_count(path)
         else:
             ticket_label = extract_ticket_id_from_branch(branch)
             if ticket_label is None:
                 ticket_label = "無法辨識"
-            ahead, behind = get_worktree_ahead_behind(branch, "main")
-            uncommitted = get_worktree_uncommitted_count(path)
+            ahead, behind = get_worktree_ahead_behind(branch, DEFAULT_BASE_BRANCH)
 
         display_info.append({
             "label": ticket_label,
@@ -473,19 +510,9 @@ def cmd_status(ticket_id: Optional[str] = None) -> int:
             print(f"[錯誤] 找不到 Ticket {ticket_id} 對應的 worktree。")
             print()
 
-            # 列出現有 worktree
-            existing = []
-            for wt in worktrees:
-                branch = wt.get("branch", "")
-                extracted_id = extract_ticket_id_from_branch(branch)
-                if extracted_id:
-                    existing.append(f"  - {extracted_id} ({branch})")
-
-            if existing:
-                print("目前存在的 worktree：")
-                for item in existing:
-                    print(item)
-                print()
+            # H7 修復：統一使用 _print_existing_worktrees() 消除重複邏輯
+            _print_existing_worktrees()
+            print()
 
             print("建立此 Ticket 的 worktree：")
             print(f"  /worktree create {ticket_id}")
@@ -542,9 +569,11 @@ def _query_ticket_status(ticket_id: str) -> Optional[str]:
                     if len(parts) >= 2:
                         return parts[1].strip()
         return None
-    except (subprocess.TimeoutExpired, FileNotFoundError, Exception):
+    except (subprocess.TimeoutExpired, FileNotFoundError) as e:
+        # H4 修復：移除冗餘的 Exception，只捕獲具體例外
         # 靜默降級：查詢失敗時不阻擋 merge 流程
         # 呼叫端會依 None 返回值降級為警告，允許繼續執行
+        # 原因：查詢 Ticket CLI 不可用時，merge 流程應繼續，由人工驗證
         return None
 
 
@@ -572,8 +601,8 @@ def _is_branch_pushed(branch: str) -> bool:
     """
     判斷本地分支是否已 push 到 origin
 
-    透過 git rev-parse --verify origin/<branch> 確認 origin 是否有對應分支。
-    若有 origin 分支，再比較兩者的 HEAD commit 是否相同。
+    比較本地和 origin 分支的 HEAD commit 是否相同。
+    若兩者 commit 相同，表示已 push 且同步；否則未 push 或不同步。
 
     Args:
         branch: 分支名稱（短名稱，不含 origin/ 前綴）
@@ -581,12 +610,8 @@ def _is_branch_pushed(branch: str) -> bool:
     Returns:
         bool: True 表示已 push（origin 存在且與本地同步），False 表示未 push
     """
-    # 檢查 origin 分支是否存在
-    success, _ = run_git_command(["rev-parse", "--verify", f"origin/{branch}"])
-    if not success:
-        return False
-
-    # 比較本地和 remote 的 HEAD commit
+    # H6 修復：消除重複的 rev-parse --verify 呼叫（合併為單次 rev-parse）
+    # 只需查詢兩個 commit 值進行比較，若 origin/branch 不存在 rev-parse 會自動返回 False
     success_local, local_commit = run_git_command(["rev-parse", branch])
     success_remote, remote_commit = run_git_command(["rev-parse", f"origin/{branch}"])
 
@@ -710,9 +735,7 @@ def cmd_merge(ticket_id: str) -> int:
     """
     # Step 1: 驗證 Ticket ID 格式
     if not is_valid_ticket_id(ticket_id):
-        print(f"[錯誤] 無效的 Ticket ID 格式：\"{ticket_id}\"")
-        print()
-        print("Ticket ID 格式應為 X.X.X-WN-NNN（如：0.1.1-W9-002）")
+        print(CommonMessages.INVALID_TICKET_ID_FORMAT.format(ticket_id=ticket_id))
         return 1
 
     # Step 2: 查詢對應的 worktree
@@ -874,6 +897,48 @@ def _cleanup_execute(worktree_path: str, branch: str) -> tuple[bool, str]:
     return True, success_msg
 
 
+def _cleanup_check_level2_and_3(branch: str, force: bool) -> tuple[bool, int]:
+    """
+    執行 Level 2/3 驗證並輸出結果（M2 修復：從 _cleanup_single 拆分）
+
+    Args:
+        branch: 分支名稱
+        force: 是否略過警告
+
+    Returns:
+        tuple[bool, int]: (驗證通過, exit_code)
+            - 若 exit_code != 0 表示被阻擋，應立即返回
+            - 若 exit_code == 0 表示通過或被 --force 略過
+    """
+    # Level 2: 未 push 檢查
+    passed, warning_msg = _cleanup_check_level2(branch)
+    if not passed:
+        print(f"  Level 2 檢查：失敗")
+        print()
+        print(warning_msg)
+        if not force:
+            return False, 1
+        print()
+        print("[警告] 使用 --force 略過此警告，繼續清理")
+    else:
+        print(f"  Level 2 檢查：通過（已 push 到 origin）")
+
+    # Level 3: 未合併檢查
+    passed, warning_msg = _cleanup_check_level3(branch)
+    if not passed:
+        print(f"  Level 3 檢查：失敗")
+        print()
+        print(warning_msg)
+        if not force:
+            return False, 1
+        print()
+        print("[警告] 使用 --force 略過此警告，繼續清理")
+    else:
+        print(f"  Level 3 檢查：通過（已合併到 main）")
+
+    return True, 0
+
+
 def _cleanup_single(
     worktree: dict,
     ticket_id: str,
@@ -906,31 +971,10 @@ def _cleanup_single(
 
     print(f"  Level 1 檢查：通過（無未 commit 變更）")
 
-    # Level 2: 未 push 檢查
-    passed, warning_msg = _cleanup_check_level2(branch)
-    if not passed:
-        print(f"  Level 2 檢查：失敗")
-        print()
-        print(warning_msg)
-        if not force:
-            return 1
-        print()
-        print("[警告] 使用 --force 略過此警告，繼續清理")
-    else:
-        print(f"  Level 2 檢查：通過（已 push 到 origin）")
-
-    # Level 3: 未合併檢查
-    passed, warning_msg = _cleanup_check_level3(branch)
-    if not passed:
-        print(f"  Level 3 檢查：失敗")
-        print()
-        print(warning_msg)
-        if not force:
-            return 1
-        print()
-        print("[警告] 使用 --force 略過此警告，繼續清理")
-    else:
-        print(f"  Level 3 檢查：通過（已合併到 main）")
+    # M2 修復：拆分 Level 2/3 驗證邏輯
+    passed, exit_code = _cleanup_check_level2_and_3(branch, force)
+    if exit_code != 0:
+        return exit_code
 
     print()
 
@@ -1102,9 +1146,7 @@ def cmd_cleanup(ticket_id: Optional[str] = None, force: bool = False) -> int:
 
     # Step 1: 驗證 Ticket ID 格式
     if not is_valid_ticket_id(ticket_id):
-        print(f"[錯誤] 無效的 Ticket ID 格式：\"{ticket_id}\"")
-        print()
-        print("Ticket ID 格式應為 X.X.X-WN-NNN（如：0.1.1-W9-002）")
+        print(CommonMessages.INVALID_TICKET_ID_FORMAT.format(ticket_id=ticket_id))
         return 1
 
     # Step 2: 查詢對應的 worktree
@@ -1144,8 +1186,8 @@ def main():
     )
     create_parser.add_argument(
         "--base",
-        default="main",
-        help="基礎分支，預設為 main"
+        default=DEFAULT_BASE_BRANCH,
+        help=f"基礎分支，預設為 {DEFAULT_BASE_BRANCH}"
     )
     create_parser.add_argument(
         "--dry-run",

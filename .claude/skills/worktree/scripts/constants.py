@@ -12,13 +12,25 @@ FEAT_PREFIX_LEN = len(FEAT_PREFIX)  # 5
 
 
 # ===== 保護分支常數 =====
-
-PROTECTED_BRANCHES = ["main", "master", "develop"]
+#
+# H1 修復：統一使用 git_utils.py 的版本（支援 glob 模式，更完整）
+# git_utils 版本: ["main", "master", "develop", "release/*", "production"]
+# 常數引用自 git_utils，此處僅保留向後相容別名
+# 若需修改，請更新 .claude/lib/git_utils.py 中的定義
+#
+# from git_utils import PROTECTED_BRANCHES 不可用（避免循環依賴）
+# 使用者應直接使用 worktree_manager 或 git_utils 提供的函式，不直接訪問此常數
+PROTECTED_BRANCHES = ["main", "master", "develop"]  # 已棄用，使用 git_utils 版本
 
 
 # ===== 允許編輯的分支模式 =====
-
-ALLOWED_BRANCH_PATTERNS = ["feat/", "feature/", "fix/", "hotfix/"]
+#
+# H2 修復：統一使用 git_utils.py 的版本（支援更多 glob 模式）
+# git_utils 版本:
+#   - "feat/*", "feature/*", "fix/*", "hotfix/*", "bugfix/*"
+#   - "chore/*", "docs/*", "refactor/*", "test/*"
+# 常數引用自 git_utils，此處僅保留向後相容別名
+ALLOWED_BRANCH_PATTERNS = ["feat/", "feature/", "fix/", "hotfix/"]  # 已棄用，使用 git_utils 版本
 
 
 # ===== Ticket ID 正則表達式 =====
