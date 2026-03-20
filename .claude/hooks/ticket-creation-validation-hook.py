@@ -122,6 +122,7 @@ def parse_frontmatter(content: str) -> Optional[Dict[str, Any]]:
         return frontmatter if isinstance(frontmatter, dict) else None
     except Exception as e:
         logger.error(f"Error parsing frontmatter: {e}")
+        print(f"[ERROR] Failed to parse frontmatter: {e}", file=sys.stderr)
         return None
 
 
@@ -239,6 +240,7 @@ def main() -> int:
             hook_input = json.loads(input_text)
         except json.JSONDecodeError as e:
             logger.error(f"JSON decode error: {e}")
+            print(f"[ERROR] Invalid JSON input: {e}", file=sys.stderr)
             return 0
 
         # 驗證輸入格式
