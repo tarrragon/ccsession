@@ -28,6 +28,49 @@ from ticket_system.lib.ticket_loader import (
 from ticket_system.lib.ticket_validator import extract_version_from_ticket_id
 
 
+# 預設驗收條件（依 Ticket 類型）
+DEFAULT_ACCEPTANCE_CRITERIA = {
+    "IMP": [
+        "任務實作完成",
+        "相關測試通過",
+        "無程式碼品質警告"
+    ],
+    "TST": [
+        "測試案例完整",
+        "所有測試通過",
+        "測試覆蓋率合理"
+    ],
+    "ADJ": [
+        "調整完成",
+        "功能驗證通過",
+        "無品質警告"
+    ],
+    "RES": [
+        "研究報告完成",
+        "結論明確",
+        "建議可行"
+    ],
+    "ANA": [
+        "分析報告完成",
+        "根因已識別",
+        "改善方案已提出",
+        "[ ] 分析結論已建立修復 Ticket（症狀修復）",
+        "[ ] 根因已建立防護 Ticket（機制防護）",
+        "[ ] 後續 Ticket 已記錄在 children 或 spawned_tickets"
+    ],
+    "INV": [
+        "調查報告完成",
+        "事實已確認",
+        "後續行動已定義"
+    ],
+    "DOC": [
+        "文件內容完整",
+        "格式符合規範",
+        "無遺漏項目"
+    ],
+}
+
+
 class TicketConfig(TypedDict, total=False):
     """Ticket 建立配置。
 
@@ -64,6 +107,34 @@ class TicketConfig(TypedDict, total=False):
 
     # 驗收條件（1 個欄位）
     acceptance: Optional[List[str]]  # 驗收條件清單
+
+
+def get_default_acceptance_criteria(ticket_type: str) -> List[str]:
+    """取得預設驗收條件（依 Ticket 類型）。
+
+    Args:
+        ticket_type: Ticket 類型（IMP, TST, ADJ, RES, ANA, INV, DOC）
+
+    Returns:
+        預設驗收條件清單
+
+    Examples:
+        >>> get_default_acceptance_criteria("IMP")
+        ["任務實作完成", "相關測試通過", "無程式碼品質警告"]
+
+        >>> get_default_acceptance_criteria("ANA")
+        ["分析報告完成", "根因已識別", "改善方案已提出",
+         "[ ] 分析結論已建立修復 Ticket（症狀修復）",
+         "[ ] 根因已建立防護 Ticket（機制防護）",
+         "[ ] 後續 Ticket 已記錄在 children 或 spawned_tickets"]
+
+        >>> get_default_acceptance_criteria("UNKNOWN")
+        ["任務實作完成", "相關測試通過", "無程式碼品質警告"]
+    """
+    return DEFAULT_ACCEPTANCE_CRITERIA.get(
+        ticket_type,
+        DEFAULT_ACCEPTANCE_CRITERIA["IMP"]  # 預設為 IMP 類型
+    )
 
 
 def format_ticket_id(version: str, wave: int, seq: int) -> str:
@@ -282,8 +353,13 @@ def create_ticket_frontmatter(config: TicketConfig) -> Dict[str, Any]:
         - created: 當前日期（YYYY-MM-DD）
         - updated: 當前日期（YYYY-MM-DD）
 
-    預設驗收條件:
-        ["任務實作完成", "相關測試通過", "無程式碼品質警告"]
+    預設驗收條件（依 Ticket 類型）:
+        - IMP: ["任務實作完成", "相關測試通過", "無程式碼品質警告"]
+        - ANA: ["分析報告完成", "根因已識別", "改善方案已提出",
+                "[ ] 分析結論已建立修復 Ticket（症狀修復）",
+                "[ ] 根因已建立防護 Ticket（機制防護）",
+                "[ ] 後續 Ticket 已記錄在 children 或 spawned_tickets"]
+        - 其他類型: 參考 DEFAULT_ACCEPTANCE_CRITERIA
 
     Examples:
         >>> config = TicketConfig(
@@ -331,7 +407,7 @@ def create_ticket_frontmatter(config: TicketConfig) -> Dict[str, Any]:
         "how": {"task_type": config["how_task_type"], "strategy": config["how_strategy"]},
         "acceptance": [
             f"[ ] {item}" if not (item.startswith("[") and "]" in item) else item
-            for item in (config.get("acceptance") or ["任務實作完成", "相關測試通過", "無程式碼品質警告"])
+            for item in (config.get("acceptance") or get_default_acceptance_criteria(config["ticket_type"]))
         ],
         "tdd_phase": config.get("tdd_phase"),
         "tdd_stage": config.get("tdd_stage") or [],
