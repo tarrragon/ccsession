@@ -45,8 +45,6 @@ Skip-gate 防護機制分為多層級，對應不同的工作流程階段：
 
 ### 規則 2：主線程禁止直接修復
 
-> **適用對象**：rosemary-project-manager（主線程）。subagent 開發代理人不受此限制，其職責正是編輯程式碼和執行修復。
-
 主線程（rosemary-project-manager）在任何情況下**禁止**：
 
 | 禁止行為 | 說明 |
@@ -85,8 +83,6 @@ incident-responder 分析和分類
 ---
 
 ### 規則 4：開發命令執行前的驗證（Level 2）
-
-> **適用對象**：rosemary-project-manager（主線程）。subagent 開發代理人的開發行為由 Ticket 授權，不受此驗證約束。
 
 當主線程（rosemary-project-manager）接收到**開發/修改命令**時，**必須強制驗證**：
 
@@ -166,8 +162,6 @@ incident-responder 分析和分類
 
 ### 規則 5：主線程編輯限制（Level 3）
 
-> **適用對象**：rosemary-project-manager（主線程）。subagent 開發代理人不受此限制，可依派發任務編輯對應檔案。
-
 主線程（rosemary-project-manager）只能編輯以下檔案範圍：
 
 | 允許範圍 | 路徑模式 | 說明 |
@@ -194,8 +188,6 @@ incident-responder 分析和分類
 **違規處理**：Hook 系統會在執行 Edit/Write 工具時驗證檔案路徑，如果超出允許範圍，將阻止操作並輸出警告訊息。
 
 ### 規則 6：外部查詢工作流規則
-
-> **適用對象**：rosemary-project-manager（主線程）。subagent 開發代理人在執行任務過程中可自行使用 WebFetch/WebSearch 查詢技術文件。
 
 外部資源查詢（WebFetch、WebSearch）應由 oregano-data-miner 專業代理人執行。
 
@@ -281,7 +273,7 @@ incident-responder 分析和分類
 ---
 
 **Last Updated**: 2026-03-21
-**Version**: 2.6.0 - 規則 4/6 新增適用對象角色標註，延續 W12-007.1 的角色限定模式（0.1.1-W13-005）
+**Version**: 2.7.0 - 適用對象標註集中至頂部受眾宣告，移除 4 處分散重複標註（0.1.1-W16-003）
 **Purpose**: Skip-gate Prevention with Multi-Level Protection
 **Changes**:
 - v2.4.0 (2026-02-06): 精簡主檔案，外移參考內容

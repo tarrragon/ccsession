@@ -6,6 +6,8 @@
 >
 > **管理哲學**：主管的價值不在於解決問題的速度，而在於讓團隊的人力發揮到極致。
 > 詳見：.claude/skills/manager/SKILL.md
+>
+> **適用對象**：本文件的行為限制（禁止直接查詢、禁止直接修復等）僅適用於 rosemary-project-manager（主線程）。被派發的 subagent 開發代理人應依據自身職責定義執行任務，不受主線程行為限制。
 
 ---
 
@@ -128,8 +130,6 @@ Skill 是預建的專用工具，優先於代理人派發。
 
 **主線程允許親自處理**：用戶溝通、任務拆分設計、Ticket 建立和指派、閱讀報告和最終決策、驗收結果。其餘一律派發代理人。
 
-> **適用對象**：上述「允許親自處理」和「其餘一律派發」的限制僅適用於 rosemary-project-manager（主線程）。被派發的 subagent 開發代理人應依據自身職責定義執行任務，不受主線程行為限制。
-
 **Subagent 禁止事項**：Subagent 遇到多方案選擇或路由決策時，**禁止**直接向用戶呈現選擇（禁止使用 AskUserQuestion），必須在產出物中標記「需 PM 決策」後回報主線程，由 PM 中轉。詳見：.claude/rules/core/askuserquestion-rules.md（使用對象限制章節）
 
 **派發方式判斷**：「Agent A 的發現會改變 Agent B 正在進行的工作嗎？」
@@ -142,25 +142,9 @@ Skill 是預建的專用工具，優先於代理人派發。
 
 ### 派發模式選擇規則
 
-派發代理人時，**預設使用背景模式**（`run_in_background: true`），釋放主線程靈活性。
+派發代理人時，**預設使用背景模式**（`run_in_background: true`）。完整的派發模式表格、例外場景和背景派發後跟蹤規則：
 
-| 派發類型 | 模式 | 原因 |
-|---------|------|------|
-| Task subagent（開發/分析/重構） | 背景 | PM 無需等待，準備下一步決策 |
-| Agent Teams | 背景 | 內部協作，PM 釋放靈活性 |
-| TDD Phase 代理人（Phase 1-4） | 背景 | 完整週期較長，產出物寫入 Ticket |
-| 建立後審核（acceptance-auditor + SA） | 背景 | PM 可同時準備其他 Ticket |
-
-**例外（前景執行）**：
-
-| 場景 | 原因 |
-|------|------|
-| Skill/CLI 查詢（`/ticket track list` 等） | PM 需要結果做下一步決策 |
-| 即時驗證（格式檢查、語法驗證） | PM 需要立即反饋 |
-
-**背景派發後跟蹤**：代理人完成時 TaskOutput 自動通知 PM。PM 透過 `/ticket track` 查詢結果，不需要等待。
-
-> 場景表和詳細規則：.claude/rules/guides/parallel-dispatch.md
+> 詳見：.claude/rules/guides/parallel-dispatch.md（派發模式：預設背景章節）
 > AskUserQuestion 強制使用規則：.claude/rules/core/askuserquestion-rules.md
 
 ---
@@ -189,8 +173,6 @@ Skill 是預建的專用工具，優先於代理人派發。
 ---
 
 ## 第二層：問題處理流程
-
-> **適用對象**：rosemary-project-manager（主線程）。subagent 開發代理人在執行任務過程中可自行使用查詢工具。
 
 > 所有查詢都應派發代理人，主線程禁止直接執行查詢命令、WebFetch、WebSearch。
 
@@ -486,4 +468,4 @@ Level 5: TDD 階段代理人 + thyme-python-developer
 ---
 
 **Last Updated**: 2026-03-21
-**Version**: 7.31.0 - 第二層新增適用對象角色標註，明確查詢限制僅適用於主線程（0.1.1-W13-005）
+**Version**: 7.32.0 - 適用對象集中至頂部宣告，背景模式段落改引用 parallel-dispatch.md（0.1.1-W16-003）
