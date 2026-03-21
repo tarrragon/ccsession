@@ -14,42 +14,42 @@ scripts_dir = Path(__file__).resolve().parent.parent / "scripts"
 sys.path.insert(0, str(scripts_dir))
 
 from worktree_manager import (
-    parse_ticket_id,
+    is_valid_ticket_id,
     derive_branch_name,
     derive_worktree_path,
 )
 
 
 class TestParseTicketId:
-    """parse_ticket_id 測試"""
+    """is_valid_ticket_id 測試"""
 
     def test_valid_root_ticket(self, sample_ticket_ids):
         """場景 1.1：正常格式 - 根任務"""
-        assert parse_ticket_id(sample_ticket_ids["valid_root"]) is True
+        assert is_valid_ticket_id(sample_ticket_ids["valid_root"]) is True
 
     def test_valid_subtask_ticket(self, sample_ticket_ids):
         """場景 1.2：子任務格式"""
-        assert parse_ticket_id(sample_ticket_ids["valid_subtask"]) is True
+        assert is_valid_ticket_id(sample_ticket_ids["valid_subtask"]) is True
 
     def test_valid_nested_ticket(self, sample_ticket_ids):
         """場景 1.2：多層子任務格式"""
-        assert parse_ticket_id(sample_ticket_ids["valid_nested"]) is True
+        assert is_valid_ticket_id(sample_ticket_ids["valid_nested"]) is True
 
     def test_invalid_format_free_text(self, sample_ticket_ids):
         """場景 1.4：無效格式 - 自由文字"""
-        assert parse_ticket_id(sample_ticket_ids["invalid_format"]) is False
+        assert is_valid_ticket_id(sample_ticket_ids["invalid_format"]) is False
 
     def test_invalid_format_no_w(self, sample_ticket_ids):
         """場景 1.3：無效格式 - 缺少 W"""
-        assert parse_ticket_id(sample_ticket_ids["invalid_no_w"]) is False
+        assert is_valid_ticket_id(sample_ticket_ids["invalid_no_w"]) is False
 
     def test_invalid_format_with_v_prefix(self):
         """場景 1.5：無效格式 - v 前綴"""
-        assert parse_ticket_id("v0.1.1-W9-002") is False
+        assert is_valid_ticket_id("v0.1.1-W9-002") is False
 
     def test_invalid_format_single_digit_version(self):
         """場景 1.6：無效格式 - 版本號層級不足"""
-        assert parse_ticket_id("0-W9-002") is False
+        assert is_valid_ticket_id("0-W9-002") is False
 
 
 class TestDeriveBranchName:

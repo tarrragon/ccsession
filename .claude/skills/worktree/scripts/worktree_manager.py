@@ -20,8 +20,6 @@ import subprocess
 from constants import (
     FEAT_PREFIX,
     FEAT_PREFIX_LEN,
-    PROTECTED_BRANCHES,
-    ALLOWED_BRANCH_PATTERNS,
     TICKET_ID_PATTERN,
     WORKTREE_STATUS_OUTPUT_WIDTH,
     DEFAULT_BASE_BRANCH,
@@ -52,6 +50,10 @@ except ImportError as e:
     print(f"[Warning] Failed to import git_utils: {e}", file=sys.stderr)
     print(f"[Warning] Worktree SKILL may not function properly", file=sys.stderr)
 
+    # Fallback 模式下的保護分支和允許模式定義
+    _fallback_protected_branches = ["main", "master", "develop", "release"]
+    _fallback_allowed_patterns = ["feat/", "feature/", "fix/", "hotfix/", "bugfix/", "chore/", "docs/", "refactor/", "test/"]
+
     # 定義 fallback 函式，但在呼叫時輸出警告並返回安全預設值
     def run_git_command(args: list[str], cwd: Optional[str] = None, timeout: int = 10) -> tuple[bool, str]:
         """Fallback: 執行 git 命令（降級模式）"""
@@ -71,12 +73,11 @@ except ImportError as e:
 
     def is_protected_branch(branch: str) -> bool:
         """Fallback: 檢查保護分支（降級模式）"""
-        protected = PROTECTED_BRANCHES + ["release"]  # 包含官方版本的分支清單
-        return branch in protected
+        return branch in _fallback_protected_branches
 
     def is_allowed_branch(branch: str) -> bool:
         """Fallback: 檢查允許編輯分支（降級模式）"""
-        return any(branch.startswith(p) for p in ALLOWED_BRANCH_PATTERNS)
+        return any(branch.startswith(p) for p in _fallback_allowed_patterns)
 
 
 # ===== 核心函式 =====
@@ -99,8 +100,6 @@ def is_valid_ticket_id(ticket_id: str) -> bool:
     return bool(re.match(TICKET_ID_PATTERN, ticket_id))
 
 
-# #9 修復：為向後相容，保留別名（舊命名）
-parse_ticket_id = is_valid_ticket_id
 
 
 def derive_branch_name(ticket_id: str) -> str:
@@ -173,7 +172,7 @@ def extract_ticket_id_from_branch(branch: str) -> Optional[str]:
     # #10 修復：使用常數 FEAT_PREFIX_LEN 而非魔法數字 5
     potential_ticket_id = branch[FEAT_PREFIX_LEN:]
 
-    if parse_ticket_id(potential_ticket_id):
+    if is_valid_ticket_id(potential_ticket_id):
         return potential_ticket_id
 
     return None
@@ -375,7 +374,7 @@ def cmd_create(ticket_id: str, base: str = DEFAULT_BASE_BRANCH, dry_run: bool = 
         int: exit code (0 成功，1 失敗)
     """
     # Step 1: 驗證 Ticket ID 格式
-    if not parse_ticket_id(ticket_id):
+    if not is_valid_ticket_id(ticket_id):
         print(CommonMessages.INVALID_TICKET_ID_FORMAT.format(ticket_id=ticket_id))
         return 1
 
@@ -901,6 +900,7 @@ def cmd_merge(ticket_id: str) -> int:
     W16 修復：認知負擔指數 = 6 (<= 10)
     拆分出：_merge_validate_and_collect_metrics(指數 8), _merge_validate_preconditions(指數 9),
     _merge_collect_warnings_for_branch(指數 6), _merge_build_warnings_list(指數 7)
+    W17 修復：認知負擔指數進一步降至 4，提取共用的驗證和查詢邏輯到 _validate_and_find_worktree
 
     Args:
         ticket_id: Ticket ID（如 "0.1.1-W9-002"）
@@ -908,17 +908,9 @@ def cmd_merge(ticket_id: str) -> int:
     Returns:
         int: exit code（0 成功輸出指令，1 驗證失敗被阻擋）
     """
-    # Step 1: 驗證 Ticket ID 格式
-    if not is_valid_ticket_id(ticket_id):
-        print(CommonMessages.INVALID_TICKET_ID_FORMAT.format(ticket_id=ticket_id))
-        return 1
-
-    # Step 2: 查詢對應的 worktree
-    worktree = _find_target_worktree(get_worktree_list(), ticket_id)
+    # Step 1-2: 驗證 Ticket ID 格式並查詢 worktree（共用函式）
+    worktree = _validate_and_find_worktree(ticket_id)
     if worktree is None:
-        print(CommonMessages.WORKTREE_NOT_FOUND.format(ticket_id=ticket_id))
-        print()
-        _print_existing_worktrees()
         return 1
 
     # Step 3: 驗證前置條件並收集 metrics
@@ -931,6 +923,39 @@ def cmd_merge(ticket_id: str) -> int:
     _merge_build_output(ticket_id, branch_name, ahead, behind, warnings)
 
     return 0
+
+
+# ===== 共用驗證函式 =====
+
+
+def _validate_and_find_worktree(ticket_id: str) -> Optional[dict]:
+    """
+    驗證 Ticket ID 格式並查詢對應的 worktree
+
+    此函式提取 cmd_merge 和 cmd_cleanup 中的共同驗證模式。
+    若驗證失敗，會直接輸出錯誤訊息；若 worktree 不存在，也會輸出錯誤訊息並列出現有 worktree。
+
+    Args:
+        ticket_id: Ticket ID 字串
+
+    Returns:
+        Optional[dict]: 若驗證成功且 worktree 存在，返回 worktree dict；
+                       若驗證失敗或 worktree 不存在，返回 None（錯誤訊息已輸出）
+    """
+    # Step 1: 驗證 Ticket ID 格式
+    if not is_valid_ticket_id(ticket_id):
+        print(CommonMessages.INVALID_TICKET_ID_FORMAT.format(ticket_id=ticket_id))
+        return None
+
+    # Step 2: 查詢對應的 worktree
+    worktree = _find_target_worktree(get_worktree_list(), ticket_id)
+    if worktree is None:
+        print(CommonMessages.WORKTREE_NOT_FOUND.format(ticket_id=ticket_id))
+        print()
+        _print_existing_worktrees()
+        return None
+
+    return worktree
 
 
 # ===== cleanup 子命令相關函式 =====
@@ -1358,18 +1383,9 @@ def cmd_cleanup(ticket_id: Optional[str] = None, force: bool = False) -> int:
 
     # 有參數：精確模式
 
-    # Step 1: 驗證 Ticket ID 格式
-    if not is_valid_ticket_id(ticket_id):
-        print(CommonMessages.INVALID_TICKET_ID_FORMAT.format(ticket_id=ticket_id))
-        return 1
-
-    # Step 2: 查詢對應的 worktree
-    worktree = _find_target_worktree(get_worktree_list(), ticket_id)
+    # Step 1-2: 驗證 Ticket ID 格式並查詢 worktree（共用函式）
+    worktree = _validate_and_find_worktree(ticket_id)
     if worktree is None:
-        print(CommonMessages.WORKTREE_NOT_FOUND.format(ticket_id=ticket_id))
-        print()
-        # 列出現有 worktree
-        _print_existing_worktrees()
         return 1
 
     # Step 3: 執行清理
