@@ -177,6 +177,29 @@ def _check_via_uv_tool(package_name: str) -> Optional[InstalledInfo]:
     return None
 
 
+def _locate_module_subdir(parent_dir: Path, module_name: str) -> Optional[Path]:
+    """在父目錄下搜尋特定名稱的模組子目錄.
+
+    用於定位已安裝模組或 source 目錄下的特定子目錄。
+    若 parent_dir 下存在直接或深層嵌套的同名目錄，回傳第一個找到的。
+
+    Args:
+        parent_dir: 父目錄路徑。
+        module_name: 欲搜尋的模組名稱。
+
+    Returns:
+        找到的模組子目錄 Path，或 None。
+    """
+    if not parent_dir.exists():
+        return None
+
+    for candidate in parent_dir.rglob(module_name):
+        if candidate.is_dir():
+            return candidate
+
+    return None
+
+
 def _find_uv_tool_site_packages(package_name: str) -> Optional[Path]:
     """定位 uv tool 安裝的套件 site-packages 路徑.
 
@@ -193,8 +216,8 @@ def _find_uv_tool_site_packages(package_name: str) -> Optional[Path]:
     # 搜尋 lib/pythonX.Y/site-packages/{package_module}/
     package_module = package_name.replace("-", "_")
     for site_packages in uv_tools_dir.rglob("site-packages"):
-        candidate = site_packages / package_module
-        if candidate.exists():
+        candidate = _locate_module_subdir(site_packages, package_module)
+        if candidate:
             return candidate
 
     return None
@@ -258,8 +281,8 @@ def resolve_source_module_dir(source_dir: Path, installed_dir: Path) -> Path:
         Path: 對齊後的 source 模組目錄。若無法定位則回傳原 source_dir。
     """
     if (source_dir / "pyproject.toml").exists():
-        module_subdir = source_dir / installed_dir.name
-        if module_subdir.exists() and module_subdir.is_dir():
+        module_subdir = _locate_module_subdir(source_dir, installed_dir.name)
+        if module_subdir:
             return module_subdir
     return source_dir
 
