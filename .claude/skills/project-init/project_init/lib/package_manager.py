@@ -13,6 +13,17 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
+# 導入共用掃描模組
+_lib_path = Path(__file__).parent.parent.parent.parent.parent / 'lib'
+sys.path.insert(0, str(_lib_path))
+
+from pyproject_scanner import (
+    scan_skills_directory,
+    extract_version_from_pyproject,
+    extract_package_name_from_pyproject,
+    extract_cli_name_from_pyproject,
+)
+
 
 @dataclass
 class PackageInfo:
@@ -67,33 +78,33 @@ def scan_custom_packages(project_root: Path) -> list[PackageInfo]:
     Returns:
         list[PackageInfo]: 找到的所有自製套件清單。
     """
-    skills_dir = project_root / ".claude" / "skills"
-    packages = []
-
-    if not skills_dir.exists():
-        return packages
-
-    for skill_dir in skills_dir.iterdir():
-        if not skill_dir.is_dir():
-            continue
-
+    packages: list[PackageInfo] = []
+    
+    # 使用共用模組掃描
+    scanned = scan_skills_directory(project_root)
+    
+    # 轉換為 PackageInfo 格式
+    for pkg_name, pkg_info in scanned.items():
+        # 找到對應的 skill 目錄
+        skill_dir = project_root / pkg_info["path"]
         pyproject_path = skill_dir / "pyproject.toml"
-        if not pyproject_path.exists():
+        
+        if not skill_dir.exists() or not pyproject_path.exists():
             continue
-
-        version = _extract_version_from_pyproject(pyproject_path)
-        package_name = _extract_package_name_from_pyproject(pyproject_path)
-        cli_name = _extract_cli_name_from_pyproject(pyproject_path)
+        
+        # 提取 CLI 名稱
+        cli_name = extract_cli_name_from_pyproject(pyproject_path)
+        
         packages.append(
             PackageInfo(
                 name=skill_dir.name,
                 source_path=skill_dir,
-                version=version,
-                package_name=package_name,
+                version=pkg_info.get("version"),
+                package_name=pkg_name,
                 cli_name=cli_name,
             )
         )
-
+    
     return sorted(packages, key=lambda p: p.name)
 
 
@@ -296,99 +307,10 @@ def compare_versions(
     )
 
 
-_pyproject_cache: dict[str, Optional[dict]] = {}
-"""快取已解析的 pyproject.toml，避免重複解析同一檔案。"""
 
 
-def _parse_pyproject(pyproject_path: Path) -> Optional[dict]:
-    """使用 tomllib 解析 pyproject.toml 檔案。
-
-    解析結果會被快取，同一檔案多次呼叫會回傳快取結果。
-
-    Args:
-        pyproject_path: pyproject.toml 檔案路徑。
-
-    Returns:
-        dict: 解析後的 TOML 資料結構，或 None 若解析失敗。
-    """
-    path_key = str(pyproject_path)
-    if path_key in _pyproject_cache:
-        return _pyproject_cache[path_key]
-
-    try:
-        with open(pyproject_path, "rb") as f:
-            data = tomllib.load(f)
-            _pyproject_cache[path_key] = data
-            return data
-    except Exception:
-        _pyproject_cache[path_key] = None
-        return None
 
 
-def _extract_version_from_pyproject(pyproject_path: Path) -> Optional[str]:
-    """從 pyproject.toml 提取版本字串.
-
-    使用 tomllib 結構化解析，從 [project] 表格取出 version 欄位。
-
-    Args:
-        pyproject_path: pyproject.toml 檔案路徑。
-
-    Returns:
-        version: 版本字串，或 None 若未找到。
-    """
-    data = _parse_pyproject(pyproject_path)
-    if data is None:
-        return None
-
-    try:
-        return data.get("project", {}).get("version")
-    except Exception:
-        return None
-
-
-def _extract_package_name_from_pyproject(pyproject_path: Path) -> Optional[str]:
-    """從 pyproject.toml 提取 [project] name.
-
-    使用 tomllib 結構化解析，從 [project] 表格取出 name 欄位。
-
-    Args:
-        pyproject_path: pyproject.toml 檔案路徑。
-
-    Returns:
-        套件名稱（如 'ticket-system'），或 None。
-    """
-    data = _parse_pyproject(pyproject_path)
-    if data is None:
-        return None
-
-    try:
-        return data.get("project", {}).get("name")
-    except Exception:
-        return None
-
-
-def _extract_cli_name_from_pyproject(pyproject_path: Path) -> Optional[str]:
-    """從 pyproject.toml 提取 [project.scripts] 的 CLI 入口名稱.
-
-    使用 tomllib 結構化解析，從 [project.scripts] 表格取出第一個 key。
-
-    Args:
-        pyproject_path: pyproject.toml 檔案路徑。
-
-    Returns:
-        CLI 命令名稱（如 'ticket'），或 None。
-    """
-    data = _parse_pyproject(pyproject_path)
-    if data is None:
-        return None
-
-    try:
-        scripts = data.get("project", {}).get("scripts", {})
-        if scripts:
-            return next(iter(scripts.keys()))
-    except Exception:
-        pass
-    return None
 
 
 def _compute_file_hashes(directory: Path) -> dict[str, str]:
