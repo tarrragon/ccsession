@@ -16,6 +16,7 @@ Git 操作共用工具
 
 import fnmatch
 import os
+import sys
 import subprocess
 from typing import Optional
 
@@ -87,7 +88,9 @@ def run_git_command(
     except FileNotFoundError:
         return False, "git command not found"
     except Exception as e:
-        return False, str(e)
+        error_msg = str(e)
+        print(f"[Error] git command failed: {error_msg}", file=sys.stderr)
+        return False, error_msg
 
 
 def get_current_branch() -> Optional[str]:
@@ -243,8 +246,9 @@ def is_in_worktree() -> bool:
         # 在主倉庫中：相同
         return git_common_dir != git_dir
 
-    except Exception:
+    except Exception as e:
         # 錯誤時保守預設為主倉庫
+        print(f"[Warning] is_in_worktree check failed: {e}", file=sys.stderr)
         return False
 
 

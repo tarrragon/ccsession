@@ -707,19 +707,6 @@ def _print_existing_worktrees() -> None:
             print(item)
 
 
-def _find_worktree(ticket_id: str) -> Optional[dict]:
-    """
-    在 worktree 列表中查詢特定 Ticket 對應的 worktree
-
-    Args:
-        ticket_id: 欲查詢的 Ticket ID
-
-    Returns:
-        dict | None: 找到的 worktree，或 None
-    """
-    return _find_target_worktree(get_worktree_list(), ticket_id)
-
-
 def cmd_merge(ticket_id: str) -> int:
     """
     merge 子命令 — 前置驗證並輸出 git merge 指令
@@ -739,7 +726,7 @@ def cmd_merge(ticket_id: str) -> int:
         return 1
 
     # Step 2: 查詢對應的 worktree
-    worktree = _find_worktree(ticket_id)
+    worktree = _find_target_worktree(get_worktree_list(), ticket_id)
     if worktree is None:
         print(CommonMessages.WORKTREE_NOT_FOUND.format(ticket_id=ticket_id))
         print()
@@ -1150,7 +1137,7 @@ def cmd_cleanup(ticket_id: Optional[str] = None, force: bool = False) -> int:
         return 1
 
     # Step 2: 查詢對應的 worktree
-    worktree = _find_worktree(ticket_id)
+    worktree = _find_target_worktree(get_worktree_list(), ticket_id)
     if worktree is None:
         print(CommonMessages.WORKTREE_NOT_FOUND.format(ticket_id=ticket_id))
         print()

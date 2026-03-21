@@ -35,18 +35,34 @@ ALLOWED_BRANCH_PATTERNS = ["feat/", "feature/", "fix/", "hotfix/"]  # 已棄用�
 
 # ===== Ticket ID 正則表達式 =====
 
-# #3 修復：統一使用官方版本的 TICKET_ID_PATTERN
-# 來源：.claude/skills/ticket/ticket_system/lib/constants.py (v0.31.0 及更高版本)
-# 此常數提供給 worktree SKILL 使用，避免重複定義
+# ===== Ticket ID 正則表達式 =====
 #
-# 支援無限深度子任務和描述性後綴
-# 格式: {version}-W{wave}-{seq[.seq...]}[-description]
-# 範例:
-#   0.31.0-W3-001           (根任務)
-#   0.31.0-W3-001.1         (第一層子任務)
-#   0.31.0-W3-001.1.1       (第二層子任務)
-#   0.1.0-W11-004-phase1-design  (TDD Phase 文件)
-#   0.1.0-W25-005-analysis       (分析文件)
+# M8 修復：本地定義 TICKET_ID_PATTERN 的原因說明
+#
+# 來源：.claude/skills/ticket/ticket_system/lib/constants.py
+# 版本要求：v0.31.0 及更高版本
+#
+# 為何需要本地定義（不能引用）：
+#   1. ticket_system 位於 .claude/skills/ticket/，距離此處相對路徑複雜
+#   2. 避免循環依賴：ticket_system 內部可能引用 worktree_manager
+#   3. worktree SKILL 需要獨立執行，不依賴其他 SKILL 的初始化
+#   4. 正則表達式為常數，複製開銷低，修改時需同步兩處
+#
+# 支援的格式：
+#   - 無限深度子任務：seq.seq.seq...
+#   - 可選描述性後綴：-phase1-design, -analysis 等
+#
+# 範例：
+#   0.31.0-W3-001              (根任務)
+#   0.31.0-W3-001.1            (子任務)
+#   0.31.0-W3-001.1.1          (孫任務)
+#   0.1.0-W11-004-phase1-design (TDD Phase 文件)
+#   0.1.0-W25-005-analysis     (分析文件)
+#
+# 維護建議：
+#   如果修改正則表達式邏輯，請同時更新：
+#   - .claude/skills/ticket/ticket_system/lib/constants.py
+#   - .claude/skills/worktree/scripts/constants.py （本檔）
 TICKET_ID_PATTERN = r"^(\d+\.\d+\.\d+)-W(\d+)-(\d+(?:\.\d+)*)(-[a-z0-9][a-z0-9-]{0,59})?$"
 
 
