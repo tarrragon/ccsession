@@ -409,8 +409,9 @@ def _collect_worktree_info(worktrees: list[dict]) -> list[dict]:
         # M3 修復：前置計算 uncommitted，消除三處重複呼叫
         uncommitted = get_worktree_uncommitted_count(path)
 
-        # 檢查是否為主倉庫
-        is_main = branch in PROTECTED_BRANCHES
+        # H2 修復：改用 is_protected_branch() 函式，消除定義不同步
+        # git_utils.py 版本支援 glob 模式（release/*, production），更完整
+        is_main = is_protected_branch(branch) if not is_detached else False
 
         # #12 修復：處理 detached HEAD worktree
         if is_detached:
@@ -458,9 +459,9 @@ def _print_worktree_status(display_info: list[dict]) -> None:
         print(f"  分支：   {info['branch']}")
 
         if not info['is_main']:
-            # 格式化 ahead/behind 輸出（#1 修復：0 時不顯示 -0）
+            # H3 修復：behind 不應加 + 前綴，only ahead（領先）加 + 符合 git 慣例
             ahead_str = f"+{info['ahead']}" if info['ahead'] > 0 else f"{info['ahead']}"
-            behind_str = f"+{info['behind']}" if info['behind'] > 0 else f"{info['behind']}"
+            behind_str = str(info['behind'])  # behind 不需要 + 號
             print(f"  領先：   {ahead_str} commits ahead of main")
             print(f"  落後：   {behind_str} commits behind main")
 
@@ -483,6 +484,9 @@ def _extract_ticket_id_from_worktree(worktree: dict) -> Optional[str]:
     Returns:
         str | None: 提取的 Ticket ID，或 None
     """
+    # H4 修復：detached HEAD 沒有 branch 欄位，先檢查以避免傳空字串給 extract_ticket_id_from_branch
+    if worktree.get("detached", False):
+        return None
     branch = worktree.get("branch", "")
     return extract_ticket_id_from_branch(branch)
 
@@ -585,11 +589,14 @@ def _query_ticket_status(ticket_id: str) -> Optional[str]:
                     if len(parts) >= 2:
                         return parts[1].strip()
         return None
-    except (subprocess.TimeoutExpired, FileNotFoundError) as e:
-        # H4 修復：移除冗餘的 Exception，只捕獲具體例外
-        # 靜默降級：查詢失敗時不阻擋 merge 流程
-        # 呼叫端會依 None 返回值降級為警告，允許繼續執行
-        # 原因：查詢 Ticket CLI 不可用時，merge 流程應繼續，由人工驗證
+    except subprocess.TimeoutExpired:
+        # H4 修復：補充 stderr 輸出，符合 quality-baseline.md 規則 4 雙通道要求
+        # 原因：TimeoutExpired 是非預期的事件，應警告用戶
+        print(f"[Warning] Ticket status query timed out after {TICKET_QUERY_TIMEOUT}s", file=sys.stderr)
+        return None
+    except FileNotFoundError:
+        # ticket CLI 不可用是正常降級場景（本地環境可能未安裝 ticket CLI）
+        # 不需要 stderr 警告，呼叫端依 None 返回值降級為警告
         return None
 
 
@@ -1001,7 +1008,9 @@ def _cleanup_filter_feature_worktrees(worktrees: list[dict]) -> list[dict]:
     feature_worktrees = []
     for wt in worktrees:
         branch = wt.get("branch", "")
-        if branch not in PROTECTED_BRANCHES and not wt.get("detached", False):
+        # H2 修復：改用 is_protected_branch() 函式，消除定義不同步
+        is_protected = is_protected_branch(branch) if branch else False
+        if not is_protected and not wt.get("detached", False):
             feature_worktrees.append(wt)
     return feature_worktrees
 
