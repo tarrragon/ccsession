@@ -470,6 +470,23 @@ def _print_worktree_status(display_info: list[dict]) -> None:
             print()
 
 
+def _extract_ticket_id_from_worktree(worktree: dict) -> Optional[str]:
+    """
+    從 worktree 字典中提取 Ticket ID
+
+    共用函式，用於從 worktree 列表中提取 Ticket ID。
+    避免重複的 extract_ticket_id_from_branch() 呼叫邏輯。
+
+    Args:
+        worktree: worktree 資訊字典
+
+    Returns:
+        str | None: 提取的 Ticket ID，或 None
+    """
+    branch = worktree.get("branch", "")
+    return extract_ticket_id_from_branch(branch)
+
+
 def _find_target_worktree(worktrees: list[dict], ticket_id: str) -> Optional[dict]:
     """
     在 worktree 列表中查詢特定 Ticket 對應的 worktree（#7 修復：從 cmd_status 拆分出來）
@@ -482,8 +499,7 @@ def _find_target_worktree(worktrees: list[dict], ticket_id: str) -> Optional[dic
         dict | None: 找到的 worktree，或 None
     """
     for wt in worktrees:
-        branch = wt.get("branch", "")
-        extracted_id = extract_ticket_id_from_branch(branch)
+        extracted_id = _extract_ticket_id_from_worktree(wt)
         if extracted_id == ticket_id:
             return wt
     return None
@@ -680,7 +696,7 @@ def _merge_build_output(
     # 輸出 merge 指令
     print(MergeMessages.MERGE_COMMAND_HEADER)
     print()
-    print(f"  git checkout main")
+    print(f"  git checkout {DEFAULT_BASE_BRANCH}")
     print(f"  git merge --no-ff {branch_name}")
     print()
     print(MergeMessages.MERGE_COMMAND_HINT.format(ticket_id=ticket_id))
@@ -696,9 +712,9 @@ def _print_existing_worktrees() -> None:
     existing_worktrees = get_worktree_list()
     existing = []
     for wt in existing_worktrees:
-        branch = wt.get("branch", "")
-        extracted_id = extract_ticket_id_from_branch(branch)
+        extracted_id = _extract_ticket_id_from_worktree(wt)
         if extracted_id:
+            branch = wt.get("branch", "")
             existing.append(f"  - {extracted_id} ({branch})")
 
     if existing:
@@ -1012,7 +1028,7 @@ def _cleanup_classify_worktrees(feature_worktrees: list[dict]) -> tuple[list[str
     for wt in feature_worktrees:
         path = wt.get("path", "")
         branch = wt.get("branch", "")
-        ticket_id = extract_ticket_id_from_branch(branch)
+        ticket_id = _extract_ticket_id_from_worktree(wt)
 
         # Level 1 檢查
         passed_l1, uncommitted = _cleanup_check_level1(path)
