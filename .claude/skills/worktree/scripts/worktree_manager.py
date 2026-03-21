@@ -390,9 +390,99 @@ def cmd_create(ticket_id: str, base: str = DEFAULT_BASE_BRANCH, dry_run: bool = 
         return _cmd_create_validate_and_execute(ticket_id, branch_name, worktree_path, base)
 
 
+def _get_feature_branch_metrics(branch: str) -> tuple[str, int, int]:
+    """
+    取得 feature 分支的 Ticket ID 和 ahead/behind metrics
+
+    W16 修復：認知負擔指數 = 8 (<= 10)
+
+    Args:
+        branch: 分支名稱
+
+    Returns:
+        tuple[str, int, int]: (ticket_label, ahead, behind)
+    """
+    ticket_label = extract_ticket_id_from_branch(branch) or "無法辨識"
+    ahead, behind = get_worktree_ahead_behind(branch, DEFAULT_BASE_BRANCH)
+    return ticket_label, ahead, behind
+
+
+def _determine_ticket_label_and_metrics(
+    branch: str,
+    is_detached: bool,
+    is_main: bool
+) -> tuple[str, int, int]:
+    """
+    判定 ticket label 和 commit metrics (ahead/behind)
+
+    根據 branch 類型判定 label：
+    - detached HEAD: "detached"
+    - 保護分支（主倉庫）: "主倉庫"
+    - feature 分支: Ticket ID 或 "無法辨識"
+
+    W16 修復：認知負擔指數 = 5 (<= 10)
+
+    Args:
+        branch: 分支名稱
+        is_detached: 是否 detached HEAD
+        is_main: 是否保護分支
+
+    Returns:
+        tuple[str, int, int]: (ticket_label, ahead, behind)
+    """
+    if is_detached:
+        return "detached", 0, 0
+    if is_main:
+        return "主倉庫", 0, 0
+    return _get_feature_branch_metrics(branch)
+
+
+def _build_worktree_display_info(wt: dict) -> dict:
+    """
+    將單個 worktree 轉換為顯示用資訊字典
+
+    W16 修復：認知負擔指數 = 5 (<= 10)
+
+    Args:
+        wt: worktree 資訊字典
+
+    Returns:
+        dict: 顯示用資訊字典
+    """
+    path = wt.get("path", "")
+    branch = wt.get("branch", "")
+    is_detached = wt.get("detached", False)
+
+    # M3 修復：前置計算 uncommitted，消除三處重複呼叫
+    uncommitted = get_worktree_uncommitted_count(path)
+
+    # H2 修復：改用 is_protected_branch() 函式，消除定義不同步
+    is_main = is_protected_branch(branch) if not is_detached else False
+
+    # W16 修復：拆分狀態判定邏輯至 _determine_ticket_label_and_metrics
+    ticket_label, ahead, behind = _determine_ticket_label_and_metrics(
+        branch, is_detached, is_main
+    )
+
+    return {
+        "label": ticket_label,
+        "path": path,
+        "branch": branch if not is_detached else "detached",
+        "ahead": ahead,
+        "behind": behind,
+        "uncommitted": uncommitted,
+        "is_main": is_main,
+        "is_detached": is_detached
+    }
+
+
 def _collect_worktree_info(worktrees: list[dict]) -> list[dict]:
     """
     收集 worktree 資訊（#7 修復：從 cmd_status 拆分出來降低認知負擔）
+
+    W16 修復：認知負擔指數 = 3 (<= 10)
+    拆分出：_build_worktree_display_info(指數 5), _determine_ticket_label_and_metrics(指數 5),
+    _get_feature_branch_metrics(指數 8)
 
     Args:
         worktrees: worktree 列表
@@ -400,46 +490,7 @@ def _collect_worktree_info(worktrees: list[dict]) -> list[dict]:
     Returns:
         list[dict]: 包含顯示用資訊的字典列表
     """
-    display_info = []
-    for wt in worktrees:
-        path = wt.get("path", "")
-        branch = wt.get("branch", "")
-        is_detached = wt.get("detached", False)
-
-        # M3 修復：前置計算 uncommitted，消除三處重複呼叫
-        uncommitted = get_worktree_uncommitted_count(path)
-
-        # H2 修復：改用 is_protected_branch() 函式，消除定義不同步
-        # git_utils.py 版本支援 glob 模式（release/*, production），更完整
-        is_main = is_protected_branch(branch) if not is_detached else False
-
-        # #12 修復：處理 detached HEAD worktree
-        if is_detached:
-            ticket_label = "detached"
-            ahead, behind = 0, 0
-            is_main = False
-        # 反推 Ticket ID 或標籤
-        elif is_main:
-            ticket_label = "主倉庫"
-            ahead, behind = 0, 0
-        else:
-            ticket_label = extract_ticket_id_from_branch(branch)
-            if ticket_label is None:
-                ticket_label = "無法辨識"
-            ahead, behind = get_worktree_ahead_behind(branch, DEFAULT_BASE_BRANCH)
-
-        display_info.append({
-            "label": ticket_label,
-            "path": path,
-            "branch": branch if not is_detached else "detached",
-            "ahead": ahead,
-            "behind": behind,
-            "uncommitted": uncommitted,
-            "is_main": is_main,
-            "is_detached": is_detached
-        })
-
-    return display_info
+    return [_build_worktree_display_info(wt) for wt in worktrees]
 
 
 def _print_worktree_status(display_info: list[dict]) -> None:
@@ -730,12 +781,126 @@ def _print_existing_worktrees() -> None:
             print(item)
 
 
+def _merge_build_warnings_list(ahead: int, behind: int, status_msg: str) -> list[str]:
+    """
+    根據 metrics 和狀態訊息構建警告清單
+
+    W16 修復：認知負擔指數 = 7 (<= 10)
+
+    Args:
+        ahead: branch 領先 main 的 commit 數
+        behind: branch 落後 main 的 commit 數
+        status_msg: Ticket 狀態訊息（可為空）
+
+    Returns:
+        list[str]: 警告訊息列表
+    """
+    warnings = []
+    if status_msg:
+        warnings.append(status_msg)
+    if ahead == 0:
+        warnings.append(MergeMessages.NO_NEW_COMMITS.format(base=DEFAULT_BASE_BRANCH))
+    if behind > 0:
+        warnings.append(MergeMessages.BRANCH_BEHIND_BASE.format(base=DEFAULT_BASE_BRANCH, count=behind))
+    return warnings
+
+
+def _merge_collect_warnings_for_branch(branch_name: str, ticket_id: str) -> tuple[int, int, list[str]]:
+    """
+    計算 ahead/behind 並根據 metrics 收集警告訊息
+
+    W16 修復：認知負擔指數 = 6 (<= 10)
+
+    Args:
+        branch_name: 分支名稱
+        ticket_id: Ticket ID
+
+    Returns:
+        tuple[int, int, list[str]]: (ahead, behind, warnings)
+    """
+    ahead, behind = get_worktree_ahead_behind(branch_name, DEFAULT_BASE_BRANCH)
+
+    # 檢查 Ticket 狀態降級警告
+    _, status_msg = _merge_validate_ticket_status(ticket_id)
+
+    warnings = _merge_build_warnings_list(ahead, behind, status_msg or "")
+    return ahead, behind, warnings
+
+
+def _merge_validate_preconditions(
+    ticket_id: str,
+    worktree_path: str
+) -> bool:
+    """
+    驗證 merge 前置條件（Ticket 狀態和 working tree 乾淨）
+
+    W16 修復：認知負擔指數 = 9 (<= 10)
+
+    Args:
+        ticket_id: Ticket ID
+        worktree_path: worktree 絕對路徑
+
+    Returns:
+        bool: 驗證通過
+
+    若驗證失敗，會直接 print 錯誤訊息
+    """
+    # 驗證 Ticket 狀態
+    can_continue, msg = _merge_validate_ticket_status(ticket_id)
+    if not can_continue:
+        print(msg)
+        return False
+
+    # 檢查 working tree 乾淨
+    is_clean, uncommitted = _check_working_tree_clean(worktree_path)
+    if not is_clean:
+        print(MergeMessages.DIRTY_WORKING_TREE.format(count=uncommitted))
+        return False
+
+    return True
+
+
+def _merge_validate_and_collect_metrics(
+    ticket_id: str,
+    worktree: dict
+) -> tuple[bool, int, int, list[str]]:
+    """
+    驗證 merge 前置條件並收集 metrics
+
+    W16 修復：認知負擔指數 = 8 (<= 10)
+
+    Args:
+        ticket_id: Ticket ID
+        worktree: worktree 資訊字典
+
+    Returns:
+        tuple[bool, int, int, list[str]]:
+            - bool: 驗證通過
+            - int: ahead 數
+            - int: behind 數
+            - list[str]: 警告訊息列表
+    """
+    # 驗證前置條件
+    if not _merge_validate_preconditions(ticket_id, worktree["path"]):
+        return False, 0, 0, []
+
+    # 計算 metrics 和警告
+    branch_name = worktree.get("branch", f"feat/{ticket_id}")
+    ahead, behind, warnings = _merge_collect_warnings_for_branch(branch_name, ticket_id)
+
+    return True, ahead, behind, warnings
+
+
 def cmd_merge(ticket_id: str) -> int:
     """
     merge 子命令 — 前置驗證並輸出 git merge 指令
 
     驗證 Ticket 狀態為 completed、working tree 乾淨、ahead/behind 狀態後，
     輸出 git merge --no-ff 指令供使用者執行（不自動執行 git merge）。
+
+    W16 修復：認知負擔指數 = 6 (<= 10)
+    拆分出：_merge_validate_and_collect_metrics(指數 8), _merge_validate_preconditions(指數 9),
+    _merge_collect_warnings_for_branch(指數 6), _merge_build_warnings_list(指數 7)
 
     Args:
         ticket_id: Ticket ID（如 "0.1.1-W9-002"）
@@ -753,39 +918,16 @@ def cmd_merge(ticket_id: str) -> int:
     if worktree is None:
         print(CommonMessages.WORKTREE_NOT_FOUND.format(ticket_id=ticket_id))
         print()
-        # 列出現有 worktree
         _print_existing_worktrees()
         return 1
 
-    # Step 3: 驗證 Ticket 狀態
-    can_continue, msg = _merge_validate_ticket_status(ticket_id)
-    if not can_continue:
-        print(msg)
+    # Step 3: 驗證前置條件並收集 metrics
+    passed, ahead, behind, warnings = _merge_validate_and_collect_metrics(ticket_id, worktree)
+    if not passed:
         return 1
 
-    warnings = []
-    if msg:
-        # 降級警告，但可繼續
-        warnings.append(msg)
-
-    # Step 4: 檢查 working tree 乾淨
-    is_clean, uncommitted = _check_working_tree_clean(worktree["path"])
-    if not is_clean:
-        print(MergeMessages.DIRTY_WORKING_TREE.format(count=uncommitted))
-        return 1
-
-    # Step 5: 計算 ahead/behind
+    # Step 4: 輸出指令
     branch_name = worktree.get("branch", f"feat/{ticket_id}")
-    ahead, behind = get_worktree_ahead_behind(branch_name, DEFAULT_BASE_BRANCH)
-
-    # 檢查警告條件
-    if ahead == 0:
-        warnings.append(MergeMessages.NO_NEW_COMMITS.format(base=DEFAULT_BASE_BRANCH))
-
-    if behind > 0:
-        warnings.append(MergeMessages.BRANCH_BEHIND_BASE.format(base=DEFAULT_BASE_BRANCH, count=behind))
-
-    # Step 6: 輸出指令
     _merge_build_output(ticket_id, branch_name, ahead, behind, warnings)
 
     return 0
@@ -949,30 +1091,60 @@ def _cleanup_check_level2_and_3(branch: str, force: bool) -> tuple[bool, int]:
     return True, 0
 
 
-def _cleanup_single(
-    worktree: dict,
-    ticket_id: str,
-    force: bool
-) -> int:
+def _cleanup_print_initial_header(ticket_id: str) -> None:
     """
-    清理指定 worktree（精確模式核心邏輯）
+    輸出清理操作的開始標題
 
-    依序執行三閘門安全檢查，通過後執行 git worktree remove + git branch -d。
+    W16 修復：認知負擔指數 = 2 (<= 10)
 
     Args:
-        worktree: worktree 資訊字典（含 path, branch 等欄位）
-        ticket_id: Ticket ID（用於錯誤訊息）
-        force: 是否略過 Level 2/3 警告閘門
-
-    Returns:
-        int: exit code（0 成功，1 被閘門阻擋或執行失敗）
+        ticket_id: Ticket ID
     """
-    path = worktree.get("path", "")
-    branch = worktree.get("branch", f"feat/{ticket_id}")
-
     print(f"正在清理 Ticket {ticket_id} 的 worktree...")
     print()
 
+
+def _cleanup_execute_and_report(
+    path: str,
+    branch: str
+) -> int:
+    """
+    執行清理操作並輸出結果
+
+    W16 修復：認知負擔指數 = 6 (<= 10)
+
+    Args:
+        path: worktree 絕對路徑
+        branch: 分支名稱
+
+    Returns:
+        int: exit code（0 成功，1 失敗）
+    """
+    success, result_msg = _cleanup_execute(path, branch)
+    print(result_msg)
+    return 0 if success else 1
+
+
+def _cleanup_verify_all_gates(
+    path: str,
+    branch: str,
+    force: bool
+) -> int:
+    """
+    執行三閘門驗證
+
+    返回 0 表示全部通過（可進行清理），1 表示被阻擋。
+
+    W16 修復：認知負擔指數 = 10 (<= 10)
+
+    Args:
+        path: worktree 絕對路徑
+        branch: 分支名稱
+        force: 是否略過 Level 2/3 警告
+
+    Returns:
+        int: 0 表示通過，1 表示阻擋
+    """
     # Level 1: 未 commit 檢查（永不可繞過）
     passed, uncommitted_count = _cleanup_check_level1(path)
     if not passed:
@@ -987,12 +1159,42 @@ def _cleanup_single(
         return exit_code
 
     print()
+    return 0
+
+
+def _cleanup_single(
+    worktree: dict,
+    ticket_id: str,
+    force: bool
+) -> int:
+    """
+    清理指定 worktree（精確模式核心邏輯）
+
+    依序執行三閘門安全檢查，通過後執行 git worktree remove + git branch -d。
+
+    W16 修復：認知負擔指數 = 8 (<= 10)
+    拆分出：_cleanup_verify_all_gates(指數 10), _cleanup_execute_and_report(指數 6),
+    _cleanup_print_initial_header(指數 2)
+
+    Args:
+        worktree: worktree 資訊字典（含 path, branch 等欄位）
+        ticket_id: Ticket ID（用於錯誤訊息）
+        force: 是否略過 Level 2/3 警告閘門
+
+    Returns:
+        int: exit code（0 成功，1 被閘門阻擋或執行失敗）
+    """
+    path = worktree.get("path", "")
+    branch = worktree.get("branch", f"feat/{ticket_id}")
+
+    _cleanup_print_initial_header(ticket_id)
+
+    # 執行三閘門驗證
+    if _cleanup_verify_all_gates(path, branch, force) != 0:
+        return 1
 
     # 執行清理
-    success, result_msg = _cleanup_execute(path, branch)
-    print(result_msg)
-
-    return 0 if success else 1
+    return _cleanup_execute_and_report(path, branch)
 
 
 def _cleanup_filter_feature_worktrees(worktrees: list[dict]) -> list[dict]:
