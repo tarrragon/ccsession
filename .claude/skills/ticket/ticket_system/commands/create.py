@@ -168,10 +168,10 @@ def _build_decision_tree_path(
     1. 豁免條件：子任務（is_child=True）或 DOC 類型
     2. 豁免時無參數 → 返回 None
     3. 豁免時有完整參數 → 返回字典（驗證後）
-    4. 豁免時部分參數 → 返回 False（拒絕）
-    5. 非豁免時無參數 → 返回 False（拒絕）
+    4. 豁免時部分參數 → raise ValueError（拒絕）
+    5. 非豁免時無參數 → raise ValueError（拒絕）
     6. 非豁免時有完整參數 → 返回字典（驗證後）
-    7. 非豁免時部分參數 → 返回 False（拒絕）
+    7. 非豁免時部分參數 → raise ValueError（拒絕）
 
     Args:
         entry: --decision-tree-entry 參數值
@@ -183,7 +183,9 @@ def _build_decision_tree_path(
     Returns:
         - Dict[str, str]：包含 entry_point, final_decision, rationale 三個鍵
         - None：豁免且無參數
-        - False：驗證失敗（拒絕建立）
+
+    Raises:
+        ValueError: 驗證失敗（參數不完整或其他問題）
     """
     # 判斷是否豁免
     is_exempted = is_child or ticket_type == "DOC"
@@ -199,12 +201,12 @@ def _build_decision_tree_path(
             return None
         else:
             print(format_error(CreateMessages.DECISION_TREE_MISSING_ALL))
-            return False
+            raise ValueError("決策樹參數缺失")
 
     if provided_count == 3:
         # 完整三參數 - 驗證後返回字典
         if not _validate_decision_tree_params(entry, decision, rationale):
-            return False
+            raise ValueError("決策樹參數驗證失敗")
         return _build_decision_tree_dict(entry, decision, rationale)
 
     # 部分參數 - 全部拒絕
@@ -224,7 +226,7 @@ def _build_decision_tree_path(
             CreateMessages.DECISION_TREE_MISSING_PARTIAL,
             missing_fields=", ".join(missing_fields)
         ))
-    return False
+    raise ValueError("決策樹參數不完整")
 
 
 def _tokenize(text: str) -> set:
@@ -413,17 +415,18 @@ def _detect_duplicate_tickets(
         sys.stderr.write(f"[DEBUG] 重複偵測異常 ({type(e).__name__}): {e}\n")
 
 
-def execute(args: argparse.Namespace) -> int:
-    """執行 create 命令"""
-    version = resolve_version(args.version)
-    if not version:
-        print(format_error(ErrorMessages.VERSION_NOT_DETECTED))
-        return 1
+def _resolve_ticket_id_and_wave(args: argparse.Namespace, version: str) -> Optional[tuple]:
+    """Step 1: 解析版本和 Ticket ID。
 
-    # 初始化 wave
+    Args:
+        args: 命令行參數
+        version: 已解析的版本號
+
+    Returns:
+        (version, ticket_id, wave) 或 None（失敗）
+    """
     wave = args.wave
 
-    # 判斷是否建立子任務
     if args.parent:
         # 建立子任務 ID（總是自動遞增，忽略 --seq）
         child_seq = get_next_child_seq(args.parent)
@@ -443,33 +446,46 @@ def execute(args: argparse.Namespace) -> int:
         # 建立根任務 ID
         if not wave:
             print(format_error(ErrorMessages.MISSING_WAVE_PARAMETER))
-            return 1
+            return None
 
-        if args.seq is None:
-            seq = get_next_seq(version, wave)
-        else:
-            seq = args.seq
+        seq = get_next_seq(version, wave) if args.seq is None else args.seq
         ticket_id = format_ticket_id(version, wave, seq)
 
     # 驗證 Ticket ID
     if not validate_ticket_id(ticket_id):
         print(format_error(ErrorMessages.INVALID_TICKET_ID_FORMAT, ticket_id=ticket_id))
-        return 1
+        return None
 
+    return (version, ticket_id, wave)
+
+
+def _parse_cli_args_to_config(
+    args: argparse.Namespace,
+    version: str,
+    ticket_id: str,
+    wave: int,
+    tdd_result: Any,
+) -> Optional[TicketConfig]:
+    """Step 2: CLI 參數轉換為 TicketConfig。
+
+    Args:
+        args: 命令行參數
+        version: 版本號
+        ticket_id: 已解析的 Ticket ID
+        wave: Wave 編號
+        tdd_result: TDD 序列建議結果
+
+    Returns:
+        TicketConfig 或 None（失敗）
+    """
     # 處理 where_files
-    where_files = []
-    if args.where_files:
-        where_files = [f.strip() for f in args.where_files.split(",")]
+    where_files = [f.strip() for f in args.where_files.split(",")] if args.where_files else []
 
     # 處理 blocked_by
-    blocked_by = []
-    if args.blocked_by:
-        blocked_by = [b.strip() for b in args.blocked_by.split(",")]
+    blocked_by = [b.strip() for b in args.blocked_by.split(",")] if args.blocked_by else []
 
     # 處理 related_to
-    related_to = []
-    if args.related_to:
-        related_to = [r.strip() for r in args.related_to.split(",")]
+    related_to = [r.strip() for r in args.related_to.split(",")] if args.related_to else []
 
     # 處理 acceptance（支援多次 --acceptance 和 | 分隔）
     acceptance = None
@@ -479,34 +495,30 @@ def execute(args: argparse.Namespace) -> int:
             acceptance.extend(a.strip() for a in item.split("|"))
         acceptance = [a for a in acceptance if a]
 
-    # 識別任務類型並取得 TDD 順序建議
+    # 識別任務類型
     ticket_type = args.type or "IMP"
-    tdd_result = suggest_tdd_sequence(task_type=ticket_type)
 
-    # 若有 TDD Phase 順序，取第一個 Phase 作為初始階段
-    tdd_phase = tdd_result.phases[0] if tdd_result.phases else None
-
-    # 驗證決策樹路徑
-    decision_tree_path = _build_decision_tree_path(
-        entry=args.decision_tree_entry,
-        decision=args.decision_tree_decision,
-        rationale=args.decision_tree_rationale,
-        is_child=bool(args.parent),
-        ticket_type=ticket_type,
-    )
-
-    # 若驗證失敗，拒絕建立
-    if decision_tree_path is False:
-        return 1
+    # 建立決策樹路徑
+    try:
+        decision_tree_path = _build_decision_tree_path(
+            entry=args.decision_tree_entry,
+            decision=args.decision_tree_decision,
+            rationale=args.decision_tree_rationale,
+            is_child=bool(args.parent),
+            ticket_type=ticket_type,
+        )
+    except ValueError:
+        return None
 
     # 如果是子任務，載入父 Ticket 以繼承欄位
     parent_ticket: Optional[Dict[str, Any]] = None
     if args.parent:
         parent_ticket = load_ticket(version, args.parent)
 
-    # 建立配置
-    # 注意：子任務可從父 Ticket 繼承 where_layer 和 why，但 CLI 參數優先級更高
-    config: TicketConfig = {
+    # 若有 TDD Phase 順序，取第一個 Phase 作為初始階段
+    tdd_phase = tdd_result.phases[0] if tdd_result.phases else None
+
+    return {
         "ticket_id": ticket_id,
         "version": version,
         "wave": wave,
@@ -530,62 +542,105 @@ def execute(args: argparse.Namespace) -> int:
         "decision_tree_path": decision_tree_path,
     }
 
-    # 建立 frontmatter
-    frontmatter = create_ticket_frontmatter(config)
 
-    # 建立 body
-    body = create_ticket_body(frontmatter["what"], frontmatter["who"]["current"])
+def _persist_and_report(
+    args: argparse.Namespace,
+    config: TicketConfig,
+    version: str,
+    ticket_id: str,
+    tdd_result: Any,
+) -> int:
+    """Step 3: 驗證 blockedBy + 重複偵測 + 持久化 + 輸出。
 
-    # 建立 Ticket 物件
-    ticket = frontmatter.copy()
-    ticket["_body"] = body
+    Args:
+        args: 命令行參數
+        config: Ticket 配置
+        version: 版本號
+        ticket_id: Ticket ID
+        tdd_result: TDD 序列建議結果
 
-    # Bug 1 修正：在 save_ticket 之前執行 blockedBy 驗證
+    Returns:
+        0（成功）或 1（失敗）
+    """
+    blocked_by = config.get("blocked_by", [])
+
+    # 驗證 blockedBy 存在性
     if not _validate_blocked_by_references(version, ticket_id, blocked_by):
         return 1
 
-    # W3-003：執行重複偵測，在 save 前警告可能重複的 Ticket
+    # 重複偵測
     _detect_duplicate_tickets(
         version=version,
-        new_title=args.title or f"{args.action} {args.target}",
-        new_what=args.what or f"{args.action} {args.target}",
+        new_title=config["title"],
+        new_what=config["what"],
         new_ticket_id=ticket_id,
     )
+
+    # 建立 Ticket 物件
+    frontmatter = create_ticket_frontmatter(config)
+    body = create_ticket_body(frontmatter["what"], frontmatter["who"]["current"])
+    ticket = frontmatter.copy()
+    ticket["_body"] = body
 
     # 儲存
     tickets_dir = get_tickets_dir(version)
     tickets_dir.mkdir(parents=True, exist_ok=True)
-
     ticket_path = get_ticket_path(version, ticket_id)
     save_ticket(ticket, ticket_path)
 
+    # 輸出建立訊息
     print(format_info(InfoMessages.TICKET_CREATED, ticket_id=ticket_id))
     print(f"   Location: {ticket_path}")
-    print(format_msg(CreateMessages.TASK_TYPE_LABEL, task_type=args.type or 'IMP'))
+    print(format_msg(CreateMessages.TASK_TYPE_LABEL, task_type=config["ticket_type"]))
 
     # 如果有 parent，更新 parent 的 children
     parent_info: Optional[Dict[str, Any]] = None
     if args.parent:
         if update_parent_children(version, args.parent, ticket_id):
             print(f"   Parent: {args.parent} (已更新 children)")
-            # 載入 parent 以進行並行分析
             parent_info = load_ticket(version, args.parent)
         else:
             print(format_warning(WarningMessages.PARENT_UPDATE_FAILED, parent_id=args.parent))
 
     # 顯示建立時檢查清單
-    # 判斷是否使用了預設驗收條件
-    used_default_acceptance = acceptance is None
+    used_default_acceptance = config.get("acceptance") is None
     _print_create_checklist(
         ticket_id=ticket_id,
-        ticket_type=args.type or "IMP",
+        ticket_type=config["ticket_type"],
         parent_id=args.parent,
         parent_info=parent_info,
         new_ticket=ticket,
-        used_default_acceptance=used_default_acceptance
+        used_default_acceptance=used_default_acceptance,
+        tdd_result=tdd_result,
     )
 
     return 0
+
+
+def execute(args: argparse.Namespace) -> int:
+    """執行 create 命令 — 協調四個步驟"""
+    version = resolve_version(args.version)
+    if not version:
+        print(format_error(ErrorMessages.VERSION_NOT_DETECTED))
+        return 1
+
+    # Step 1: 解析版本和 Ticket ID
+    resolved = _resolve_ticket_id_and_wave(args, version)
+    if resolved is None:
+        return 1
+    version, ticket_id, wave = resolved
+
+    # 識別任務類型並取得 TDD 順序建議（需要在 Step 2 使用）
+    ticket_type = args.type or "IMP"
+    tdd_result = suggest_tdd_sequence(task_type=ticket_type)
+
+    # Step 2: CLI 參數轉換為 TicketConfig
+    config = _parse_cli_args_to_config(args, version, ticket_id, wave, tdd_result)
+    if config is None:
+        return 1
+
+    # Step 3: 驗證 blockedBy + 重複偵測 + 持久化 + 輸出
+    return _persist_and_report(args, config, version, ticket_id, tdd_result)
 
 
 def _print_create_checklist(
@@ -595,6 +650,7 @@ def _print_create_checklist(
     parent_info: Optional[Dict[str, Any]] = None,
     new_ticket: Optional[Dict[str, Any]] = None,
     used_default_acceptance: bool = False,
+    tdd_result: Any = None,
 ) -> None:
     """印出建立時的檢查清單、TDD 順序建議和並行分析結果。
 
@@ -605,6 +661,7 @@ def _print_create_checklist(
         parent_info: 父 Ticket 的資訊（用於並行分析）
         new_ticket: 新建立的 Ticket 資訊（用於並行分析）
         used_default_acceptance: 是否使用了預設驗收條件
+        tdd_result: TDD 序列建議結果（避免重複呼叫）
     """
     print()
     print(SEPARATOR_PRIMARY)
@@ -660,20 +717,21 @@ def _print_create_checklist(
     print()
 
     # 輸出 TDD 順序建議（適用於所有任務類型）
-    _print_tdd_sequence_suggestion(ticket_type)
+    _print_tdd_sequence_suggestion(ticket_type, tdd_result)
 
     # 輸出並行分析結果（對子任務）
     if parent_id and parent_info and new_ticket:
         _print_parallel_analysis_result(parent_info, new_ticket, ticket_id)
 
 
-def _print_tdd_sequence_suggestion(ticket_type: str) -> None:
+def _print_tdd_sequence_suggestion(ticket_type: str, tdd_result: Any = None) -> None:
     """輸出 TDD 順序建議。
 
     Args:
         ticket_type: Ticket 類型（IMP、ADJ、DOC 等）
+        tdd_result: TDD 序列建議結果（可選，若無則重新計算）
     """
-    result = suggest_tdd_sequence(task_type=ticket_type)
+    result = tdd_result or suggest_tdd_sequence(task_type=ticket_type)
 
     # 若無需 TDD 流程，略過此章節
     if not result.phases:
