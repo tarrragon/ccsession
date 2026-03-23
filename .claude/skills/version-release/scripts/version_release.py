@@ -353,17 +353,29 @@ def check_worklog_completed(version: str) -> Tuple[bool, List[str]]:
     major_minor = extract_major_minor(version)
 
     # 查詢相關的工作日誌
+    # 優先檢查版本子目錄（新結構：docs/work-logs/v0.1.1/v0.1.1-main.md）
     worklog_files = []
-    if worklog_dir.exists():
+    version_subdir = worklog_dir / f"v{version}"
+    if version_subdir.exists():
+        for f in version_subdir.glob(f"v{version}*.md"):
+            worklog_files.append(f)
+
+    # 如果版本子目錄中找不到，則檢查根目錄（向後相容舊結構）
+    if not worklog_files and worklog_dir.exists():
         for f in worklog_dir.glob(f"v{major_minor}*.md"):
             worklog_files.append(f)
 
     if not worklog_files:
-        errors.append(f"找不到版本 v{major_minor} 的工作日誌檔案")
+        errors.append(f"找不到版本 v{version} 的工作日誌檔案")
         return False, errors
 
     # 檢查主工作日誌
-    main_worklog = worklog_dir / f"v{major_minor}.0-main.md"
+    # 優先檢查版本子目錄中的主工作日誌
+    main_worklog = version_subdir / f"v{version}-main.md"
+    if not main_worklog.exists():
+        # fallback：檢查根目錄（舊結構）
+        main_worklog = worklog_dir / f"v{major_minor}.0-main.md"
+
     if main_worklog.exists():
         try:
             with open(main_worklog, encoding="utf-8") as f:
@@ -409,8 +421,9 @@ def check_technical_debt_status(version: str) -> Dict:
     version_series = f"v{major_minor}"  # v0.20
 
     # 掃描版本系列的票目錄
+    # 修復 Bug 2b：使用完整版本號而非硬編碼 .0
     worklog_dir = root / "docs" / "work-logs"
-    tickets_dir = worklog_dir / f"v{major_minor}.0" / "tickets"
+    tickets_dir = worklog_dir / f"v{version}" / "tickets"
 
     result = {
         "passed": True,
