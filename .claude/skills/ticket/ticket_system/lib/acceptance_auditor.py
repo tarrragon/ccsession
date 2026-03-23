@@ -15,7 +15,7 @@ from datetime import datetime
 
 from .ticket_loader import load_ticket, resolve_version, get_project_root, get_tickets_dir
 from .parser import parse_frontmatter
-from .constants import STATUS_COMPLETED, VAGUE_ACCEPTANCE_WORDS
+from .constants import STATUS_COMPLETED, VAGUE_ACCEPTANCE_WORDS, SRP_WHAT_CONJUNCTIONS, SRP_ACCEPTANCE_MODULE_THRESHOLD
 
 
 # ============================================================
@@ -438,6 +438,160 @@ def detect_vague_acceptance(
 
     # 警告不導致失敗，只返回 True + 警告清單
     return True, warnings
+
+
+# ============================================================
+# SRP 違規偵測（create 層輕量提示）
+# ============================================================
+
+def _detect_srp_multi_target(what_text: str) -> Tuple[bool, List[str]]:
+    """
+    偵測 what 欄位中的多目標連接詞。
+
+    掃描 what 文字是否包含並列連接詞（和/與/及/並/同時），
+    暗示 Ticket 可能包含多個獨立目標。
+
+    Args:
+        what_text: what 欄位文字
+
+    Returns:
+        (has_conjunction, found_conjunctions):
+        - has_conjunction: 是否找到並列連接詞
+        - found_conjunctions: 找到的連接詞清單
+    """
+    # Guard Clause：空值或無意義文字
+    if not what_text or not isinstance(what_text, str):
+        return False, []
+
+    cleaned = what_text.strip()
+    if not cleaned or len(cleaned) < 2:
+        return False, []
+
+    # 掃描並列連接詞
+    found_conjunctions = []
+    for conjunction in SRP_WHAT_CONJUNCTIONS:
+        if conjunction in cleaned:
+            found_conjunctions.append(conjunction)
+
+    # 回傳結果
+    if found_conjunctions:
+        return True, found_conjunctions
+    return False, []
+
+
+def _detect_srp_cross_module(acceptance_list: Optional[List[str]]) -> Tuple[bool, List[str]]:
+    """
+    偵測驗收條件中的跨模組特徵。
+
+    從驗收條件文字中識別模組名稱（檔案路徑、snake_case、PascalCase）。
+    若不同模組數量超過閾值，視為跨模組。
+
+    Args:
+        acceptance_list: 驗收條件清單
+
+    Returns:
+        (is_cross_module, detected_modules):
+        - is_cross_module: 是否偵測到跨模組特徵
+        - detected_modules: 識別到的模組名稱清單
+    """
+    # Guard Clause：空值或無意義清單
+    if not acceptance_list or len(acceptance_list) == 0:
+        return False, []
+
+    detected_modules = set()
+
+    # 掃描驗收條件並提取模組名稱
+    for item in acceptance_list:
+        # 跳過非字串元素
+        if not isinstance(item, str):
+            continue
+
+        # 識別方式 1：檔案路徑（含 .py）
+        # 匹配 xxx.py 或 xxx_yyy.py 格式
+        file_matches = re.findall(r'(\w+)\.py', item)
+        for match in file_matches:
+            detected_modules.add(match.lower())
+
+        # 識別方式 2：Python 模組名（snake_case）
+        # 匹配 snake_case 模組名
+        snake_case_matches = re.findall(r'\b([a-z_]+)\b', item)
+        for match in snake_case_matches:
+            if match and len(match) > 2:  # 過濾過短的詞
+                detected_modules.add(match.lower())
+
+        # 識別方式 3：類別名稱（PascalCase）
+        # 匹配 PascalCase 名稱
+        pascal_case_matches = re.findall(r'\b([A-Z][a-zA-Z]+)\b', item)
+        for match in pascal_case_matches:
+            detected_modules.add(match.lower())
+
+    # 判斷是否跨模組
+    module_count = len(detected_modules)
+    if module_count > SRP_ACCEPTANCE_MODULE_THRESHOLD:
+        return True, sorted(list(detected_modules))
+    return False, []
+
+
+def detect_srp_violations(
+    what_text: str,
+    acceptance_list: Optional[List[str]],
+) -> Tuple[bool, List[str]]:
+    """
+    偵測 Ticket 是否有潛在的 SRP（單一職責原則）違規。
+
+    執行兩項輕量偵測：
+    1. what 欄位多目標連接詞偵測
+    2. 驗收條件跨模組偵測
+
+    此函式僅用於建立時的輕量提示，不作為阻止建立的依據。
+    詳細 SRP 審查由 SA 層（saffron-system-analyst）在 Phase 0 執行。
+
+    Args:
+        what_text: Ticket 的 what 欄位文字（不可為 None）
+        acceptance_list: 驗收條件清單（可為 None）
+
+    Returns:
+        Tuple[bool, List[str]]:
+        - (False, []): 未偵測到 SRP 疑慮
+        - (True, [warning_messages]): 偵測到疑慮，回傳警告訊息清單
+
+    Note:
+        回傳值第一個元素為 True 表示「有疑慮」（與 detect_vague_acceptance 的語義不同）。
+        偵測結果只用於輸出 WARNING，不影響 create 命令的回傳碼。
+    """
+    # Guard Clause
+    if not what_text:
+        what_text = ""
+    if not acceptance_list:
+        acceptance_list = []
+
+    warning_messages = []
+    has_any_issue = False
+
+    # 執行 what 欄位偵測
+    has_what_issue, conjunctions = _detect_srp_multi_target(what_text)
+    if has_what_issue and conjunctions:
+        from .command_lifecycle_messages import CreateMessages
+        message = CreateMessages.SRP_MULTI_TARGET_WARNING.format(
+            conjunctions="、".join(conjunctions)
+        )
+        warning_messages.append(message)
+        has_any_issue = True
+
+    # 執行 acceptance 欄位偵測
+    has_accept_issue, modules = _detect_srp_cross_module(acceptance_list)
+    if has_accept_issue and modules:
+        from .command_lifecycle_messages import CreateMessages
+        message = CreateMessages.SRP_CROSS_MODULE_WARNING.format(
+            modules="、".join(modules)
+        )
+        warning_messages.append(message)
+        has_any_issue = True
+
+    # 回傳結果
+    if has_any_issue:
+        return True, warning_messages
+    return False, []
 
 
 # ============================================================

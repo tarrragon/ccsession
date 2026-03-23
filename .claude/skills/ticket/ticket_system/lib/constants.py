@@ -199,6 +199,24 @@ VAGUE_ACCEPTANCE_WORDS: List[str] = [
 # 修改檔案數閾值（超過此數則警告）
 COGNITIVE_LOAD_FILE_THRESHOLD: int = 5
 
+# ============================================================
+# SRP（單一職責原則）偵測常數
+# ============================================================
+
+# what 欄位多目標偵測：並列連接詞清單
+# 偵測到這些連接詞時，疑似 Ticket 包含多個獨立目標
+SRP_WHAT_CONJUNCTIONS: List[str] = [
+    "和",
+    "與",
+    "及",
+    "並",
+    "同時",
+]
+
+# 驗收條件跨模組偵測：不同模組數量閾值
+# 超過此閾值時，疑似驗收條件指向不相關模組
+SRP_ACCEPTANCE_MODULE_THRESHOLD: int = 2
+
 
 if __name__ == "__main__":
     from ticket_system.lib.messages import print_not_executable_and_exit

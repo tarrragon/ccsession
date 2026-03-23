@@ -52,7 +52,7 @@ from ticket_system.lib.ticket_builder import (
     create_ticket_body,
     update_parent_children,
 )
-from ticket_system.lib.acceptance_auditor import detect_vague_acceptance
+from ticket_system.lib.acceptance_auditor import detect_vague_acceptance, detect_srp_violations
 from ticket_system.lib.ui_constants import SEPARATOR_PRIMARY
 
 
@@ -430,6 +430,15 @@ def _print_create_checklist(
 
     # 變更 4：初步認知負擔評估
     _print_cognitive_load_assessment(new_ticket)
+
+    # SRP 偵測（W3-002）
+    if new_ticket:
+        what_text = new_ticket.get("what", "") or ""
+        acceptance = new_ticket.get("acceptance", []) or []
+        has_srp_issue, srp_warnings = detect_srp_violations(what_text, acceptance)
+        if has_srp_issue and srp_warnings:
+            for warning in srp_warnings:
+                print(format_warning(warning))
 
     # 驗收條件格式提示
     print(CreateMessages.ACCEPTANCE_4V_CHECK)

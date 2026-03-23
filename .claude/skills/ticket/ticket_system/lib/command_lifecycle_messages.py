@@ -296,6 +296,20 @@ class CreateMessages:
         "請使用 /ticket fields update <ticket-id> where <files> 補充"
     )
 
+    # SRP 多目標偵測警告（W3-002）
+    SRP_MULTI_TARGET_WARNING = (
+        "[WARNING] what 欄位含連接詞「{conjunctions}」，疑似包含多個獨立目標\n"
+        "          Atomic Ticket 原則：一個 Ticket = 一個 Action + 一個 Target\n"
+        "          建議：考慮拆分為多個 Ticket，或確認目標確實是單一職責"
+    )
+
+    # SRP 跨模組驗收偵測警告（W3-002）
+    SRP_CROSS_MODULE_WARNING = (
+        "[WARNING] 驗收條件涉及多個模組（{modules}），疑似包含多個職責\n"
+        "          Atomic Ticket 原則：所有驗收條件應指向同一目標\n"
+        "          建議：確認是否需要拆分為多個獨立 Ticket"
+    )
+
     # blockedBy 驗證錯誤訊息（Bug 1 修正）
     BLOCKED_BY_NOT_FOUND = "[ERROR] blockedBy 中的 {bid} 不存在，請確認 ID 是否正確"
 
