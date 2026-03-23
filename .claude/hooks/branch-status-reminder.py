@@ -38,8 +38,6 @@ try:
     from lib.common_functions import hook_output
     from git_utils import (
         get_current_branch,
-        get_project_root,
-        get_worktree_list,
         is_protected_branch,
         is_allowed_branch,
         is_in_worktree,

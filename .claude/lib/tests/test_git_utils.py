@@ -136,10 +136,6 @@ class TestConstants(unittest.TestCase):
         self.assertEqual(BRANCH_PREFIX_LEN, len("branch "))
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class TestUncommittedStatusLines(unittest.TestCase):
     """測試 get_uncommitted_status_lines 函式"""
 
@@ -182,3 +178,7 @@ A  file3.py
         self.assertTrue(any(line.startswith(" M") for line in status_lines))
         self.assertTrue(any(line.startswith("??") for line in status_lines))
         self.assertTrue(any(line.startswith(" D") for line in status_lines))
+
+
+if __name__ == "__main__":
+    unittest.main()
