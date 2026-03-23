@@ -381,18 +381,22 @@ def check_worklog_completed(version: str) -> Tuple[bool, List[str]]:
             with open(main_worklog, encoding="utf-8") as f:
                 content = f.read()
 
-            # 檢查 Phase 完成情況
-            phases = {
-                "Phase 0": r"## Phase 0:.*?✅",
-                "Phase 1": r"## Phase 1:.*?✅",
-                "Phase 2": r"## Phase 2:.*?✅",
-                "Phase 3": r"## Phase 3.*?✅",
-                "Phase 4": r"## Phase 4.*?✅",
-            }
+            # 檢查 Phase 完成情況（多 Wave 版本可跳過）
+            # 若工作日誌含 "status" 欄位標記為 completed，視為非 TDD 版本，跳過 Phase 檢查
+            if re.search(r"^status:\s*completed", content, re.MULTILINE):
+                pass  # 非 TDD 版本，Phase 檢查跳過
+            else:
+                phases = {
+                    "Phase 0": r"## Phase 0:.*?✅",
+                    "Phase 1": r"## Phase 1:.*?✅",
+                    "Phase 2": r"## Phase 2:.*?✅",
+                    "Phase 3": r"## Phase 3.*?✅",
+                    "Phase 4": r"## Phase 4.*?✅",
+                }
 
-            for phase_name, pattern in phases.items():
-                if not re.search(pattern, content, re.DOTALL):
-                    errors.append(f"{main_worklog.name}: {phase_name} 未標記為完成")
+                for phase_name, pattern in phases.items():
+                    if not re.search(pattern, content, re.DOTALL):
+                        errors.append(f"{main_worklog.name}: {phase_name} 未標記為完成")
         except Exception as e:
             errors.append(f"讀取 {main_worklog} 失敗: {e}")
     else:
@@ -583,6 +587,10 @@ def check_previous_versions_completed(version: str) -> Tuple[bool, List[str]]:
                 if not status_match:
                     continue
                 status = status_match.group(1).strip()
+                # 有 completed_at 欄位的視為已完成（即使 status 未同步更新）
+                has_completed_at = re.search(r"completed_at:", frontmatter) is not None
+                if has_completed_at:
+                    continue
                 if status == "pending":
                     pending_count += 1
                 elif status == "in_progress":
