@@ -11,6 +11,8 @@ if __name__ == "__main__":
 
 
 import argparse
+import re
+import sys
 from typing import Any, Dict, List, Optional
 
 from ticket_system.lib.ticket_loader import (
@@ -39,7 +41,11 @@ from ticket_system.lib.command_lifecycle_messages import (
     CreateMessages,
     format_msg,
 )
-from ticket_system.lib.constants import COGNITIVE_LOAD_FILE_THRESHOLD
+from ticket_system.lib.constants import (
+    COGNITIVE_LOAD_FILE_THRESHOLD,
+    STATUS_PENDING,
+    DUPLICATE_DETECTION_THRESHOLD,
+)
 from ticket_system.lib.parallel_analyzer import ParallelAnalyzer
 from ticket_system.lib.tdd_sequence import suggest_tdd_sequence
 from ticket_system.lib.ticket_builder import (
@@ -133,28 +139,6 @@ def _validate_decision_tree_params(
     return True
 
 
-def _build_decision_tree_dict(
-    entry: str,
-    decision: str,
-    rationale: str,
-) -> Dict[str, str]:
-    """構建 decision_tree_path 字典。
-
-    Args:
-        entry: entry_point 值
-        decision: final_decision 值
-        rationale: rationale 值
-
-    Returns:
-        {'entry_point': ..., 'final_decision': ..., 'rationale': ...}
-    """
-    return {
-        "entry_point": entry,
-        "final_decision": decision,
-        "rationale": rationale,
-    }
-
-
 def _build_decision_tree_path(
     entry: Optional[str],
     decision: Optional[str],
@@ -207,13 +191,15 @@ def _build_decision_tree_path(
         # 完整三參數 - 驗證後返回字典
         if not _validate_decision_tree_params(entry, decision, rationale):
             raise ValueError("決策樹參數驗證失敗")
-        return _build_decision_tree_dict(entry, decision, rationale)
+        return {
+            "entry_point": entry,
+            "final_decision": decision,
+            "rationale": rationale,
+        }
 
     # 部分參數 - 全部拒絕
     if is_exempted:
-        print(format_error(
-            "[ERROR] 豁免條件下三個參數必須全部提供或全部省略"
-        ))
+        print(format_error(CreateMessages.EXEMPTED_PARTIAL_PARAMS_ERROR))
     else:
         missing_fields = []
         if entry is None:
@@ -243,7 +229,6 @@ def _tokenize(text: str) -> set:
     Returns:
         集合，包含所有詞彙
     """
-    import re
     # 提取中文字符和英文單詞
     # 模式：中文字符（\u4e00-\u9fff）或英文單詞（\w+）
     pattern = r'[\u4e00-\u9fff]|\w+'
@@ -319,11 +304,6 @@ def _detect_duplicate_tickets(
     Returns:
         None（不返回偵測結果，以簽名方式消費 WARNING）
     """
-    import sys
-    from ticket_system.lib.constants import (
-        STATUS_PENDING,
-        DUPLICATE_DETECTION_THRESHOLD,
-    )
 
     try:
         # 步驟 A：驗證輸入
@@ -543,7 +523,7 @@ def _parse_cli_args_to_config(
     }
 
 
-def _persist_and_report(
+def _finalize(
     args: argparse.Namespace,
     config: TicketConfig,
     version: str,
@@ -562,7 +542,7 @@ def _persist_and_report(
     Returns:
         0（成功）或 1（失敗）
     """
-    blocked_by = config.get("blocked_by", [])
+    blocked_by = config.get("blocked_by")
 
     # 驗證 blockedBy 存在性
     if not _validate_blocked_by_references(version, ticket_id, blocked_by):
@@ -590,14 +570,14 @@ def _persist_and_report(
 
     # 輸出建立訊息
     print(format_info(InfoMessages.TICKET_CREATED, ticket_id=ticket_id))
-    print(f"   Location: {ticket_path}")
+    print(format_msg(CreateMessages.TICKET_LOCATION, ticket_path=ticket_path))
     print(format_msg(CreateMessages.TASK_TYPE_LABEL, task_type=config["ticket_type"]))
 
     # 如果有 parent，更新 parent 的 children
     parent_info: Optional[Dict[str, Any]] = None
     if args.parent:
         if update_parent_children(version, args.parent, ticket_id):
-            print(f"   Parent: {args.parent} (已更新 children)")
+            print(format_msg(CreateMessages.PARENT_UPDATED, parent_id=args.parent))
             parent_info = load_ticket(version, args.parent)
         else:
             print(format_warning(WarningMessages.PARENT_UPDATE_FAILED, parent_id=args.parent, child_id=ticket_id))
@@ -640,7 +620,7 @@ def execute(args: argparse.Namespace) -> int:
         return 1
 
     # Step 3: 驗證 blockedBy + 重複偵測 + 持久化 + 輸出
-    return _persist_and_report(args, config, version, ticket_id, tdd_result)
+    return _finalize(args, config, version, ticket_id, tdd_result)
 
 
 def _print_create_checklist(

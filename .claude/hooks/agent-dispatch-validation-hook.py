@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --quiet --script
 # /// script
 # requires-python = ">=3.11"
 # dependencies = [
@@ -19,6 +19,9 @@ Hook 類型：PreToolUse
 雙通道輸出：
 - stderr：即時通知（使用者可見）
 - 日誌檔：詳細記錄（供除錯參考）
+
+注意：Hook 檔案可能無法直接 import ticket_system，
+因此保留自己的 load_registry 版本。未來可在 Phase 2 統一實作。
 """
 
 import json
@@ -84,7 +87,7 @@ class Messages:
     HEADER_CHECKING = "Checking..."
     
     # Success
-    VALIDATION_PASSED = "✓ Validation passed"
+    VALIDATION_PASSED = "[INFO] Registry loaded, full validation pending (Phase 2)"
     NO_CONFLICTS = "No conflicts detected"
     
     # Warnings
@@ -272,7 +275,7 @@ def validate_dispatch(agent_name: str, ticket_id: Optional[str] = None) -> tuple
     # 簡化版本：此處應從 ticket execution log 或上下文讀取已派發的 agent
     # 目前返回允許，詳細實作見 Phase 2
     
-    return True, f"{Colors.OKGREEN}{Messages.VALIDATION_PASSED}{Colors.ENDC}"
+    return True, Messages.VALIDATION_PASSED
 
 
 # ===== CLI 入口 =====
@@ -302,4 +305,3 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
-

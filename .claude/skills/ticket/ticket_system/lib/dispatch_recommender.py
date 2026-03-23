@@ -98,11 +98,13 @@ class DispatchRecommender:
                 score += 20.0
                 reason_parts.append("phase match: 20")
         
-        # 3. Preconditions（30 分，簡化：認為已滿足）
+        # 3. Preconditions（30 分，只在實際有不可驗證的條件時才加分）
         preconditions = config.get("preconditions", [])
         if preconditions:
-            score += 30.0
-            reason_parts.append("preconditions: 30")
+            # 只有當 preconditions 存在且可驗證時才加分
+            # 簡化版本：認為如果有 preconditions 但無法驗證，則不加分
+            score += 0.0  # 改為不無條件加分
+            # 實際實作應檢查是否能驗證，如果能才加分
         
         reason = ", ".join(reason_parts) if reason_parts else "no match"
         return score, reason
@@ -159,4 +161,3 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
-

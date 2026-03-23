@@ -9,6 +9,7 @@ Git 操作共用工具
 - run_git_command: 執行 git 命令
 - get_current_branch: 獲取當前分支
 - get_project_root: 獲取專案根目錄
+- get_uncommitted_files: 獲取未提交變更檔案列表
 - get_worktree_list: 獲取 worktree 列表
 - is_protected_branch: 檢查是否為保護分支
 - is_allowed_branch: 檢查是否為允許編輯的分支
@@ -122,6 +123,33 @@ def get_project_root() -> str:
     """
     success, output = run_git_command(["rev-parse", "--show-toplevel"])
     return output if success else os.getcwd()
+
+
+def get_uncommitted_files() -> list[str]:
+    """
+    獲取未提交變更的檔案列表
+
+    執行 git status --porcelain，返回所有未提交變更的狀態行。
+    每行格式為 git porcelain 格式（如 " M file.txt"、"?? new.txt"）。
+    空輸出或 git 命令失敗時返回空列表。
+
+    Returns:
+        list[str]: 未提交變更的狀態行列表，如果沒有變更或命令失敗則返回空列表
+
+    Example:
+        files = get_uncommitted_files()
+        if files:
+            print(f"有 {len(files)} 個未提交變更")
+        for line in files:
+            print(f"  {line}")
+    """
+    success, output = run_git_command(["status", "--porcelain"])
+
+    if not success or not output:
+        return []
+
+    lines = output.split("\n")
+    return [line for line in lines if line.strip()]
 
 
 def get_worktree_list() -> list[dict]:

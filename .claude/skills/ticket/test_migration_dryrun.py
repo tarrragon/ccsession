@@ -23,6 +23,7 @@ import yaml
 sys.path.insert(0, str(Path(__file__).parent))
 
 from ticket_system.lib.migrations import migrate_ticket, ProtocolVersionError
+from ticket_system.lib.constants import PROTOCOL_VERSION_CURRENT
 
 
 def scan_ticket_files() -> List[Dict[str, Any]]:
@@ -81,7 +82,7 @@ def run_migration_dryrun() -> Tuple[int, int, int, List[Dict[str, Any]]]:
             migrated, history = migrate_ticket(ticket)
 
             # 驗證遷移結果
-            if migrated.get("protocol_version") == "2.0":
+            if migrated.get("protocol_version") == PROTOCOL_VERSION_CURRENT:
                 success_count += 1
                 status = "✓ PASS"
             else:
@@ -89,7 +90,7 @@ def run_migration_dryrun() -> Tuple[int, int, int, List[Dict[str, Any]]]:
                 status = "✗ FAIL"
                 error_details.append({
                     "ticket_id": ticket_id,
-                    "reason": f"版本未升級至 2.0，當前: {migrated.get('protocol_version')}",
+                    "reason": f"版本未升級至 {PROTOCOL_VERSION_CURRENT}，當前: {migrated.get('protocol_version')}",
                 })
 
             # 印出進度

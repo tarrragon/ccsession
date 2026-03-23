@@ -12,7 +12,6 @@ from ticket_system.lib.constants import (
     PROTOCOL_VERSION_PATTERN,
     PROTOCOL_VERSION_RE,
     PROTOCOL_VERSIONS_SUPPORTED,
-    PROTOCOL_VERSION_SEMANTICS,
 )
 
 
@@ -72,13 +71,3 @@ class TestProtocolVersionConstants:
         assert v1_rule["target"] == "2.0"
         assert v1_rule["handler"] == "migrate_v1_to_v2"
         assert v1_rule["breaking_changes"] is False
-
-    def test_protocol_version_semantics(self):
-        """驗證版本語義定義"""
-        assert isinstance(PROTOCOL_VERSION_SEMANTICS, dict)
-        assert "major_increment" in PROTOCOL_VERSION_SEMANTICS
-        assert "minor_increment" in PROTOCOL_VERSION_SEMANTICS
-
-        # 驗證語義描述
-        assert "破壞性" in PROTOCOL_VERSION_SEMANTICS["major_increment"]
-        assert "向後相容" in PROTOCOL_VERSION_SEMANTICS["minor_increment"]

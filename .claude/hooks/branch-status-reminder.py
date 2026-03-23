@@ -46,6 +46,7 @@ try:
         is_allowed_branch,
         is_in_worktree,
         run_git_command,
+        get_uncommitted_files,
     )
 except ImportError as e:
     # #11 修復：ImportError 不應 exit(1) 阻斷整個 session
@@ -67,6 +68,8 @@ except ImportError as e:
         return branch in ["main", "master", "develop"]
     def run_git_command(args, cwd=None, timeout=10):
         return False, "git_utils not available"
+    def get_uncommitted_files():
+        return []  # 無法查詢時回傳空列表，功能降級
 
 
 def _report_uncommitted_changes(logger: logging.Logger) -> None:

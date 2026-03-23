@@ -266,12 +266,6 @@ PROTOCOL_VERSION_MIGRATIONS: Dict[str, Dict] = {
     # }
 }
 
-# 協議版本語義文檔
-PROTOCOL_VERSION_SEMANTICS: Dict[str, str] = {
-    "major_increment": "欄位刪除、語義改變、必填新增（破壞性）",
-    "minor_increment": "可選欄位新增、可接受值擴充（向後相容）",
-}
-
 
 if __name__ == "__main__":
     from ticket_system.lib.messages import print_not_executable_and_exit

@@ -34,7 +34,7 @@ def is_valid_version_format(version_string: str) -> bool:
         >>> is_valid_version_format("v2.0")
         False
     """
-    return PROTOCOL_VERSION_RE.match(version_string) is not None
+    return PROTOCOL_VERSION_RE.fullmatch(version_string) is not None
 
 
 def migrate_ticket(ticket_data: Dict[str, Any]) -> Tuple[Dict[str, Any], List[Dict[str, str]]]:
@@ -52,12 +52,13 @@ def migrate_ticket(ticket_data: Dict[str, Any]) -> Tuple[Dict[str, Any], List[Di
         - migration_history: 遷移步驟記錄，每項為 {"from": "1.0", "to": "2.0", "status": "success", "handler": "..."}
 
     Raises:
-        ProtocolVersionError: 版本格式無效或無遷移路徑
+        ProtocolVersionError: 版本格式無效或無遷移路徑或環形遷移路徑
 
     設計原則：
         - 所有現有欄位完全保留（100% 無資訊遺失）
         - 新增可選欄位時添加預設值
         - 遷移過程記錄完整歷史，支援審計追蹤
+        - 防護環形遷移路徑（超過 10 步上限）
 
     範例：
         >>> ticket = {"id": "0.1.0-W1-001", "title": "Test"}
@@ -79,8 +80,19 @@ def migrate_ticket(ticket_data: Dict[str, Any]) -> Tuple[Dict[str, Any], List[Di
     # 步驟 3：初始化遷移歷史
     migration_history: List[Dict[str, str]] = []
 
+    # 步驟 3.5：初始化迴圈計數器防護
+    migration_step_count = 0
+    max_migration_steps = 10
+
     # 步驟 4：逐步遷移至最新版本
     while current_version != PROTOCOL_VERSION_CURRENT:
+        # 檢查是否超出遷移步數上限（防護環形遷移路徑）
+        migration_step_count += 1
+        if migration_step_count > max_migration_steps:
+            raise ProtocolVersionError(
+                f"遷移步數超出上限（{max_migration_steps}），可能存在環形遷移路徑"
+            )
+
         if current_version not in PROTOCOL_VERSION_MIGRATIONS:
             raise ProtocolVersionError(
                 f"無遷移路徑：{current_version} → {PROTOCOL_VERSION_CURRENT}"
@@ -92,8 +104,7 @@ def migrate_ticket(ticket_data: Dict[str, Any]) -> Tuple[Dict[str, Any], List[Di
         handler_name = migration_rule["handler"]
 
         # 執行遷移
-        handler_func = _get_migration_handler(handler_name)
-        ticket_data = handler_func(ticket_data)
+        ticket_data = migrate_v1_to_v2(ticket_data)
 
         # 更新版本欄位
         ticket_data["protocol_version"] = target_version
@@ -160,33 +171,3 @@ def migrate_v1_to_v2(ticket_data: Dict[str, Any]) -> Dict[str, Any]:
         migrated_data["tdd_stage"] = []
 
     return migrated_data
-
-
-def _get_migration_handler(handler_name: str) -> callable:
-    """
-    取得指定名稱的遷移處理函式。
-
-    此函式提供動態載入遷移處理器的機制，支援未來擴展更多版本遷移。
-
-    Args:
-        handler_name: 遷移處理器名稱，如 "migrate_v1_to_v2"
-
-    Returns:
-        callable: 對應的遷移函式
-
-    Raises:
-        ProtocolVersionError: 找不到對應的處理器
-
-    範例：
-        >>> handler = _get_migration_handler("migrate_v1_to_v2")
-        >>> handler.__name__
-        'migrate_v1_to_v2'
-    """
-    handlers: Dict[str, callable] = {
-        "migrate_v1_to_v2": migrate_v1_to_v2,
-    }
-
-    if handler_name not in handlers:
-        raise ProtocolVersionError(f"未知的遷移處理器: {handler_name}")
-
-    return handlers[handler_name]

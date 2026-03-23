@@ -323,6 +323,15 @@ class CreateMessages:
         "   建議：執行 /ticket track list 查看所有現有 Ticket 後再決定"
     )
 
+    # 問題 4 新增常數（0.1.2-W4-001.1）
+    EXEMPTED_PARTIAL_PARAMS_ERROR = (
+        "[ERROR] 豁免條件下三個參數必須全部提供或全部省略"
+    )
+
+    TICKET_LOCATION = "   Location: {ticket_path}"
+
+    PARENT_UPDATED = "   Parent: {parent_id} (已更新 children)"
+
 
 class FieldsMessages:
     """fields.py 相關訊息"""
