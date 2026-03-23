@@ -46,7 +46,7 @@ try:
         is_allowed_branch,
         is_in_worktree,
         run_git_command,
-        get_uncommitted_files,
+        get_uncommitted_status_lines,
     )
 except ImportError as e:
     # #11 修復：ImportError 不應 exit(1) 阻斷整個 session
@@ -68,7 +68,7 @@ except ImportError as e:
         return branch in ["main", "master", "develop"]
     def run_git_command(args, cwd=None, timeout=10):
         return False, "git_utils not available"
-    def get_uncommitted_files():
+    def get_uncommitted_status_lines():
         return []  # 無法查詢時回傳空列表，功能降級
 
 
@@ -80,25 +80,25 @@ def _report_uncommitted_changes(logger: logging.Logger) -> None:
     """
     偵測並報告未提交的變更
 
-    使用 get_uncommitted_files() 取得未提交變更列表，
+    使用 get_uncommitted_status_lines() 取得未提交變更狀態行，
     如果超過 MAX_UNCOMMITTED_FILES_DISPLAY 個檔案，只顯示前 N 個並提示還有多少個。
     如果沒有未提交變更，則不輸出任何內容。
 
     Args:
         logger: logging 實例，用於記錄錯誤
     """
-    files = get_uncommitted_files()
+    status_lines = get_uncommitted_status_lines()
 
-    if not files:
+    if not status_lines:
         return
 
-    total_changes = len(files)
+    total_changes = len(status_lines)
 
     # 輸出未提交變更摘要
     hook_output(f"[branch-status-reminder] 偵測到 {total_changes} 個未提交變更：", "info")
 
     # 列出前 N 個變更
-    for line in files[:MAX_UNCOMMITTED_FILES_DISPLAY]:
+    for line in status_lines[:MAX_UNCOMMITTED_FILES_DISPLAY]:
         hook_output(f"   {line}", "info")
 
     # 如果超過上限，顯示還有多少個
