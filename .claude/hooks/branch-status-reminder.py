@@ -72,47 +72,38 @@ except ImportError as e:
         return []  # 無法查詢時回傳空列表，功能降級
 
 
+# 顯示設定常數
+MAX_UNCOMMITTED_FILES_DISPLAY = 10  # 未提交變更顯示上限，超過則折疊顯示
+
+
 def _report_uncommitted_changes(logger: logging.Logger) -> None:
     """
     偵測並報告未提交的變更
 
-    執行 git status --porcelain，列出所有未提交變更
-    如果超過 10 個檔案，只顯示前 10 個並提示還有多少個
-    如果沒有未提交變更，則不輸出任何內容
+    使用 get_uncommitted_files() 取得未提交變更列表，
+    如果超過 MAX_UNCOMMITTED_FILES_DISPLAY 個檔案，只顯示前 N 個並提示還有多少個。
+    如果沒有未提交變更，則不輸出任何內容。
 
     Args:
         logger: logging 實例，用於記錄錯誤
     """
-    success, output = run_git_command(["status", "--porcelain"])
+    files = get_uncommitted_files()
 
-    if not success:
-        # git 命令失敗時靜默，不影響 hook 正常流程
-        logger.debug(f"Failed to run git status: {output}")
+    if not files:
         return
 
-    if not output:
-        # 沒有未提交變更
-        return
-
-    # 解析 git status --porcelain 輸出
-    lines = output.split("\n")
-    lines = [line for line in lines if line.strip()]  # 過濾空行
-
-    total_changes = len(lines)
-    if total_changes == 0:
-        return
+    total_changes = len(files)
 
     # 輸出未提交變更摘要
     hook_output(f"[branch-status-reminder] 偵測到 {total_changes} 個未提交變更：", "info")
 
-    # 列出前 10 個變更
-    max_display = 10
-    for i, line in enumerate(lines[:max_display]):
+    # 列出前 N 個變更
+    for line in files[:MAX_UNCOMMITTED_FILES_DISPLAY]:
         hook_output(f"   {line}", "info")
 
-    # 如果超過 10 個，顯示還有多少個
-    if total_changes > max_display:
-        remaining = total_changes - max_display
+    # 如果超過上限，顯示還有多少個
+    if total_changes > MAX_UNCOMMITTED_FILES_DISPLAY:
+        remaining = total_changes - MAX_UNCOMMITTED_FILES_DISPLAY
         hook_output(f"   ...還有 {remaining} 個", "info")
 
     hook_output("[提示] 這些變更可能來自其他 session，建議先確認後再開始工作", "info")
