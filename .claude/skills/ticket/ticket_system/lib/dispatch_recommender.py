@@ -22,6 +22,9 @@ from ticket_system.lib.registry_loader import load_registry
 
 REGISTRY_PATH = Path(__file__).parent.parent.parent / "agents" / "registry.yaml"
 
+# 評分常數
+MAX_SCORE = 60  # artifact_match(40) + phase_match(20)
+
 
 class DispatchRecommender:
     """派發建議引擎"""
@@ -66,9 +69,10 @@ class DispatchRecommender:
     ) -> Tuple[float, str]:
         """
         計算 agent 的推薦分數
-        
+
         評分公式：
-        total = artifact_match_score + phase_match_score + precondition_score - penalties
+        total = artifact_match_score(40) + phase_match_score(20)
+        最高分：60
         """
         score = 0.0
         reason_parts = []
@@ -87,15 +91,7 @@ class DispatchRecommender:
             if tdd_phase in tdd_phases:
                 score += 20.0
                 reason_parts.append("phase match: 20")
-        
-        # 3. Preconditions（30 分，只在實際有不可驗證的條件時才加分）
-        preconditions = config.get("preconditions", [])
-        if preconditions:
-            # 只有當 preconditions 存在且可驗證時才加分
-            # 簡化版本：認為如果有 preconditions 但無法驗證，則不加分
-            score += 0.0  # 改為不無條件加分
-            # 實際實作應檢查是否能驗證，如果能才加分
-        
+
         reason = ", ".join(reason_parts) if reason_parts else "no match"
         return score, reason
 
@@ -124,7 +120,7 @@ def format_recommendation(
     
     for idx, (agent_name, score, reason) in enumerate(candidates, 1):
         lines.append(f"{idx}. {agent_name}")
-        lines.append(f"   Score: {score:.1f}/100")
+        lines.append(f"   Score: {score:.1f}/{MAX_SCORE}")
         lines.append(f"   Reason: {reason}\n")
     
     return "\n".join(lines)
