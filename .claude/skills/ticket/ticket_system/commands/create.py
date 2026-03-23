@@ -24,6 +24,7 @@ from ticket_system.lib.ticket_loader import (
 from ticket_system.lib.ticket_validator import (
     validate_ticket_id,
     extract_wave_from_ticket_id,
+    validate_blocked_by,
 )
 from ticket_system.lib.messages import (
     ErrorMessages,
@@ -38,6 +39,7 @@ from ticket_system.lib.command_lifecycle_messages import (
     CreateMessages,
     format_msg,
 )
+from ticket_system.lib.constants import COGNITIVE_LOAD_FILE_THRESHOLD
 from ticket_system.lib.parallel_analyzer import ParallelAnalyzer
 from ticket_system.lib.tdd_sequence import suggest_tdd_sequence
 from ticket_system.lib.ticket_builder import (
@@ -314,6 +316,27 @@ def execute(args: argparse.Namespace) -> int:
     print(f"   Location: {ticket_path}")
     print(format_msg(CreateMessages.TASK_TYPE_LABEL, task_type=args.type or 'IMP'))
 
+    # 變更 2：blockedBy 存在性驗證
+    if blocked_by:
+        for bid in blocked_by:
+            blocked_ticket = load_ticket(version, bid)
+            if blocked_ticket is None:
+                print(format_warning(
+                    f"blockedBy 中的 {bid} 不存在，請確認 ID 是否正確"
+                ))
+
+    # 變更 3：validate_blocked_by() 循環偵測前移
+    if blocked_by:
+        from ticket_system.lib.ticket_loader import list_tickets
+        all_tickets = list_tickets(version)
+        valid, cycle_msg, cycle_path = validate_blocked_by(
+            ticket_id,
+            blocked_by,
+            all_tickets
+        )
+        if not valid and cycle_msg:
+            print(format_warning(cycle_msg))
+
     # 如果有 parent，更新 parent 的 children
     parent_info: Optional[Dict[str, Any]] = None
     if args.parent:
@@ -371,6 +394,9 @@ def _print_create_checklist(
 
     # 拆分提示
     print(CreateMessages.SPLIT_NEEDED)
+
+    # 變更 4：初步認知負擔評估
+    _print_cognitive_load_assessment(new_ticket)
 
     # 驗收條件格式提示
     print(CreateMessages.ACCEPTANCE_4V_CHECK)
@@ -502,6 +528,38 @@ def _print_parallel_analysis_result(
 
     print(f"理由: {analysis_result.reason}")
     print()
+
+
+def _print_cognitive_load_assessment(
+    new_ticket: Optional[Dict[str, Any]] = None,
+) -> None:
+    """
+    執行初步認知負擔評估（基於 where_files）。
+
+    邏輯：
+    - 若 where_files 為空或「待定義」，輸出提示「尚未填寫」
+    - 若 where_files > 5 個，輸出 WARNING「認知負擔可能超閾值」
+    - 否則無輸出（認知負擔正常）
+
+    Args:
+        new_ticket: 新建立的 Ticket 資訊
+    """
+    if not new_ticket:
+        return
+
+    where_files = new_ticket.get("where", {}).get("files") or []
+
+    # 若 where_files 為空或「待定義」
+    if not where_files or where_files == ["待定義"]:
+        print(format_warning(CreateMessages.COGNITIVE_LOAD_FILES_UNDEFINED_WARNING))
+        return
+
+    # 若 where_files > 閾值，輸出警告
+    if len(where_files) > COGNITIVE_LOAD_FILE_THRESHOLD:
+        print(format_warning(
+            CreateMessages.COGNITIVE_LOAD_FILE_THRESHOLD_WARNING,
+            threshold=COGNITIVE_LOAD_FILE_THRESHOLD
+        ))
 
 
 def register(subparsers: argparse._SubParsersAction) -> None:

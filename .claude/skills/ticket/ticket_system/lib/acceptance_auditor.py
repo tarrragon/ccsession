@@ -15,7 +15,7 @@ from datetime import datetime
 
 from .ticket_loader import load_ticket, resolve_version, get_project_root, get_tickets_dir
 from .parser import parse_frontmatter
-from .constants import STATUS_COMPLETED
+from .constants import STATUS_COMPLETED, VAGUE_ACCEPTANCE_WORDS
 
 
 # ============================================================
@@ -377,6 +377,70 @@ def validate_acceptance_consistency(
 
 
 # ============================================================
+# Step 4.5: 含糊驗收條件偵測
+# ============================================================
+
+def detect_vague_acceptance(
+    acceptance_list: Optional[List[str]],
+) -> Tuple[bool, List[str]]:
+    """
+    偵測驗收條件中的模糊詞彙
+
+    掃描驗收條件中的模糊詞彙清單。若條件只包含模糊詞而無量化指標，輸出 WARNING。
+    判斷邏輯：條件文字（去除 `[ ]` 前綴後）若只由模糊詞 + 連接詞組成，
+    沒有數字、百分比、具體檔案名、具體功能名等量化指標，則標記為 vague。
+
+    Args:
+        acceptance_list: 驗收條件清單（YAML list 或 None）
+
+    Returns:
+        Tuple[bool, List[str]]: (無嚴重問題, 警告訊息清單)
+        - (True, []): 無模糊詞或有量化指標
+        - (True, [warnings...]): 有模糊詞但無嚴重問題（只警告）
+    """
+    if not acceptance_list or len(acceptance_list) == 0:
+        return True, []
+
+    warnings = []
+
+    for idx, condition in enumerate(acceptance_list, 1):
+        if not isinstance(condition, str):
+            continue
+
+        # 移除 [ ] 或 [x] 前綴
+        cleaned = condition.strip()
+        if cleaned.startswith("[") and "]" in cleaned:
+            # 移除 [ ] 或 [x] 及其後的空白
+            cleaned = cleaned.split("]", 1)[1].strip()
+
+        # 判斷是否只包含模糊詞
+        has_vague_word = False
+        vague_found = []
+
+        for vague_word in VAGUE_ACCEPTANCE_WORDS:
+            if vague_word in cleaned:
+                has_vague_word = True
+                vague_found.append(vague_word)
+
+        # 若有模糊詞，檢查是否有量化指標
+        if has_vague_word:
+            # 檢查是否包含量化指標：數字、百分比、具體名稱等
+            has_metrics = bool(re.search(r'\d+|%|個|次|項|檔|行|秒|分|小時|天', cleaned))
+
+            # 若無量化指標，標記為含糊
+            if not has_metrics:
+                vague_preview = cleaned[:50]
+                vague_words_str = ", ".join(set(vague_found))
+                warnings.append(
+                    f"AC-{idx} 含糊：「{vague_preview}...」只有模糊詞（{vague_words_str}），"
+                    f"建議補充量化指標（如：「5 個案例」「100% 通過」等）"
+                )
+
+    # 警告不導致失敗，只返回 True + 警告清單
+    return True, warnings
+
+
+# ============================================================
 # Step 5: 後續任務銜接檢查
 # ============================================================
 
@@ -711,6 +775,14 @@ def run_audit(ticket_id: str, version: Optional[str] = None) -> AuditReport:
         name="驗收條件一致性檢查",
         passed=consistency_passed,
         warnings=consistency_warnings
+    ))
+
+    # Step 4.5: 含糊驗收條件偵測
+    vague_passed, vague_warnings = detect_vague_acceptance(acceptance)
+    report.add_step(AuditStep(
+        name="含糊驗收條件偵測",
+        passed=vague_passed,
+        warnings=vague_warnings
     ))
 
     # Step 5: 後續任務銜接檢查

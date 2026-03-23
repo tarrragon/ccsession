@@ -279,6 +279,23 @@ class CreateMessages:
         "       欄位：{field_name}"
     )
 
+    # 含糊驗收條件警告（W2-001.2 變更 1）
+    VAGUE_ACCEPTANCE_WARNING = (
+        "[WARNING] 驗收條件含有模糊詞彙，建議補充量化指標\n"
+        "          模糊詞彙：{vague_words}\n"
+        "          範例：「完成」→「新增 5 個測試案例」，「通過」→「100% 測試通過」"
+    )
+
+    # 認知負擔評估警告（W2-001.2 變更 4）
+    COGNITIVE_LOAD_FILE_THRESHOLD_WARNING = (
+        "[WARNING] 修改檔案數 > {threshold}，認知負擔可能超閾值，"
+        "建議考慮拆分子任務"
+    )
+    COGNITIVE_LOAD_FILES_UNDEFINED_WARNING = (
+        "[WARNING] 尚未填寫影響檔案清單（where_files），無法評估認知負擔。"
+        "請使用 /ticket fields update <ticket-id> where <files> 補充"
+    )
+
 
 class FieldsMessages:
     """fields.py 相關訊息"""
