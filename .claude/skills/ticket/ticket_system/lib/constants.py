@@ -171,6 +171,15 @@ NON_CHAIN_DIRECTION_TYPES: tuple = ("context-refresh",)
 TDD_PHASES: List[str] = ["phase1", "phase2", "phase3a", "phase3b", "phase4"]
 
 # TDD Phase 顯示名稱映射（包含代理人名稱）
+#
+# ⚠️ 同步契約：此映射與 ticket_system/lib/tdd_sequence.py 中的 PHASE_LABELS 有同步關係
+#   - PHASE_LABELS 的鍵集必須是 TDD_PHASE_DISPLAY 的子集
+#   - 當修改此映射時，必須檢查 PHASE_LABELS 是否需要同步：
+#     1. 若新增/刪除 phase1-phase4 的條目，必須同時更新 PHASE_LABELS
+#     2. 若新增 phase0/phase4a/phase4b/phase4c，可不更新 PHASE_LABELS（非核心 TDD 序列）
+#   - 修改 phase1-phase4 的顯示文字時，PHASE_LABELS 中的對應值可保持簡潔
+#   - 詳見 .claude/rules/core/decision-tree.md（第五層 TDD 階段判斷）和 tdd_sequence.py
+#
 TDD_PHASE_DISPLAY: Dict[str, str] = {
     "phase0": "Phase 0 SA 前置審查",
     "phase1": "Phase 1 - 功能設計 (lavender)",

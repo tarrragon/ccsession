@@ -527,6 +527,149 @@ def _parse_cli_args_to_config(
     }
 
 
+def _validate_before_persist(
+    version: str,
+    ticket_id: str,
+    config: TicketConfig,
+) -> bool:
+    """驗證層：執行持久化前的所有驗證。
+
+    負責：
+    1. 驗證 blockedBy 存在性和循環依賴
+    2. 重複偵測
+
+    Args:
+        version: 版本號
+        ticket_id: Ticket ID
+        config: Ticket 配置
+
+    Returns:
+        True 表示驗證通過，False 表示驗證失敗
+    """
+    blocked_by = config.get("blocked_by")
+
+    # 驗證 blockedBy 存在性
+    if not _validate_blocked_by_references(version, ticket_id, blocked_by):
+        return False
+
+    # 重複偵測
+    _detect_duplicate_tickets(
+        version=version,
+        new_title=config["title"],
+        new_what=config["what"],
+        new_ticket_id=ticket_id,
+    )
+
+    return True
+
+
+def _build_and_save_ticket(
+    version: str,
+    ticket_id: str,
+    config: TicketConfig,
+) -> Dict[str, Any]:
+    """持久化層：建構並儲存 Ticket。
+
+    負責：
+    1. 建立 Ticket frontmatter 和 body
+    2. 建立相應目錄
+    3. 儲存 Ticket 到檔案系統
+
+    Args:
+        version: 版本號
+        ticket_id: Ticket ID
+        config: Ticket 配置
+
+    Returns:
+        建立的 Ticket 物件（含 frontmatter 和 body）
+    """
+    frontmatter = create_ticket_frontmatter(config)
+    body = create_ticket_body(frontmatter["what"], frontmatter["who"]["current"])
+    ticket = frontmatter.copy()
+    ticket["_body"] = body
+
+    tickets_dir = get_tickets_dir(version)
+    tickets_dir.mkdir(parents=True, exist_ok=True)
+    ticket_path = get_ticket_path(version, ticket_id)
+    save_ticket(ticket, ticket_path)
+
+    print(format_info(InfoMessages.TICKET_CREATED, ticket_id=ticket_id))
+    print(format_msg(CreateMessages.TICKET_LOCATION, ticket_path=ticket_path))
+    print(format_msg(CreateMessages.TASK_TYPE_LABEL, task_type=config["ticket_type"]))
+
+    return ticket
+
+
+def _update_parent_and_get_parent_info(
+    args: argparse.Namespace,
+    version: str,
+    ticket_id: str,
+) -> Optional[Dict[str, Any]]:
+    """關係層：更新父 Ticket 並取得其資訊。
+
+    負責：
+    1. 若為子任務，更新父 Ticket 的 children 欄位
+    2. 載入並回傳父 Ticket 資訊（用於並行分析）
+
+    Args:
+        args: 命令行參數（含 parent 欄位）
+        version: 版本號
+        ticket_id: 新建立的 Ticket ID
+
+    Returns:
+        父 Ticket 資訊（Dict）或 None（非子任務）
+    """
+    parent_info: Optional[Dict[str, Any]] = None
+
+    if args.parent:
+        if update_parent_children(version, args.parent, ticket_id):
+            print(format_msg(CreateMessages.PARENT_UPDATED, parent_id=args.parent))
+            parent_info = load_ticket(version, args.parent)
+        else:
+            print(format_warning(
+                WarningMessages.PARENT_UPDATE_FAILED,
+                parent_id=args.parent,
+                child_id=ticket_id
+            ))
+
+    return parent_info
+
+
+def _report_creation_success(
+    ticket_id: str,
+    config: TicketConfig,
+    args: argparse.Namespace,
+    ticket: Dict[str, Any],
+    parent_info: Optional[Dict[str, Any]],
+    tdd_result: Any,
+) -> None:
+    """報告層：輸出建立成功的完整報告。
+
+    負責：
+    1. 輸出建立時檢查清單
+    2. 輸出 TDD 順序建議
+    3. 輸出並行分析結果（如適用）
+
+    Args:
+        ticket_id: Ticket ID
+        config: Ticket 配置
+        args: 命令行參數（含 parent 欄位）
+        ticket: 新建立的 Ticket 物件
+        parent_info: 父 Ticket 資訊（若為子任務）
+        tdd_result: TDD 序列建議結果
+    """
+    used_default_acceptance = config.get("acceptance") is None
+    _print_create_checklist(
+        ticket_id=ticket_id,
+        ticket_type=config["ticket_type"],
+        parent_id=args.parent,
+        parent_info=parent_info,
+        new_ticket=ticket,
+        used_default_acceptance=used_default_acceptance,
+        tdd_result=tdd_result,
+    )
+
+
 def _persist_and_report(
     args: argparse.Namespace,
     config: TicketConfig,
@@ -534,9 +677,13 @@ def _persist_and_report(
     ticket_id: str,
     tdd_result: Any,
 ) -> int:
-    """Step 3: 驗證 blockedBy + 重複偵測 + 驗證持久化 + 回報結果。
+    """Step 3: 協調層 — 驗證、持久化、更新關係、回報結果。
 
-    負責驗證、持久化 Ticket 資訊並輸出結果報告。
+    協調四個子函式完成 Ticket 建立流程：
+    1. 驗證層：檢查 blockedBy 和重複偵測
+    2. 持久化層：建構並儲存 Ticket
+    3. 關係層：更新父子關係
+    4. 報告層：輸出建立報告
 
     Args:
         args: 命令行參數
@@ -548,55 +695,23 @@ def _persist_and_report(
     Returns:
         0（成功）或 1（失敗）
     """
-    blocked_by = config.get("blocked_by")
-
-    # 驗證 blockedBy 存在性
-    if not _validate_blocked_by_references(version, ticket_id, blocked_by):
+    # 步驟 1：驗證
+    if not _validate_before_persist(version, ticket_id, config):
         return 1
 
-    # 重複偵測
-    _detect_duplicate_tickets(
-        version=version,
-        new_title=config["title"],
-        new_what=config["what"],
-        new_ticket_id=ticket_id,
-    )
+    # 步驟 2：持久化
+    ticket = _build_and_save_ticket(version, ticket_id, config)
 
-    # 建立 Ticket 物件
-    frontmatter = create_ticket_frontmatter(config)
-    body = create_ticket_body(frontmatter["what"], frontmatter["who"]["current"])
-    ticket = frontmatter.copy()
-    ticket["_body"] = body
+    # 步驟 3：更新關係
+    parent_info = _update_parent_and_get_parent_info(args, version, ticket_id)
 
-    # 儲存
-    tickets_dir = get_tickets_dir(version)
-    tickets_dir.mkdir(parents=True, exist_ok=True)
-    ticket_path = get_ticket_path(version, ticket_id)
-    save_ticket(ticket, ticket_path)
-
-    # 輸出建立訊息
-    print(format_info(InfoMessages.TICKET_CREATED, ticket_id=ticket_id))
-    print(format_msg(CreateMessages.TICKET_LOCATION, ticket_path=ticket_path))
-    print(format_msg(CreateMessages.TASK_TYPE_LABEL, task_type=config["ticket_type"]))
-
-    # 如果有 parent，更新 parent 的 children
-    parent_info: Optional[Dict[str, Any]] = None
-    if args.parent:
-        if update_parent_children(version, args.parent, ticket_id):
-            print(format_msg(CreateMessages.PARENT_UPDATED, parent_id=args.parent))
-            parent_info = load_ticket(version, args.parent)
-        else:
-            print(format_warning(WarningMessages.PARENT_UPDATE_FAILED, parent_id=args.parent, child_id=ticket_id))
-
-    # 顯示建立時檢查清單
-    used_default_acceptance = config.get("acceptance") is None
-    _print_create_checklist(
+    # 步驟 4：回報結果
+    _report_creation_success(
         ticket_id=ticket_id,
-        ticket_type=config["ticket_type"],
-        parent_id=args.parent,
+        config=config,
+        args=args,
+        ticket=ticket,
         parent_info=parent_info,
-        new_ticket=ticket,
-        used_default_acceptance=used_default_acceptance,
         tdd_result=tdd_result,
     )
 
