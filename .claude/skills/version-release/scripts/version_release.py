@@ -383,7 +383,7 @@ def check_worklog_completed(version: str) -> Tuple[bool, List[str]]:
 
             # 檢查 Phase 完成情況（多 Wave 版本可跳過）
             # 若工作日誌含 "status" 欄位標記為 completed，視為非 TDD 版本，跳過 Phase 檢查
-            if re.search(r"^status:\s*completed", content, re.MULTILINE):
+            if re.search(r"^status:\s*completed|^completed$", content, re.MULTILINE):
                 pass  # 非 TDD 版本，Phase 檢查跳過
             else:
                 phases = {
@@ -576,7 +576,14 @@ def check_previous_versions_completed(version: str) -> Tuple[bool, List[str]]:
         pending_count = 0
         in_progress_count = 0
 
+        # 排除 TDD Phase 附件檔案（非獨立 Ticket）
+        tdd_suffixes = ("-phase1-design", "-phase2-test", "-phase3a-strategy",
+                        "-phase3b-", "-phase4-", "-refactor", "-analysis",
+                        "-feature-spec", "-feature-design", "-test-design",
+                        "-test-case", "-execution-report", "-execution-log")
         for ticket_file in tickets_dir.glob("*.md"):
+            if any(s in ticket_file.stem for s in tdd_suffixes):
+                continue
             try:
                 with open(ticket_file, encoding="utf-8") as f:
                     content = f.read()
@@ -587,7 +594,9 @@ def check_previous_versions_completed(version: str) -> Tuple[bool, List[str]]:
                 if not status_match:
                     continue
                 status = status_match.group(1).strip()
-                # 有 completed_at 欄位的視為已完成（即使 status 未同步更新）
+                # 已完成的 Ticket 跳過（status: completed 或有 completed_at 欄位）
+                if status == "completed":
+                    continue
                 has_completed_at = re.search(r"completed_at:", frontmatter) is not None
                 if has_completed_at:
                     continue
