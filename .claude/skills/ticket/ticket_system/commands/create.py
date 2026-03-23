@@ -262,7 +262,13 @@ def execute(args: argparse.Namespace) -> int:
     if decision_tree_path is False:
         return 1
 
+    # 如果是子任務，載入父 Ticket 以繼承欄位
+    parent_ticket: Optional[Dict[str, Any]] = None
+    if args.parent:
+        parent_ticket = load_ticket(version, args.parent)
+
     # 建立配置
+    # 注意：子任務可從父 Ticket 繼承 where_layer 和 why，但 CLI 參數優先級更高
     config: TicketConfig = {
         "ticket_id": ticket_id,
         "version": version,
@@ -270,12 +276,12 @@ def execute(args: argparse.Namespace) -> int:
         "title": args.title or f"{args.action} {args.target}",
         "ticket_type": ticket_type,
         "priority": args.priority or "P2",
-        "who": args.who or "pending",
+        "who": args.who or (parent_ticket.get("who", {}).get("current") if parent_ticket else "pending"),
         "what": args.what or f"{args.action} {args.target}",
         "when": args.when or "待定義",
-        "where_layer": args.where_layer or "待定義",
+        "where_layer": args.where_layer or (parent_ticket.get("where", {}).get("layer") if parent_ticket else "待定義"),
         "where_files": where_files,
-        "why": args.why or "待定義",
+        "why": args.why or (parent_ticket.get("why") if parent_ticket else "待定義"),
         "how_task_type": args.how_type or "Implementation",
         "how_strategy": args.how_strategy or "待定義",
         "parent_id": args.parent,
@@ -319,12 +325,15 @@ def execute(args: argparse.Namespace) -> int:
             print(format_warning(WarningMessages.PARENT_UPDATE_FAILED, parent_id=args.parent))
 
     # 顯示建立時檢查清單
+    # 判斷是否使用了預設驗收條件
+    used_default_acceptance = acceptance is None
     _print_create_checklist(
         ticket_id=ticket_id,
         ticket_type=args.type or "IMP",
         parent_id=args.parent,
         parent_info=parent_info,
-        new_ticket=ticket
+        new_ticket=ticket,
+        used_default_acceptance=used_default_acceptance
     )
 
     return 0
@@ -336,6 +345,7 @@ def _print_create_checklist(
     parent_id: Optional[str] = None,
     parent_info: Optional[Dict[str, Any]] = None,
     new_ticket: Optional[Dict[str, Any]] = None,
+    used_default_acceptance: bool = False,
 ) -> None:
     """印出建立時的檢查清單、TDD 順序建議和並行分析結果。
 
@@ -345,6 +355,7 @@ def _print_create_checklist(
         parent_id: 父 Ticket ID（如果是子任務）
         parent_info: 父 Ticket 的資訊（用於並行分析）
         new_ticket: 新建立的 Ticket 資訊（用於並行分析）
+        used_default_acceptance: 是否使用了預設驗收條件
     """
     print()
     print(SEPARATOR_PRIMARY)
@@ -364,6 +375,10 @@ def _print_create_checklist(
     # 驗收條件格式提示
     print(CreateMessages.ACCEPTANCE_4V_CHECK)
     print(CreateMessages.ACCEPTANCE_4V_DESC)
+
+    # 如果使用了預設驗收條件，輸出 WARNING
+    if used_default_acceptance:
+        print(format_warning(CreateMessages.DEFAULT_ACCEPTANCE_WARNING))
 
     # 依賴提示
     print(CreateMessages.BLOCKED_BY_CHECK)

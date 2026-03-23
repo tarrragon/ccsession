@@ -219,29 +219,28 @@ class TestGetDefaultAcceptanceCriteria:
     def test_get_default_acceptance_criteria_imp(self):
         """Given: ticket_type = "IMP"
         When: 呼叫 get_default_acceptance_criteria("IMP")
-        Then: 返回 ["任務實作完成", "相關測試通過", "無程式碼品質警告"]
+        Then: 返回包含量化佔位符的實作驗收條件
         """
         result = get_default_acceptance_criteria("IMP")
-        assert result == ["任務實作完成", "相關測試通過", "無程式碼品質警告"]
+        assert len(result) == 3
+        assert "指定功能（{feature_name}）實作符合設計規格" in result
+        assert any("相關測試 100% 通過" in item for item in result)
+        assert any("0 issues" in item for item in result)
 
     def test_get_default_acceptance_criteria_ana(self):
         """Given: ticket_type = "ANA"（分析 Ticket）
         When: 呼叫 get_default_acceptance_criteria("ANA")
-        Then: 返回包含分析結論和防護 Ticket 相關項目的驗收條件：
-          - 分析報告完成
-          - 根因已識別
-          - 改善方案已提出
-          - [ ] 分析結論已建立修復 Ticket（症狀修復）
-          - [ ] 根因已建立防護 Ticket（機制防護）
-          - [ ] 後續 Ticket 已記錄在 children 或 spawned_tickets
+        Then: 返回包含結構化分析步驟和防護 Ticket 相關項目的驗收條件
         """
         result = get_default_acceptance_criteria("ANA")
-        assert "分析報告完成" in result
-        assert "根因已識別" in result
-        assert "改善方案已提出" in result
-        assert "[ ] 分析結論已建立修復 Ticket（症狀修復）" in result
-        assert "[ ] 根因已建立防護 Ticket（機制防護）" in result
-        assert "[ ] 後續 Ticket 已記錄在 children 或 spawned_tickets" in result
+        assert len(result) == 6
+        # 檢查關鍵詞而不是完全匹配，因為條件包含結構化描述
+        assert any("分析報告已撰寫" in item for item in result)
+        assert any("根因已通過" in item for item in result)
+        assert any("改善方案至少包含" in item for item in result)
+        assert any("症狀修復" in item for item in result)
+        assert any("機制防護" in item for item in result)
+        assert any("spawned_tickets" in item for item in result)
 
     def test_get_default_acceptance_criteria_unknown_type(self):
         """Given: ticket_type = "UNKNOWN"（未知類型）
@@ -254,11 +253,13 @@ class TestGetDefaultAcceptanceCriteria:
     def test_get_default_acceptance_criteria_doc(self):
         """Given: ticket_type = "DOC"
         When: 呼叫 get_default_acceptance_criteria("DOC")
-        Then: 返回文件類型的驗收條件
+        Then: 返回文件類型的量化驗收條件
         """
         result = get_default_acceptance_criteria("DOC")
-        assert "文件內容完整" in result
-        assert "格式符合規範" in result
+        assert len(result) == 3
+        assert any("文件內容完整" in item for item in result)
+        assert any("格式符合規範" in item for item in result)
+        assert any("無 TODO" in item for item in result)
 
 
 class TestCreateTicketFrontmatter:
@@ -305,7 +306,7 @@ class TestCreateTicketFrontmatter:
         """Given: 最小化的 TicketConfig（只有必填欄位）
         When: 呼叫 create_ticket_frontmatter(config)
         Then: 返回字典中所有可選欄位都有預設值：
-          - acceptance = ["[ ] 任務實作完成", "[ ] 相關測試通過", "[ ] 無程式碼品質警告"]（預設，帶 [ ] 前綴）
+          - acceptance = 包含量化佔位符的 IMP 型預設條件（帶 [ ] 前綴）
           - parent_id = None
           - tdd_stage = []
         """
@@ -328,7 +329,12 @@ class TestCreateTicketFrontmatter:
 
         frontmatter = create_ticket_frontmatter(config)
 
-        assert frontmatter["acceptance"] == ["[ ] 任務實作完成", "[ ] 相關測試通過", "[ ] 無程式碼品質警告"]
+        # 驗證是 IMP 預設條件的量化版本，均有 [ ] 前綴
+        acceptance = frontmatter["acceptance"]
+        assert len(acceptance) == 3
+        assert all(item.startswith("[ ]") for item in acceptance)
+        assert any("{feature_name}" in item for item in acceptance)
+        assert any("100% 通過" in item for item in acceptance)
         assert frontmatter["parent_id"] is None
         assert frontmatter["tdd_stage"] == []
 
@@ -413,11 +419,11 @@ class TestCreateTicketFrontmatter:
     def test_create_ticket_frontmatter_ana_type(self):
         """Given: TicketConfig ticket_type = "ANA"（分析 Ticket），無自訂驗收條件
         When: 呼叫 create_ticket_frontmatter(config)
-        Then: frontmatter["acceptance"] 應包含 ANA 類型的預設驗收條件：
-          - 分析報告完成、根因已識別、改善方案已提出（基礎驗收）
-          - [ ] 分析結論已建立修復 Ticket（症狀修復）
-          - [ ] 根因已建立防護 Ticket（機制防護）
-          - [ ] 後續 Ticket 已記錄在 children 或 spawned_tickets
+        Then: frontmatter["acceptance"] 應包含 ANA 類型的量化驗收條件：
+          - 分析報告已撰寫、根因已通過分析、改善方案至少包含兩個方向（基礎驗收）
+          - [ ] 分析結論已建立修復 Ticket（症狀修復），Ticket ID 已記錄在 spawned_tickets
+          - [ ] 根因已建立防護 Ticket（機制防護），Ticket ID 已記錄在 spawned_tickets
+          - [ ] 若無後續 Ticket 需建立，需說明理由
           （所有項目都以 [ ] 前綴開頭）
         """
         config: TicketConfig = {
@@ -439,23 +445,18 @@ class TestCreateTicketFrontmatter:
 
         frontmatter = create_ticket_frontmatter(config)
 
-        # 驗證所有 ANA 預設驗收條件都以 [ ] 開頭
-        expected_items = [
-            "分析報告完成",
-            "根因已識別",
-            "改善方案已提出",
-            "分析結論已建立修復 Ticket（症狀修復）",
-            "根因已建立防護 Ticket（機制防護）",
-            "後續 Ticket 已記錄在 children 或 spawned_tickets"
-        ]
-
+        # 驗證 ANA 預設驗收條件的關鍵元素
         acceptance = frontmatter["acceptance"]
-        assert len(acceptance) >= len(expected_items)
+        assert len(acceptance) == 6
+        assert all(item.startswith("[ ]") for item in acceptance)
 
-        # 驗證每個預期項目都在驗收條件中（以 [ ] 形式）
-        for item in expected_items:
-            assert any(item in ac for ac in acceptance), \
-                f"'{item}' 應該在驗收條件中，但未找到。驗收條件：{acceptance}"
+        # 驗證關鍵詞而不是完全匹配
+        assert any("分析報告已撰寫" in ac for ac in acceptance)
+        assert any("根因已通過" in ac for ac in acceptance)
+        assert any("改善方案至少包含" in ac for ac in acceptance)
+        assert any("症狀修復" in ac for ac in acceptance)
+        assert any("機制防護" in ac for ac in acceptance)
+        assert any("若無後續 Ticket" in ac for ac in acceptance)
 
     def test_create_ticket_frontmatter_doc_type(self):
         """Given: TicketConfig ticket_type = "DOC"（文件 Ticket）

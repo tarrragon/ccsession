@@ -212,6 +212,10 @@ class CreateMessages:
     SPLIT_NEEDED = "   [ ] 是否需要拆分子任務？（認知負擔 > 10）"
     ACCEPTANCE_4V_CHECK = "   [ ] 驗收條件是否符合 4V 原則？"
     ACCEPTANCE_4V_DESC = "       （可驗證、可量化、可追溯、可記錄）"
+    DEFAULT_ACCEPTANCE_WARNING = (
+        "[WARNING] 使用預設驗收條件模板。請修改為具體、可量化的驗收標準。\n"
+        "           使用 /ticket fields update <ticket-id> acceptance <criteria> 修改"
+    )
     BLOCKED_BY_CHECK = "   [ ] 是否有需要設定的 blockedBy？"
     DECISION_TREE_CHECK = "   [ ] 是否已填寫 decision_tree_path 欄位？"
     DECISION_TREE_DESC = "       （派發驗證必需）"
