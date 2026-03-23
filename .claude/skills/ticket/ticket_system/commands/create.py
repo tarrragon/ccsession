@@ -11,7 +11,6 @@ if __name__ == "__main__":
 
 
 import argparse
-from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from ticket_system.lib.ticket_loader import (
@@ -269,8 +268,6 @@ def _calculate_jaccard_similarity(text_a: str, text_b: str) -> float:
     Raises:
         TypeError: 如果輸入不是字串型別
     """
-    import re
-
     # 輸入驗證
     if not isinstance(text_a, str) or not isinstance(text_b, str):
         raise TypeError("text_a 和 text_b 必須是字串型別")
@@ -338,7 +335,9 @@ def _detect_duplicate_tickets(
         # 計算需排除的 ID 清單
         exclude_ids = {new_ticket_id}
         # 若是子任務，額外排除父任務 ID
-        if "." in new_ticket_id:
+        # 只檢查序號段（最後一個 - 之後）是否含 "."
+        seq_part = new_ticket_id.rsplit("-", 1)[-1]
+        if "." in seq_part:
             parent_id = new_ticket_id.rsplit(".", 1)[0]
             exclude_ids.add(parent_id)
 
