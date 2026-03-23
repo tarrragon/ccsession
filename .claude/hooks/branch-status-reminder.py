@@ -26,6 +26,8 @@ Hook Event: SessionStart
 """
 
 import sys
+import subprocess
+import logging
 from pathlib import Path
 
 # 添加 lib 目錄到路徑（M-003 標準化）
@@ -43,6 +45,7 @@ try:
         is_protected_branch,
         is_allowed_branch,
         is_in_worktree,
+        run_git_command,
     )
 except ImportError as e:
     # #11 修復：ImportError 不應 exit(1) 阻斷整個 session
@@ -62,6 +65,55 @@ except ImportError as e:
         return False
     def is_protected_branch(branch):
         return branch in ["main", "master", "develop"]
+    def run_git_command(args, cwd=None, timeout=10):
+        return False, "git_utils not available"
+
+
+def _report_uncommitted_changes(logger: logging.Logger) -> None:
+    """
+    偵測並報告未提交的變更
+
+    執行 git status --porcelain，列出所有未提交變更
+    如果超過 10 個檔案，只顯示前 10 個並提示還有多少個
+    如果沒有未提交變更，則不輸出任何內容
+
+    Args:
+        logger: logging 實例，用於記錄錯誤
+    """
+    success, output = run_git_command(["status", "--porcelain"])
+
+    if not success:
+        # git 命令失敗時靜默，不影響 hook 正常流程
+        logger.debug(f"Failed to run git status: {output}")
+        return
+
+    if not output:
+        # 沒有未提交變更
+        return
+
+    # 解析 git status --porcelain 輸出
+    lines = output.split("\n")
+    lines = [line for line in lines if line.strip()]  # 過濾空行
+
+    total_changes = len(lines)
+    if total_changes == 0:
+        return
+
+    # 輸出未提交變更摘要
+    hook_output(f"[branch-status-reminder] 偵測到 {total_changes} 個未提交變更：", "info")
+
+    # 列出前 10 個變更
+    max_display = 10
+    for i, line in enumerate(lines[:max_display]):
+        hook_output(f"   {line}", "info")
+
+    # 如果超過 10 個，顯示還有多少個
+    if total_changes > max_display:
+        remaining = total_changes - max_display
+        hook_output(f"   ...還有 {remaining} 個", "info")
+
+    hook_output("[提示] 這些變更可能來自其他 session，建議先確認後再開始工作", "info")
+    hook_output("", "info")
 
 
 def main():
@@ -92,6 +144,10 @@ def main():
     if not is_in_worktree() and is_protected_branch(current_branch):
         hook_output(f"[branch-status-reminder] 警告：當前在主倉庫的保護分支 '{current_branch}' 上", "warning")
         hook_output("", "info")
+
+        # 偵測未提交變更
+        _report_uncommitted_changes(logger)
+
         hook_output("建議操作：", "info")
         hook_output("  建立 feature worktree 進行開發：", "info")
         hook_output("  /worktree create <ticket-id>", "info")
