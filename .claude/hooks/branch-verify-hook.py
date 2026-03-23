@@ -57,6 +57,10 @@ def is_exempt_path_on_protected_branch(file_path: str) -> bool:
 
     適用場景：需要在 main 分支上更新規則、文件、Ticket 時
 
+    邏輯：
+    1. 如果 file_path 不在專案根目錄下（如 auto-memory 路徑），視為非專案檔案，直接豁免
+    2. 如果 file_path 在專案根目錄下，檢查是否匹配豁免路徑前綴或精確路徑
+
     Args:
         file_path: 要編輯的檔案路徑
 
@@ -79,13 +83,20 @@ def is_exempt_path_on_protected_branch(file_path: str) -> bool:
         "README.md",
     ]
 
+    project_root = get_project_root()
+
+    # 檢查 file_path 是否為絕對路徑且不在專案根目錄下
+    # 非專案檔案（如 auto-memory）不受保護分支限制，直接豁免
+    if file_path.startswith("/") and not file_path.startswith(project_root):
+        return True
+
     # 正規化路徑：將絕對路徑轉為相對於專案根目錄的路徑
     # Edit 工具傳入絕對路徑（如 /Users/.../project/.claude/rules/...），
     # 需轉為相對路徑（.claude/rules/...）才能正確比對豁免前綴
-    project_root = get_project_root()
     if file_path.startswith(project_root):
         normalized = file_path[len(project_root):].lstrip("/")
     else:
+        # file_path 已是相對路徑或其他格式，直接使用
         normalized = file_path.lstrip("/")
 
     # 檢查字首
@@ -154,10 +165,15 @@ def main() -> int:
             write_hook_output(output)
             return 0
 
+        # 判斷是否為專案檔案
+        project_root = get_project_root()
+        is_project_file = file_path.startswith(project_root) if file_path.startswith("/") else True
+
         logger.info(f"在保護分支 '{current_branch}' 上嘗試編輯非豁免檔案 {file_path}，操作已阻止")
-        output = create_pretooluse_output(
-            "deny",
-            f"""保護分支編輯被阻止
+
+        if is_project_file:
+            # 專案內的檔案
+            deny_message = f"""保護分支編輯被阻止
 
 對不起，當前在保護分支 '{current_branch}' 上，無法直接編輯檔案：
 {file_path}
@@ -172,8 +188,21 @@ def main() -> int:
 2. 或手動建立分支：
    git checkout -b feat/your-feature
 
-注意：.claude/ 和 docs/ 路徑在保護分支上允許直接編輯。"""
-        )
+豁免路徑（允許在保護分支上編輯）：
+- .claude/ （規則、配置、Hook、方法論）
+- docs/ （工作日誌、Ticket 檔案）
+- CLAUDE.md、README.md """
+        else:
+            # 非專案檔案（應該不會發生，但保留說明）
+            deny_message = f"""保護分支編輯被阻止
+
+對不起，當前在保護分支 '{current_branch}' 上，無法編輯檔案：
+{file_path}
+
+此操作可能涉及系統檔案或外部 auto-memory 的特殊處理。
+請切換到 feature 分支後重試。"""
+
+        output = create_pretooluse_output("deny", deny_message)
         write_hook_output(output)
         return 0
 
