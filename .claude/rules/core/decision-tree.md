@@ -291,6 +291,8 @@ Skill 是預建的專用工具，優先於代理人派發。
 
 > TDD 完整流程：.claude/rules/flows/tdd-flow.md
 
+> **Agent Registry 關係**（v0.1.2 規劃）：上方 TDD 階段代理人對應表是**決策規則**（本文件是決策引擎）。未來 Agent Registry（`.claude/agents/registry.yaml`）將作為**能力資料層**，提供機器可讀的代理人能力查詢和派發驗證，但不取代本文件的決策邏輯。架構分工：decision-tree（判斷需要什麼能力）→ registry（查詢誰有這個能力）→ Hook（驗證選定的 Agent 符合）。詳見：docs/work-logs/v0.1.1/tickets/0.1.1-W14-001-analysis.md（附錄：已確認設計決策）
+
 ---
 
 ## 第六層：事件回應流程
