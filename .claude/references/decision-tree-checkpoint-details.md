@@ -132,9 +132,11 @@ git branch -d {branch-name}
 
 ### 情境 C：ticket 已 completed + 同 Wave 無待處理任務（Wave 完成）
 
-**強制前置步驟：Wave 完成審查**
+**強制前置步驟：先審查，後路由**
 
-進入情境 C 時，在判斷 C1/C2 之前，**必須**先執行 `/parallel-evaluation` 對整個 Wave 的變更進行多視角審查。
+進入情境 C 時，**必須**依序完成以下三個步驟，才能進入 C1/C2 路由。禁止跳過審查直接路由。
+
+**Step 1：[強制] 執行多視角審查**
 
 ```
 同 Wave 無 pending 任務
@@ -142,23 +144,38 @@ git branch -d {branch-name}
     v
 [強制] /parallel-evaluation（Wave 完成審查）
     視角：Consistency（跨 Ticket 一致性）、Regression（迴歸風險）、Gap（盲點偵測）
-    |
-    v
-審查發現 → 建立 Ticket（/ticket create，不中斷，不詢問）
-    |
-    v
-[再次查詢] ticket track list --status pending（查詢版本其他 Wave）
 ```
 
 **觸發條件**：Wave 內所有 Ticket 已 completed（情境 C 的進入條件即為觸發條件）
 
 **審查範圍**：本 Wave 內所有已完成 Ticket 涉及的變更檔案
 
-**審查後處理**：
-- 審查發現問題 → 立即建立 Ticket（遵循 plan-to-ticket-flow 執行中額外發現規則）
-- 無問題發現 → 繼續 C1/C2 流程
+**Step 2：審查發現建立 Ticket 追蹤**
 
-**動作**：[再次查詢] `ticket track list --status pending`（查詢版本其他 Wave）
+```
+審查結果
+    |
+    +── 發現問題 → 立即建立 Ticket（/ticket create，不中斷，不詢問）
+    |               遵循 plan-to-ticket-flow 執行中額外發現規則
+    |
+    +── 無問題發現 → 繼續
+```
+
+**Step 3：AskUserQuestion #3（Wave 收尾確認）**
+
+```
+[再次查詢] ticket track list --status pending（查詢版本其他 Wave）
+    |
+    v
+進入 C1 或 C2 路由（見下方）
+```
+
+**禁止行為**：
+
+| 禁止 | 說明 |
+|------|------|
+| 跳過 Step 1 直接進入 C1/C2 | 必須先完成多視角審查 |
+| 審查發現問題但不建立 Ticket | 所有發現必須追蹤（quality-baseline 規則 5） |
 
 #### 情境 C1：版本有其他 Wave 的 pending 任務
 
@@ -296,5 +313,5 @@ ticket handoff --gc --execute
 
 ---
 
-**Last Updated**: 2026-03-17
-**Version**: 1.5.0 - 新增 Checkpoint 1.8 合併回 main 步驟
+**Last Updated**: 2026-03-23
+**Version**: 1.6.0 - 情境 C 重構為三步驟流程（先審查→建立 Ticket→後路由），明確禁止跳過審查

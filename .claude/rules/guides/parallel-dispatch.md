@@ -143,6 +143,18 @@
 
 **保留的事實驗證**：`git diff --stat` 驗證仍然保留，這是事實比對而非細節審查。
 
+### 多視角審查固定三人組（強制）
+
+Wave 完成審查和 parallel-evaluation 必須包含以下三個審查視角：
+
+| 審查者 | 視角 | 重點 |
+|--------|------|------|
+| code-reviewer | Bug/安全 | 邏輯錯誤、安全漏洞、程式碼品質 |
+| code-explorer | 架構/設計 | 職責分離、冗餘、擴展性、一致性 |
+| linux | 品味/簡潔 | 架構決策品質、good taste、零容忍複雜度 |
+
+**禁止行為**：省略任一審查者。三個視角互補，缺少任一會導致審查盲點。
+
 ---
 
 ## Commit 責任邊界
@@ -193,5 +205,5 @@
 
 ---
 
-**Last Updated**: 2026-03-20
-**Version**: 3.6.0 - 決策流程新增派發前複雜度關卡（Dispatch Complexity Gate），適用所有派發（0.1.1-W15-004）
+**Last Updated**: 2026-03-23
+**Version**: 3.7.0 - 新增多視角審查固定三人組（code-reviewer + code-explorer + linux 常駐審查委員）

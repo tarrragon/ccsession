@@ -388,7 +388,7 @@ Step 4: ticket track complete <id>
 | D（優先） | ticket 含 tdd_phase 欄位 | D1: Phase 1/2 → 全自動下一 Phase；D1a: Phase 3a → 3b 拆分評估（見 tdd-flow.md）後派發 3b；D2: Phase 3b → [自動檢查豁免條件] → 符合豁免 → 全自動 4b / 不符合 → #13（選擇 4a 或 4b）；D3a: 4a → 全自動 4b；D3b: 4b 標準 → 全自動 4c / 豁免 → /tech-debt-capture + #13；D3c: 4c → /tech-debt-capture + #13 |
 | A（#11a） | ticket 仍 in_progress | Context 刷新 Handoff |
 | B（#11b） | ticket completed + 同 Wave 有 pending | 任務切換 Handoff |
-| C | ticket completed + 同 Wave 無 pending | [強制] /parallel-evaluation Wave 審查 → C1: 有其他 Wave → #3a；C2: 全完成 → [強制] 版本收尾技術債整理（見 version-progression.md）→ /version-release check + #13 |
+| C | ticket completed + 同 Wave 無 pending | [強制] /parallel-evaluation Wave 審查（必須包含 linux 常駐審查委員，見 parallel-dispatch.md 多視角審查固定三人組）→ C1: 有其他 Wave → #3a；C2: 全完成 → [強制] 版本收尾技術債整理（見 version-progression.md）→ /version-release check + #13 |
 
 **與現有層級的銜接**：第四層（建立完成）→ Checkpoint 0；第五層（Phase 完成）→ Checkpoint 1；第六層（incident 完成）→ Checkpoint 3；第七層（complete）→ Checkpoint 1
 
@@ -469,5 +469,5 @@ Level 5: TDD 階段代理人 + thyme-python-developer
 
 ---
 
-**Last Updated**: 2026-03-21
-**Version**: 7.32.0 - 適用對象集中至頂部宣告，背景模式段落改引用 parallel-dispatch.md（0.1.1-W16-003）
+**Last Updated**: 2026-03-23
+**Version**: 7.33.0 - 情境 C Wave 審查補充 linux 常駐審查委員要求（多視角固定三人組）
