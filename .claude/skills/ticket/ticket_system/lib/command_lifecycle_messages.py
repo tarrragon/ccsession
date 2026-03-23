@@ -296,6 +296,9 @@ class CreateMessages:
         "請使用 /ticket fields update <ticket-id> where <files> 補充"
     )
 
+    # blockedBy 驗證錯誤訊息（Bug 1 修正）
+    BLOCKED_BY_NOT_FOUND = "[ERROR] blockedBy 中的 {bid} 不存在，請確認 ID 是否正確"
+
 
 class FieldsMessages:
     """fields.py 相關訊息"""

@@ -52,7 +52,57 @@ from ticket_system.lib.ticket_builder import (
     create_ticket_body,
     update_parent_children,
 )
+from ticket_system.lib.acceptance_auditor import detect_vague_acceptance
 from ticket_system.lib.ui_constants import SEPARATOR_PRIMARY
+
+
+def _validate_blocked_by_references(
+    version: str,
+    ticket_id: str,
+    blocked_by: Optional[List[str]],
+) -> bool:
+    """
+    驗證 blockedBy 欄位的存在性和循環依賴。
+
+    執行兩個驗證：
+    1. 存在性檢查：所有 blockedBy 中的 Ticket ID 必須存在
+    2. 循環依賴檢測：設定 blockedBy 不應產生循環依賴
+
+    Args:
+        version: Ticket 版本號
+        ticket_id: 當前要建立的 Ticket ID
+        blocked_by: blockedBy 欄位清單（可為 None）
+
+    Returns:
+        bool: True 表示驗證通過，False 表示有錯誤（已輸出錯誤訊息）
+    """
+    # Guard Clause：無 blockedBy 欄位
+    if not blocked_by:
+        return True
+
+    # 驗證 1：blockedBy 存在性檢查
+    for bid in blocked_by:
+        blocked_ticket = load_ticket(version, bid)
+        if blocked_ticket is None:
+            print(format_error(
+                CreateMessages.BLOCKED_BY_NOT_FOUND,
+                bid=bid
+            ))
+            return False
+
+    # 驗證 2：blockedBy 循環依賴檢測
+    from ticket_system.lib.ticket_loader import list_tickets
+    all_tickets = list_tickets(version)
+    valid, cycle_msg, cycle_path = validate_blocked_by(
+        ticket_id,
+        blocked_by,
+        all_tickets
+    )
+    if not valid and cycle_msg:
+        print(format_error(cycle_msg))
+        return False
+
+    return True
 
 
 def _validate_decision_tree_params(
@@ -305,6 +355,10 @@ def execute(args: argparse.Namespace) -> int:
     ticket = frontmatter.copy()
     ticket["_body"] = body
 
+    # Bug 1 修正：在 save_ticket 之前執行 blockedBy 驗證
+    if not _validate_blocked_by_references(version, ticket_id, blocked_by):
+        return 1
+
     # 儲存
     tickets_dir = get_tickets_dir(version)
     tickets_dir.mkdir(parents=True, exist_ok=True)
@@ -315,27 +369,6 @@ def execute(args: argparse.Namespace) -> int:
     print(format_info(InfoMessages.TICKET_CREATED, ticket_id=ticket_id))
     print(f"   Location: {ticket_path}")
     print(format_msg(CreateMessages.TASK_TYPE_LABEL, task_type=args.type or 'IMP'))
-
-    # 變更 2：blockedBy 存在性驗證
-    if blocked_by:
-        for bid in blocked_by:
-            blocked_ticket = load_ticket(version, bid)
-            if blocked_ticket is None:
-                print(format_warning(
-                    f"blockedBy 中的 {bid} 不存在，請確認 ID 是否正確"
-                ))
-
-    # 變更 3：validate_blocked_by() 循環偵測前移
-    if blocked_by:
-        from ticket_system.lib.ticket_loader import list_tickets
-        all_tickets = list_tickets(version)
-        valid, cycle_msg, cycle_path = validate_blocked_by(
-            ticket_id,
-            blocked_by,
-            all_tickets
-        )
-        if not valid and cycle_msg:
-            print(format_warning(cycle_msg))
 
     # 如果有 parent，更新 parent 的 children
     parent_info: Optional[Dict[str, Any]] = None
@@ -405,6 +438,15 @@ def _print_create_checklist(
     # 如果使用了預設驗收條件，輸出 WARNING
     if used_default_acceptance:
         print(format_warning(CreateMessages.DEFAULT_ACCEPTANCE_WARNING))
+
+    # 問題 4 修正：檢查含糊驗收條件（無論是否使用預設）
+    if new_ticket:
+        acceptance = new_ticket.get("acceptance", [])
+        if acceptance:
+            vague_passed, vague_warnings = detect_vague_acceptance(acceptance)
+            if not vague_passed and vague_warnings:
+                for warning in vague_warnings:
+                    print(format_warning(CreateMessages.VAGUE_ACCEPTANCE_WARNING, vague_words=warning))
 
     # 依賴提示
     print(CreateMessages.BLOCKED_BY_CHECK)

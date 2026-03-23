@@ -88,6 +88,32 @@ TODOLIST_FILE_NAME = "docs/todolist.yaml"
 RECENT_TASK_THRESHOLD_MINUTES = 30  # 30 分鐘內視為「最近任務」（可能有代理人正在執行）
 
 
+def _get_ticket_file_path(project_root: Path, ticket_id: str) -> Optional[Path]:
+    """
+    解析 Ticket ID 並構建檔案路徑。
+
+    問題 7 修正：提取重複的版本解析邏輯為共用函式。
+
+    Args:
+        project_root: 專案根目錄
+        ticket_id: Ticket ID（格式：0.31.0-W5-001）
+
+    Returns:
+        Optional[Path]: Ticket 檔案路徑；若解析失敗返回 None
+    """
+    try:
+        # 解析版本號（以 '-' 分割，第一部分是版本號）
+        parts = ticket_id.split('-')
+        if not parts:
+            return None
+
+        version = parts[0]
+        ticket_path = project_root / WORK_LOGS_DIR_NAME / f"v{version}" / TICKETS_SUBDIR_NAME / f"{ticket_id}.md"
+        return ticket_path
+    except Exception:
+        return None
+
+
 def get_session_stop_flag() -> Path:
     """
     取得 session stop flag 檔案路徑
@@ -284,15 +310,9 @@ def is_ticket_recently_started(project_root: Path, ticket_id: str, logger) -> bo
         bool - 是否在最近 N 分鐘內開始執行
     """
     try:
-        # 解析版本號
-        parts = ticket_id.split('-')
-        if not parts:
-            return False
-
-        version = parts[0]
-        ticket_path = project_root / WORK_LOGS_DIR_NAME / f"v{version}" / TICKETS_SUBDIR_NAME / f"{ticket_id}.md"
-
-        if not ticket_path.exists():
+        # 問題 7 修正：使用共用函式解析 Ticket 檔案路徑
+        ticket_path = _get_ticket_file_path(project_root, ticket_id)
+        if not ticket_path or not ticket_path.exists():
             return False
 
         # 解析 frontmatter
@@ -346,15 +366,9 @@ def is_ticket_completed(project_root: Path, ticket_id: str, logger) -> bool:
         bool - 是否已完成
     """
     try:
-        # 解析版本號
-        parts = ticket_id.split('-')
-        if not parts:
-            return False
-
-        version = parts[0]
-        ticket_path = project_root / WORK_LOGS_DIR_NAME / f"v{version}" / TICKETS_SUBDIR_NAME / f"{ticket_id}.md"
-
-        if not ticket_path.exists():
+        # 問題 7 修正：使用共用函式解析 Ticket 檔案路徑
+        ticket_path = _get_ticket_file_path(project_root, ticket_id)
+        if not ticket_path or not ticket_path.exists():
             return False
 
         # 解析 frontmatter
@@ -386,73 +400,8 @@ def scan_in_progress_tickets(project_root: Path, logger) -> list:
     Returns:
         list - 建立的 pending JSON 的 ticket_id 列表
     """
-    active_version = get_active_version(project_root, logger)
-    if not active_version:
-        logger.warning("無法取得活躍版本")
-        return []
-
-    tickets_dir = project_root / WORK_LOGS_DIR_NAME / f"v{active_version}" / TICKETS_SUBDIR_NAME
-    created_tickets = []
-
-    if not tickets_dir.exists():
-        logger.debug(f"Tickets 目錄不存在: {tickets_dir}")
-        return created_tickets
-
-    try:
-        # 使用共用函式掃描 Ticket 檔案
-        ticket_files = scan_ticket_files_by_version(project_root, active_version, logger)
-        for file_path in sorted(ticket_files):
-            try:
-                # 解析 frontmatter
-                frontmatter = parse_ticket_frontmatter(file_path, logger)
-                if not frontmatter:
-                    continue
-
-                # 檢查狀態是否為 in_progress
-                status = frontmatter.get('status', '').lower()
-                if status != 'in_progress':
-                    continue
-
-                ticket_id = frontmatter.get('id')
-                if not ticket_id:
-                    continue
-
-                # 檢查 pending JSON 是否已存在
-                pending_dir = project_root / PENDING_DIR_NAME
-                pending_file = pending_dir / f"{ticket_id}.json"
-
-                if pending_file.exists():
-                    logger.debug(f"Pending JSON 已存在: {ticket_id}")
-                    continue
-
-                # 建立 pending JSON
-                pending_dir.mkdir(parents=True, exist_ok=True)
-                title = frontmatter.get('title', '')
-                what = frontmatter.get('what', '')
-
-                pending_data = {
-                    "ticket_id": ticket_id,
-                    "title": title,
-                    "direction": "continuation",
-                    "timestamp": datetime.now().isoformat(),
-                    "from_status": "in_progress",
-                    "what": what,
-                    "resumed_at": None
-                }
-
-                with open(pending_file, "w", encoding="utf-8") as f:
-                    json.dump(pending_data, f, ensure_ascii=False, indent=2)
-
-                logger.info(f"為 in_progress ticket 建立 pending JSON: {ticket_id}")
-                created_tickets.append(ticket_id)
-
-            except Exception as e:
-                logger.warning(f"處理 Ticket 檔案失敗 ({file_path.name}): {e}")
-
-    except Exception as e:
-        logger.error(f"掃描 in_progress Tickets 失敗: {e}")
-
-    return created_tickets
+    # 問題 8 修正：廢棄函式縮減為空實現，僅保留 docstring
+    return []
 
 
 def should_preserve_pending_json(direction: str, logger) -> bool:

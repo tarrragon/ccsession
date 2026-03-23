@@ -69,21 +69,9 @@ DEFAULT_ACCEPTANCE_CRITERIA = {
         "格式符合規範：遵守 CLAUDE.md 的文件格式規則",
         "內容無遺漏：所有預期的小節都已填寫（無 TODO 或空白區段）"
     ],
-    "SEC": [
-        "安全威脅已識別並分類（Critical/High/Medium/Low）",
-        "修復方案已實作並通過安全測試",
-        "漏洞掃描 0 Critical vulnerabilities"
-    ],
-    "PERF": [
-        "效能指標基線已建立（當前：{baseline}）",
-        "最佳化後效能提升 {improvement}%",
-        "效能測試覆蓋 {test_count} 個場景"
-    ],
-    "INFRA": [
-        "基礎設施變更已完成（{infra_change_description}）",
-        "相關測試通過（通過率 100%）",
-        "監控告警已配置"
-    ],
+    # 問題 5 修正：移除未在 TICKET_TYPES 中註冊的類型
+    # SEC、PERF、INFRA 類型未在 constants.py 的 TICKET_TYPES 中定義
+    # 若需支援這些類型，請先在 TICKET_TYPES 中註冊
 }
 
 

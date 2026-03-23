@@ -757,13 +757,14 @@ def run_audit(ticket_id: str, version: Optional[str] = None) -> AuditReport:
         issues=log_issues
     ))
 
-    # Step 4: 驗收條件一致性檢查
+    # Step 4: 驗收條件一致性檢查（Bug 2 修正）
     # 從 body 中提取 Solution 和 Test Results 區段
-    solution_match = re.search(r"^##\s+Solution\s*$|^###\s+Solution\s*$(.*?)(?=^##\s+|^###\s+|\Z)", body, re.MULTILINE | re.DOTALL)
-    test_results_match = re.search(r"^##\s+Test Results\s*$|^###\s+Test Results\s*$(.*?)(?=^##\s+|^###\s+|\Z)", body, re.MULTILINE | re.DOTALL)
+    # 使用非捕獲組 (?:) 確保 group(1) 總是捕獲內容部分，而不會因為選擇分支而返回 None
+    solution_match = re.search(r"^(?:##|###)\s+Solution\s*$(.*?)(?=^##\s+|^###\s+|\Z)", body, re.MULTILINE | re.DOTALL)
+    test_results_match = re.search(r"^(?:##|###)\s+Test Results\s*$(.*?)(?=^##\s+|^###\s+|\Z)", body, re.MULTILINE | re.DOTALL)
 
-    solution_text = solution_match.group(1) if solution_match else ""
-    test_results_text = test_results_match.group(1) if test_results_match else ""
+    solution_text = solution_match.group(1).strip() if solution_match else ""
+    test_results_text = test_results_match.group(1).strip() if test_results_match else ""
 
     acceptance = ticket.get("acceptance", [])
     consistency_passed, consistency_warnings = validate_acceptance_consistency(
