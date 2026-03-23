@@ -11,6 +11,10 @@ Branch Status Reminder - SessionStart Hook 用於顯示分支狀態
 
 Hook Event: SessionStart
 
+改進 (v1.2.0):
+- 使用 get_uncommitted_files() 高階 API
+- 遷移離開原始的 porcelain 格式解析
+
 改進 (v1.1.0):
 - 使用 common_functions 統一 logging 和 output
 - 避免 stderr 污染
@@ -42,7 +46,7 @@ try:
         is_allowed_branch,
         is_in_worktree,
         run_git_command,
-        get_uncommitted_status_lines,
+        get_uncommitted_files,
     )
 except ImportError as e:
     # #11 修復：ImportError 不應 exit(1) 阻斷整個 session
@@ -64,7 +68,7 @@ except ImportError as e:
         return branch in ["main", "master", "develop"]
     def run_git_command(args, cwd=None, timeout=10):
         return False, "git_utils not available"
-    def get_uncommitted_status_lines():
+    def get_uncommitted_files():
         return []  # 無法查詢時回傳空列表，功能降級
 
 
@@ -76,23 +80,23 @@ def _report_uncommitted_changes() -> None:
     """
     偵測並報告未提交的變更
 
-    使用 get_uncommitted_status_lines() 取得未提交變更狀態行，
+    使用 get_uncommitted_files() 取得未提交變更的結構化資訊，
     如果超過 MAX_UNCOMMITTED_FILES_DISPLAY 個檔案，只顯示前 N 個並提示還有多少個。
     如果沒有未提交變更，則不輸出任何內容。
     """
-    status_lines = get_uncommitted_status_lines()
+    files = get_uncommitted_files()
 
-    if not status_lines:
+    if not files:
         return
 
-    total_changes = len(status_lines)
+    total_changes = len(files)
 
     # 輸出未提交變更摘要
     hook_output(f"[branch-status-reminder] 偵測到 {total_changes} 個未提交變更：", "info")
 
     # 列出前 N 個變更
-    for line in status_lines[:MAX_UNCOMMITTED_FILES_DISPLAY]:
-        hook_output(f"   {line}", "info")
+    for file in files[:MAX_UNCOMMITTED_FILES_DISPLAY]:
+        hook_output(f"   {file}", "info")
 
     # 如果超過上限，顯示還有多少個
     if total_changes > MAX_UNCOMMITTED_FILES_DISPLAY:

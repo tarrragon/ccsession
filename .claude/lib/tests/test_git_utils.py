@@ -14,11 +14,13 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from git_utils import (
     get_current_branch,
     get_project_root,
+    get_uncommitted_files,
     get_uncommitted_status_lines,
     get_worktree_list,
     is_allowed_branch,
     is_protected_branch,
     run_git_command,
+    FileStatus,
     BRANCH_PREFIX_LEN,
     WORKTREE_PREFIX_LEN,
 )
@@ -136,8 +138,54 @@ class TestConstants(unittest.TestCase):
         self.assertEqual(BRANCH_PREFIX_LEN, len("branch "))
 
 
+class TestFileStatus(unittest.TestCase):
+    """測試 FileStatus dataclass"""
+
+    def test_file_status_creation(self):
+        """測試 FileStatus 建立"""
+        file = FileStatus(status=" M", file_path="file.txt")
+        self.assertEqual(file.status, " M")
+        self.assertEqual(file.file_path, "file.txt")
+
+    def test_is_modified(self):
+        """測試是否為修改狀態"""
+        file = FileStatus(status=" M", file_path="file.txt")
+        self.assertTrue(file.is_modified)
+        self.assertFalse(file.is_added)
+        self.assertFalse(file.is_untracked)
+
+    def test_is_added(self):
+        """測試是否為新增狀態"""
+        file = FileStatus(status="A ", file_path="new.py")
+        self.assertFalse(file.is_modified)
+        self.assertTrue(file.is_added)
+        self.assertFalse(file.is_untracked)
+
+    def test_is_untracked(self):
+        """測試是否為未追蹤"""
+        file = FileStatus(status="??", file_path="untracked.txt")
+        self.assertFalse(file.is_modified)
+        self.assertFalse(file.is_added)
+        self.assertTrue(file.is_untracked)
+
+    def test_is_staged(self):
+        """測試是否有 staged 變更"""
+        staged = FileStatus(status="M ", file_path="file.txt")
+        unstaged = FileStatus(status=" M", file_path="file.txt")
+        untracked = FileStatus(status="??", file_path="file.txt")
+        
+        self.assertTrue(staged.is_staged)
+        self.assertFalse(unstaged.is_staged)
+        self.assertFalse(untracked.is_staged)
+
+    def test_file_status_str(self):
+        """測試 FileStatus 字串表示"""
+        file = FileStatus(status=" M", file_path="file.txt")
+        self.assertEqual(str(file), " M file.txt")
+
+
 class TestUncommittedStatusLines(unittest.TestCase):
-    """測試 get_uncommitted_status_lines 函式"""
+    """測試 get_uncommitted_status_lines 和相關函式"""
 
     @patch('git_utils.run_git_command')
     def test_has_uncommitted_changes(self, mock_run):
@@ -178,6 +226,80 @@ A  file3.py
         self.assertTrue(any(line.startswith(" M") for line in status_lines))
         self.assertTrue(any(line.startswith("??") for line in status_lines))
         self.assertTrue(any(line.startswith(" D") for line in status_lines))
+
+
+class TestUncommittedFiles(unittest.TestCase):
+    """測試 get_uncommitted_files 高階 API"""
+
+    @patch('git_utils.run_git_command')
+    def test_get_uncommitted_files_with_changes(self, mock_run):
+        """測試有未提交變更時回傳 FileStatus 列表"""
+        mock_run.return_value = (True, """ M file1.txt
+?? file2.txt
+A  file3.py
+""")
+        files = get_uncommitted_files()
+        
+        self.assertEqual(len(files), 3)
+        
+        # 驗證第一個檔案（修改）
+        self.assertEqual(files[0].status, " M")
+        self.assertEqual(files[0].file_path, "file1.txt")
+        self.assertTrue(files[0].is_modified)
+        self.assertFalse(files[0].is_untracked)
+        
+        # 驗證第二個檔案（未追蹤）
+        self.assertEqual(files[1].status, "??")
+        self.assertEqual(files[1].file_path, "file2.txt")
+        self.assertTrue(files[1].is_untracked)
+        
+        # 驗證第三個檔案（新增）
+        self.assertEqual(files[2].status, "A ")
+        self.assertEqual(files[2].file_path, "file3.py")
+        self.assertTrue(files[2].is_added)
+
+    @patch('git_utils.run_git_command')
+    def test_get_uncommitted_files_empty(self, mock_run):
+        """測試無未提交變更時回傳空列表"""
+        mock_run.return_value = (True, "")
+        files = get_uncommitted_files()
+        self.assertEqual(files, [])
+
+    @patch('git_utils.run_git_command')
+    def test_get_uncommitted_files_failure(self, mock_run):
+        """測試 git 命令失敗時回傳空列表"""
+        mock_run.return_value = (False, "fatal: not a git repository")
+        files = get_uncommitted_files()
+        self.assertEqual(files, [])
+
+    @patch('git_utils.run_git_command')
+    def test_get_uncommitted_files_parse_multiple_files(self, mock_run):
+        """測試正確解析多個變更檔案"""
+        mock_run.return_value = (True, """M  modified_staged.txt
+ M unstaged_modified.txt
+?? new_untracked.txt
+A  added_staged.py
+ D deleted_unstaged.py
+""")
+        files = get_uncommitted_files()
+        
+        self.assertEqual(len(files), 5)
+        
+        # 驗證每個檔案的狀態
+        statuses = [f.status for f in files]
+        file_paths = [f.file_path for f in files]
+        
+        self.assertIn("M ", statuses)
+        self.assertIn(" M", statuses)
+        self.assertIn("??", statuses)
+        self.assertIn("A ", statuses)
+        self.assertIn(" D", statuses)
+        
+        self.assertIn("modified_staged.txt", file_paths)
+        self.assertIn("unstaged_modified.txt", file_paths)
+        self.assertIn("new_untracked.txt", file_paths)
+        self.assertIn("added_staged.py", file_paths)
+        self.assertIn("deleted_unstaged.py", file_paths)
 
 
 if __name__ == "__main__":

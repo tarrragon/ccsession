@@ -9,7 +9,9 @@ Git 操作共用工具
 - run_git_command: 執行 git 命令
 - get_current_branch: 獲取當前分支
 - get_project_root: 獲取專案根目錄
-- get_uncommitted_status_lines: 獲取未提交變更狀態行
+- FileStatus: 結構化檔案狀態資訊（高階 API）
+- get_uncommitted_files: 獲取未提交變更的結構化資訊（高階 API）
+- _get_uncommitted_status_lines: 獲取未提交變更狀態行（內部，已棄用）
 - get_worktree_list: 獲取 worktree 列表
 - is_protected_branch: 檢查是否為保護分支
 - is_allowed_branch: 檢查是否為允許編輯的分支
@@ -20,6 +22,7 @@ import os
 import sys
 import subprocess
 from typing import Optional
+from dataclasses import dataclass
 
 
 # ===== 分支配置常數 =====
@@ -28,6 +31,9 @@ from typing import Optional
 WORKTREE_PREFIX_LEN = len("worktree ")  # 9
 BRANCH_PREFIX_LEN = len("branch ")      # 7
 REFS_HEADS_PREFIX = "refs/heads/"
+
+# Git status --porcelain 格式常數
+GIT_STATUS_CODE_LEN = 2  # porcelain 格式的狀態碼長度
 
 # 保護分支列表（支援 glob 模式）
 PROTECTED_BRANCHES = [
@@ -50,6 +56,55 @@ ALLOWED_BRANCHES = [
     "refactor/*",
     "test/*",
 ]
+
+
+@dataclass
+class FileStatus:
+    """
+    結構化的檔案狀態資訊
+
+    git status --porcelain 格式為：XY file_path
+    - X: staged 狀態（M=modified, A=added, D=deleted, R=renamed, C=copied, ?=untracked）
+    - Y: unstaged 狀態（同上）
+    - file_path: 檔案路徑
+
+    示例：
+    - " M file.txt"：unstaged 修改
+    - "A  file.py"：staged 新增
+    - "?? untracked.txt"：未追蹤檔案
+    - "RM old.txt -> new.txt"：renamed
+    """
+    status: str  # 完整的 XY 狀態碼（如 " M"、"A "、"??"）
+    file_path: str  # 檔案路徑
+
+    @property
+    def is_staged(self) -> bool:
+        """檢查是否有 staged 變更（X 位置非空格和 ?）"""
+        return self.status[0] not in (' ', '?')
+
+    @property
+    def is_modified(self) -> bool:
+        """檢查是否為修改狀態"""
+        return 'M' in self.status
+
+    @property
+    def is_added(self) -> bool:
+        """檢查是否為新增狀態"""
+        return 'A' in self.status
+
+    @property
+    def is_deleted(self) -> bool:
+        """檢查是否為刪除狀態"""
+        return 'D' in self.status
+
+    @property
+    def is_untracked(self) -> bool:
+        """檢查是否為未追蹤"""
+        return self.status == '??'
+
+    def __str__(self) -> str:
+        """格式化為可讀的字串"""
+        return f"{self.status} {self.file_path}"
 
 
 def run_git_command(
@@ -125,19 +180,63 @@ def get_project_root() -> str:
     return output if success else os.getcwd()
 
 
-def get_uncommitted_status_lines() -> list[str]:
+def get_uncommitted_files() -> list[FileStatus]:
     """
-    獲取未提交變更的狀態行
+    獲取未提交變更的結構化資訊（高階 API）
+
+    內部呼叫 git status --porcelain，將結果解析為 FileStatus 物件列表。
+    每個 FileStatus 物件包含狀態碼和檔案路徑的結構化資訊。
+
+    Returns:
+        list[FileStatus]: 未提交變更的 FileStatus 物件列表，
+                         如果沒有變更或命令失敗則返回空列表
+
+    Example:
+        files = get_uncommitted_files()
+        for file in files:
+            if file.is_modified:
+                print(f"Modified: {file.file_path}")
+            elif file.is_untracked:
+                print(f"Untracked: {file.file_path}")
+
+        # 統計未提交檔案
+        total = len(files)
+        untracked = sum(1 for f in files if f.is_untracked)
+        print(f"Total changes: {total}, Untracked: {untracked}")
+    """
+    status_lines = _get_uncommitted_status_lines()
+
+    if not status_lines:
+        return []
+
+    files = []
+    for line in status_lines:
+        # porcelain 格式：XY file_path
+        # 狀態碼長度為 2（X 和 Y），後跟空格，然後是檔案路徑
+        if len(line) >= GIT_STATUS_CODE_LEN + 1:
+            status = line[:GIT_STATUS_CODE_LEN]
+            # 跳過狀態碼和分隔符（空格）
+            file_path = line[GIT_STATUS_CODE_LEN + 1:]
+            files.append(FileStatus(status=status, file_path=file_path))
+
+    return files
+
+
+def _get_uncommitted_status_lines() -> list[str]:
+    """
+    獲取未提交變更的狀態行（內部低階 API，已棄用）
 
     執行 git status --porcelain，返回所有未提交變更的狀態行。
     每行格式為 git porcelain 格式（如 " M file.txt"、"?? new.txt"）。
     空輸出或 git 命令失敗時返回空列表。
 
+    注意：此函式為內部實作，建議改用 get_uncommitted_files() 高階 API。
+
     Returns:
         list[str]: 未提交變更的狀態行列表，如果沒有變更或命令失敗則返回空列表
 
     Example:
-        status_lines = get_uncommitted_status_lines()
+        status_lines = _get_uncommitted_status_lines()
         if status_lines:
             print(f"有 {len(status_lines)} 個未提交變更")
         for line in status_lines:
@@ -150,6 +249,16 @@ def get_uncommitted_status_lines() -> list[str]:
 
     lines = output.split("\n")
     return [line for line in lines if line.strip()]
+
+
+# 向後相容別名（已棄用，僅用於測試）
+def get_uncommitted_status_lines() -> list[str]:
+    """
+    向後相容別名，轉向 _get_uncommitted_status_lines()
+
+    已棄用：建議改用 get_uncommitted_files() 高階 API
+    """
+    return _get_uncommitted_status_lines()
 
 
 def get_worktree_list() -> list[dict]:
