@@ -26,8 +26,6 @@ Hook Event: SessionStart
 """
 
 import sys
-import subprocess
-import logging
 from pathlib import Path
 
 # 添加 lib 目錄到路徑（M-003 標準化）
@@ -76,16 +74,13 @@ except ImportError as e:
 MAX_UNCOMMITTED_FILES_DISPLAY = 10  # 未提交變更顯示上限，超過則折疊顯示
 
 
-def _report_uncommitted_changes(logger: logging.Logger) -> None:
+def _report_uncommitted_changes() -> None:
     """
     偵測並報告未提交的變更
 
     使用 get_uncommitted_status_lines() 取得未提交變更狀態行，
     如果超過 MAX_UNCOMMITTED_FILES_DISPLAY 個檔案，只顯示前 N 個並提示還有多少個。
     如果沒有未提交變更，則不輸出任何內容。
-
-    Args:
-        logger: logging 實例，用於記錄錯誤
     """
     status_lines = get_uncommitted_status_lines()
 
@@ -140,7 +135,7 @@ def main():
         hook_output("", "info")
 
         # 偵測未提交變更
-        _report_uncommitted_changes(logger)
+        _report_uncommitted_changes()
 
         hook_output("建議操作：", "info")
         hook_output("  建立 feature worktree 進行開發：", "info")

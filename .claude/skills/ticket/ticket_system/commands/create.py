@@ -45,6 +45,10 @@ from ticket_system.lib.constants import (
     COGNITIVE_LOAD_FILE_THRESHOLD,
     STATUS_PENDING,
     DUPLICATE_DETECTION_THRESHOLD,
+    DEFAULT_PRIORITY,
+    DEFAULT_HOW_TASK_TYPE,
+    DEFAULT_UNDEFINED_VALUE,
+    TDD_PHASE_DISPLAY,
 )
 from ticket_system.lib.parallel_analyzer import ParallelAnalyzer
 from ticket_system.lib.tdd_sequence import suggest_tdd_sequence
@@ -504,15 +508,15 @@ def _parse_cli_args_to_config(
         "wave": wave,
         "title": args.title or f"{args.action} {args.target}",
         "ticket_type": ticket_type,
-        "priority": args.priority or "P2",
+        "priority": args.priority or DEFAULT_PRIORITY,
         "who": args.who or (parent_ticket.get("who", {}).get("current") if parent_ticket else "pending"),
         "what": args.what or f"{args.action} {args.target}",
-        "when": args.when or "待定義",
-        "where_layer": args.where_layer or (parent_ticket.get("where", {}).get("layer") if parent_ticket else "待定義"),
+        "when": args.when or DEFAULT_UNDEFINED_VALUE,
+        "where_layer": args.where_layer or (parent_ticket.get("where", {}).get("layer") if parent_ticket else DEFAULT_UNDEFINED_VALUE),
         "where_files": where_files,
-        "why": args.why or (parent_ticket.get("why") if parent_ticket else "待定義"),
-        "how_task_type": args.how_type or "Implementation",
-        "how_strategy": args.how_strategy or "待定義",
+        "why": args.why or (parent_ticket.get("why") if parent_ticket else DEFAULT_UNDEFINED_VALUE),
+        "how_task_type": args.how_type or DEFAULT_HOW_TASK_TYPE,
+        "how_strategy": args.how_strategy or DEFAULT_UNDEFINED_VALUE,
         "parent_id": args.parent,
         "blocked_by": blocked_by if blocked_by else None,
         "related_to": related_to if related_to else None,
@@ -523,14 +527,16 @@ def _parse_cli_args_to_config(
     }
 
 
-def _finalize(
+def _persist_and_report(
     args: argparse.Namespace,
     config: TicketConfig,
     version: str,
     ticket_id: str,
     tdd_result: Any,
 ) -> int:
-    """Step 3: 驗證 blockedBy + 重複偵測 + 持久化 + 輸出。
+    """Step 3: 驗證 blockedBy + 重複偵測 + 驗證持久化 + 回報結果。
+
+    負責驗證、持久化 Ticket 資訊並輸出結果報告。
 
     Args:
         args: 命令行參數
@@ -620,7 +626,7 @@ def execute(args: argparse.Namespace) -> int:
         return 1
 
     # Step 3: 驗證 blockedBy + 重複偵測 + 持久化 + 輸出
-    return _finalize(args, config, version, ticket_id, tdd_result)
+    return _persist_and_report(args, config, version, ticket_id, tdd_result)
 
 
 def _print_create_checklist(
@@ -726,16 +732,9 @@ def _print_tdd_sequence_suggestion(ticket_type: str, tdd_result: Any = None) -> 
     print(CreateMessages.SUGGESTED_ORDER)
 
     for i, phase in enumerate(result.phases, 1):
-        # 簡化 phase 名稱以供輸出
-        phase_display = phase.replace("phase", "Phase ").upper()
-        phase_desc = {
-            "phase1": "Phase 1 - 功能設計 (lavender)",
-            "phase2": "Phase 2 - 測試設計 (sage)",
-            "phase3a": "Phase 3a - 策略規劃 (pepper)",
-            "phase3b": "Phase 3b - 實作執行 (parsley)",
-            "phase4": "Phase 4 - 重構優化 (cinnamon)",
-        }
-        print(f"   {i}. {phase_desc.get(phase, phase)}")
+        # 使用集中化的 TDD Phase 顯示名稱映射
+        phase_display = TDD_PHASE_DISPLAY.get(phase, phase)
+        print(f"   {i}. {phase_display}")
 
     print()
     print(format_msg(CreateMessages.RATIONALE_LABEL, rationale=result.rationale))
@@ -832,7 +831,7 @@ def _print_cognitive_load_assessment(
     where_files = new_ticket.get("where", {}).get("files") or []
 
     # 若 where_files 為空或「待定義」
-    if not where_files or where_files == ["待定義"]:
+    if not where_files or where_files == [DEFAULT_UNDEFINED_VALUE]:
         print(format_warning(CreateMessages.COGNITIVE_LOAD_FILES_UNDEFINED_WARNING))
         return
 

@@ -147,6 +147,14 @@ TICKET_TYPES: Dict[str, str] = {
 PRIORITY_LEVELS: List[str] = ["P0", "P1", "P2", "P3"]
 
 # ============================================================
+# Ticket 建立預設值
+# ============================================================
+
+DEFAULT_PRIORITY: str = "P2"
+DEFAULT_HOW_TASK_TYPE: str = "Implementation"
+DEFAULT_UNDEFINED_VALUE: str = "待定義"
+
+# ============================================================
 # Handoff Direction 常數
 # ============================================================
 
@@ -161,6 +169,19 @@ NON_CHAIN_DIRECTION_TYPES: tuple = ("context-refresh",)
 # ============================================================
 
 TDD_PHASES: List[str] = ["phase1", "phase2", "phase3a", "phase3b", "phase4"]
+
+# TDD Phase 顯示名稱映射（包含代理人名稱）
+TDD_PHASE_DISPLAY: Dict[str, str] = {
+    "phase0": "Phase 0 SA 前置審查",
+    "phase1": "Phase 1 - 功能設計 (lavender)",
+    "phase2": "Phase 2 - 測試設計 (sage)",
+    "phase3a": "Phase 3a - 策略規劃 (pepper)",
+    "phase3b": "Phase 3b - 實作執行 (parsley)",
+    "phase4": "Phase 4 - 重構優化 (cinnamon)",
+    "phase4a": "Phase 4a 多視角分析",
+    "phase4b": "Phase 4b 重構執行",
+    "phase4c": "Phase 4c 多視角再審核",
+}
 
 # ============================================================
 # 必填欄位列表
