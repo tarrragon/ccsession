@@ -17,6 +17,8 @@ from pathlib import Path
 from typing import Dict, List, Any, Tuple
 import yaml
 
+from ticket_system.lib.registry_loader import load_registry
+
 
 REGISTRY_PATH = Path(__file__).parent.parent.parent / "agents" / "registry.yaml"
 
@@ -25,20 +27,8 @@ class DispatchRecommender:
     """派發建議引擎"""
     
     def __init__(self, registry_path: Path = REGISTRY_PATH):
-        self.registry = self._load_registry(registry_path)
+        self.registry = load_registry(registry_path)
         self.agents = self.registry.get("agents", {}) if self.registry else {}
-    
-    def _load_registry(self, registry_path: Path) -> Dict[str, Any]:
-        """載入 registry"""
-        if not registry_path.exists():
-            return {}
-        
-        try:
-            with open(registry_path, "r", encoding="utf-8") as f:
-                return yaml.safe_load(f) or {}
-        except Exception:
-            return {}
-    
     def recommend(
         self,
         ticket_id: str,
