@@ -217,6 +217,15 @@ SRP_WHAT_CONJUNCTIONS: List[str] = [
 # 超過此閾值時，疑似驗收條件指向不相關模組
 SRP_ACCEPTANCE_MODULE_THRESHOLD: int = 2
 
+# ============================================================
+# 重複偵測常數
+# ============================================================
+
+# Jaccard 相似度閾值：用於判斷兩個 Ticket 標題/描述是否相似
+# 0.3 表示 30% 的詞彙重疊即視為相似，觸發警告提示
+# Phase 4 可根據實際誤報率調整此值
+DUPLICATE_DETECTION_THRESHOLD: float = 0.3
+
 
 if __name__ == "__main__":
     from ticket_system.lib.messages import print_not_executable_and_exit

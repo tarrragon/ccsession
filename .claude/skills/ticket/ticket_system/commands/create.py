@@ -228,6 +228,182 @@ def _build_decision_tree_path(
     return False
 
 
+def _calculate_jaccard_similarity(text_a: str, text_b: str) -> float:
+    """
+    計算兩個字串的 Jaccard 相似度係數。
+
+    使用集合論方式計算相似度：
+    Jaccard = |intersection| / |union|
+
+    對中文字符逐字分割，英文單詞以空白和標點分割。
+
+    Args:
+        text_a: 第一個比對文字
+        text_b: 第二個比對文字
+
+    Returns:
+        float: 相似度值 [0.0, 1.0]，1.0 表示完全相同，0.0 表示完全不同
+
+    Raises:
+        TypeError: 如果輸入不是字串型別
+    """
+    import re
+    import unicodedata
+
+    # 輸入驗證
+    if not isinstance(text_a, str) or not isinstance(text_b, str):
+        raise TypeError("text_a 和 text_b 必須是字串型別")
+
+    # 統一轉為小寫，不區分大小寫
+    text_a = text_a.lower()
+    text_b = text_b.lower()
+
+    # 文字分割函式：提取中文字符和英文單詞
+    def tokenize(text: str) -> set:
+        r"""
+        將文字分割為詞集合。
+
+        - 中文字符（\u4e00-\u9fff）逐字提取
+        - 英文單詞（\w+）按單詞分割
+        - 特殊字符和標點忽略
+
+        Args:
+            text: 待分割文字
+
+        Returns:
+            集合，包含所有詞彙
+        """
+        # 提取中文字符和英文單詞
+        # 模式：中文字符（\u4e00-\u9fff）或英文單詞（\w+）
+        pattern = r'[\u4e00-\u9fff]|\w+'
+        tokens = re.findall(pattern, text)
+        return set(tokens)
+
+    # 分割兩個文字
+    set_a = tokenize(text_a)
+    set_b = tokenize(text_b)
+
+    # 邊界情況：兩個集合都為空
+    if not set_a and not set_b:
+        return 0.0
+
+    # 計算 Jaccard 係數
+    intersection = len(set_a & set_b)
+    union = len(set_a | set_b)
+
+    if union == 0:
+        return 0.0
+
+    return intersection / union
+
+
+def _detect_duplicate_tickets(
+    version: str,
+    new_title: str,
+    new_what: str,
+    new_ticket_id: str,
+) -> None:
+    """
+    偵測並警告同版本中可能重複的 pending Ticket。
+
+    掃描同版本的 pending Ticket，使用 Jaccard 相似度與即將建立的 Ticket 比對標題和目標。
+    若發現相似度達閾值的 Ticket，輸出 WARNING 提示使用者。
+
+    此函式設計為容錯式：內部所有異常都被靜默捕捉，不影響後續建立流程。
+
+    Args:
+        version: 目標版本號（如 "0.1.2"）
+        new_title: 即將建立的 Ticket 標題
+        new_what: 即將建立的 Ticket 目標描述
+        new_ticket_id: 即將建立的 Ticket ID（用於排除自身）
+
+    Returns:
+        None（不返回偵測結果，以簽名方式消費 WARNING）
+    """
+    from ticket_system.lib.constants import (
+        STATUS_PENDING,
+        DUPLICATE_DETECTION_THRESHOLD,
+    )
+    from ticket_system.lib.ticket_loader import list_tickets
+
+    try:
+        # 步驟 A：驗證輸入
+        # 若 title 和 what 均為空，無法進行比對
+        if not new_title and not new_what:
+            return
+
+        # 步驟 B：載入同版本 pending Ticket
+        all_tickets = list_tickets(version)
+
+        # 過濾 pending Ticket，並排除自身
+        pending_tickets = [
+            ticket
+            for ticket in all_tickets
+            if ticket.get("status") == STATUS_PENDING
+            and ticket.get("id") != new_ticket_id
+        ]
+
+        # 若無 pending Ticket，靜默通過
+        if not pending_tickets:
+            return
+
+        # 步驟 C：相似度計算
+        new_combined = f"{new_title} {new_what}"
+        similar_tickets = []
+
+        for ticket in pending_tickets:
+            try:
+                # 合併候選 Ticket 的 title 和 what 進行比對
+                candidate_title = ticket.get("title", "")
+                candidate_what = ticket.get("what", "")
+                candidate_combined = f"{candidate_title} {candidate_what}"
+
+                # 計算相似度
+                similarity = _calculate_jaccard_similarity(
+                    new_combined, candidate_combined
+                )
+
+                # 若達閾值，加入相似列表
+                if similarity >= DUPLICATE_DETECTION_THRESHOLD:
+                    similar_tickets.append(
+                        (ticket.get("id", ""), candidate_title)
+                    )
+            except Exception:
+                # 單項異常不影響整體，跳過此 Ticket，繼續下一個
+                continue
+
+        # 步驟 D：輸出結果
+        if similar_tickets:
+            # 組裝警告訊息
+            warning_lines = [
+                format_warning(
+                    CreateMessages.DUPLICATE_TICKETS_WARNING_HEADER,
+                    count=len(similar_tickets),
+                )
+            ]
+
+            for ticket_id, title in similar_tickets:
+                warning_lines.append(
+                    format_msg(
+                        CreateMessages.DUPLICATE_TICKETS_WARNING_ITEM,
+                        ticket_id=ticket_id,
+                        title=title,
+                    )
+                )
+
+            warning_lines.append(
+                format_msg(CreateMessages.DUPLICATE_TICKETS_WARNING_SUGGESTION)
+            )
+
+            # 輸出警告
+            print("\n".join(warning_lines))
+
+    except Exception:
+        # 外層容錯：任何異常都靜默通過
+        # 重複偵測是輔助功能，不應阻斷核心建立流程
+        pass
+
+
 def execute(args: argparse.Namespace) -> int:
     """執行 create 命令"""
     version = resolve_version(args.version)
@@ -358,6 +534,14 @@ def execute(args: argparse.Namespace) -> int:
     # Bug 1 修正：在 save_ticket 之前執行 blockedBy 驗證
     if not _validate_blocked_by_references(version, ticket_id, blocked_by):
         return 1
+
+    # W3-003：執行重複偵測，在 save 前警告可能重複的 Ticket
+    _detect_duplicate_tickets(
+        version=version,
+        new_title=args.title or f"{args.action} {args.target}",
+        new_what=args.what or f"{args.action} {args.target}",
+        new_ticket_id=ticket_id,
+    )
 
     # 儲存
     tickets_dir = get_tickets_dir(version)

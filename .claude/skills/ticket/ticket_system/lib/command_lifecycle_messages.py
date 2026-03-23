@@ -313,6 +313,16 @@ class CreateMessages:
     # blockedBy 驗證錯誤訊息（Bug 1 修正）
     BLOCKED_BY_NOT_FOUND = "[ERROR] blockedBy 中的 {bid} 不存在，請確認 ID 是否正確"
 
+    # 重複偵測警告訊息（W3-003）
+    DUPLICATE_TICKETS_WARNING_HEADER = (
+        "[WARNING] 發現 {count} 個可能重複的 pending Ticket，"
+        "請確認是否需要建立新 Ticket："
+    )
+    DUPLICATE_TICKETS_WARNING_ITEM = "   - {ticket_id}: {title}"
+    DUPLICATE_TICKETS_WARNING_SUGGESTION = (
+        "   建議：執行 /ticket track list 查看所有現有 Ticket 後再決定"
+    )
+
 
 class FieldsMessages:
     """fields.py 相關訊息"""

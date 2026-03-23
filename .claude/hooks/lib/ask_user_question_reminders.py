@@ -145,7 +145,12 @@ PM 必須使用 AskUserQuestion 確認收尾動作。
   即使非 Ticket 工作，commit 後仍必須執行。無「非正式任務」豁免（規則 4）。
   → ToolSearch("select:AskUserQuestion") 載入後使用
   → 選項：無需記錄 (Recommended) / 記錄錯誤學習
-  → 選擇「記錄」→ /error-pattern add → 重新確認 #16 直到選擇「無需記錄」
+  → 選擇「記錄」→ [雙通道，兩項必須同時執行]：
+      (1) /error-pattern add（寫入 .claude/error-patterns/，結構化知識庫）
+      (2) 更新 memory（寫入使用者 auto-memory，跨對話記憶）
+  → 重新確認 #16 直到選擇「無需記錄」
+
+  [WARNING] 雙通道要求：只寫 memory 或只執行 /error-pattern add 均不符合規範
 
 [第二步 - 強制] 執行查詢：
   ticket track list --wave {n} --status pending

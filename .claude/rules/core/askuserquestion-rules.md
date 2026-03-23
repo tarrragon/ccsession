@@ -98,6 +98,17 @@ PM 需要用戶做任何決策時（包含多選路由和二元 yes/no 確認）
 
 **Phase 1-3 自治 commit 相容性**：場景 #11/#16 由 commit-handoff-hook 觸發，但 Phase 1-3 代理人自治 commit 時，因 subagent 禁止使用 AskUserQuestion，Hook 提醒自然跳過——這是預期行為，Phase 1-3 的 commit 不需要 PM 介入 Handoff 或錯誤學習決策。
 
+### 場景 #16 雙通道記錄要求（強制）
+
+選擇「記錄錯誤學習」後，必須同時執行雙通道記錄：
+
+| 通道 | 操作 | 位置 | 說明 |
+|------|------|------|------|
+| error-pattern | /error-pattern add | .claude/error-patterns/ | 結構化可查詢知識庫 |
+| memory | 更新使用者 auto-memory | .claude/projects/.../memory/ | 跨對話個人記憶 |
+
+禁止只寫單一通道：只寫 memory 不執行 /error-pattern add，或反之，均違反雙通道要求。
+
 ### 場景執行順序約束
 
 **#16 必須先於 #11a/#11b**（強制）：commit 後先執行 #16（錯誤學習），再進入 #11（Handoff）。
