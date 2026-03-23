@@ -100,14 +100,14 @@ PM 需要用戶做任何決策時（包含多選路由和二元 yes/no 確認）
 
 ### 場景 #16 雙通道記錄要求（強制）
 
-選擇「記錄錯誤學習」後，必須同時執行雙通道記錄：
+選擇「記錄錯誤學習」後，必須同時執行雙通道記錄，**缺一不可**：
 
 | 通道 | 操作 | 位置 | 說明 |
 |------|------|------|------|
-| error-pattern | /error-pattern add | .claude/error-patterns/ | 結構化可查詢知識庫 |
-| memory | 更新使用者 auto-memory | .claude/projects/.../memory/ | 跨對話個人記憶 |
+| error-pattern | /error-pattern add | .claude/error-patterns/ | 結構化可查詢知識庫，供將來查詢參考 |
+| memory | 更新使用者 auto-memory | .claude/projects/.../memory/ | 跨對話個人記憶，服務當前用戶的持續學習 |
 
-禁止只寫單一通道：只寫 memory 不執行 /error-pattern add，或反之，均違反雙通道要求。
+**強制要求**：禁止只寫單一通道。只寫 memory 不執行 /error-pattern add，或反之，均違反雙通道規範，無法落實錯誤學習的完整目標。
 
 ### 場景執行順序約束
 

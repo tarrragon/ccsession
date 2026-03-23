@@ -20,6 +20,7 @@ from ticket_system.lib.ticket_loader import (
     load_ticket,
     resolve_version,
     get_ticket_path,
+    list_tickets,
 )
 from ticket_system.lib.ticket_validator import (
     validate_ticket_id,
@@ -91,7 +92,6 @@ def _validate_blocked_by_references(
             return False
 
     # 驗證 2：blockedBy 循環依賴檢測
-    from ticket_system.lib.ticket_loader import list_tickets
     all_tickets = list_tickets(version)
     valid, cycle_msg, cycle_path = validate_blocked_by(
         ticket_id,
@@ -228,6 +228,28 @@ def _build_decision_tree_path(
     return False
 
 
+def _tokenize(text: str) -> set:
+    r"""
+    將文字分割為詞集合。
+
+    - 中文字符（\u4e00-\u9fff）逐字提取
+    - 英文單詞（\w+）按單詞分割
+    - 特殊字符和標點忽略
+
+    Args:
+        text: 待分割文字
+
+    Returns:
+        集合，包含所有詞彙
+    """
+    import re
+    # 提取中文字符和英文單詞
+    # 模式：中文字符（\u4e00-\u9fff）或英文單詞（\w+）
+    pattern = r'[\u4e00-\u9fff]|\w+'
+    tokens = re.findall(pattern, text)
+    return set(tokens)
+
+
 def _calculate_jaccard_similarity(text_a: str, text_b: str) -> float:
     """
     計算兩個字串的 Jaccard 相似度係數。
@@ -248,7 +270,6 @@ def _calculate_jaccard_similarity(text_a: str, text_b: str) -> float:
         TypeError: 如果輸入不是字串型別
     """
     import re
-    import unicodedata
 
     # 輸入驗證
     if not isinstance(text_a, str) or not isinstance(text_b, str):
@@ -258,30 +279,9 @@ def _calculate_jaccard_similarity(text_a: str, text_b: str) -> float:
     text_a = text_a.lower()
     text_b = text_b.lower()
 
-    # 文字分割函式：提取中文字符和英文單詞
-    def tokenize(text: str) -> set:
-        r"""
-        將文字分割為詞集合。
-
-        - 中文字符（\u4e00-\u9fff）逐字提取
-        - 英文單詞（\w+）按單詞分割
-        - 特殊字符和標點忽略
-
-        Args:
-            text: 待分割文字
-
-        Returns:
-            集合，包含所有詞彙
-        """
-        # 提取中文字符和英文單詞
-        # 模式：中文字符（\u4e00-\u9fff）或英文單詞（\w+）
-        pattern = r'[\u4e00-\u9fff]|\w+'
-        tokens = re.findall(pattern, text)
-        return set(tokens)
-
     # 分割兩個文字
-    set_a = tokenize(text_a)
-    set_b = tokenize(text_b)
+    set_a = _tokenize(text_a)
+    set_b = _tokenize(text_b)
 
     # 邊界情況：兩個集合都為空
     if not set_a and not set_b:
@@ -320,11 +320,11 @@ def _detect_duplicate_tickets(
     Returns:
         None（不返回偵測結果，以簽名方式消費 WARNING）
     """
+    import sys
     from ticket_system.lib.constants import (
         STATUS_PENDING,
         DUPLICATE_DETECTION_THRESHOLD,
     )
-    from ticket_system.lib.ticket_loader import list_tickets
 
     try:
         # 步驟 A：驗證輸入
@@ -335,12 +335,19 @@ def _detect_duplicate_tickets(
         # 步驟 B：載入同版本 pending Ticket
         all_tickets = list_tickets(version)
 
-        # 過濾 pending Ticket，並排除自身
+        # 計算需排除的 ID 清單
+        exclude_ids = {new_ticket_id}
+        # 若是子任務，額外排除父任務 ID
+        if "." in new_ticket_id:
+            parent_id = new_ticket_id.rsplit(".", 1)[0]
+            exclude_ids.add(parent_id)
+
+        # 過濾 pending Ticket，並排除自身及父任務
         pending_tickets = [
             ticket
             for ticket in all_tickets
             if ticket.get("status") == STATUS_PENDING
-            and ticket.get("id") != new_ticket_id
+            and ticket.get("id") not in exclude_ids
         ]
 
         # 若無 pending Ticket，靜默通過
@@ -368,8 +375,10 @@ def _detect_duplicate_tickets(
                     similar_tickets.append(
                         (ticket.get("id", ""), candidate_title)
                     )
-            except Exception:
+            except Exception as e:
                 # 單項異常不影響整體，跳過此 Ticket，繼續下一個
+                # 記錄異常類型到日誌（供除錯用）
+                sys.stderr.write(f"[DEBUG] 相似度計算異常 ({type(e).__name__}): {e}\n")
                 continue
 
         # 步驟 D：輸出結果
@@ -398,10 +407,11 @@ def _detect_duplicate_tickets(
             # 輸出警告
             print("\n".join(warning_lines))
 
-    except Exception:
+    except Exception as e:
         # 外層容錯：任何異常都靜默通過
         # 重複偵測是輔助功能，不應阻斷核心建立流程
-        pass
+        # 異常類型輸出到 stderr，供除錯用
+        sys.stderr.write(f"[DEBUG] 重複偵測異常 ({type(e).__name__}): {e}\n")
 
 
 def execute(args: argparse.Namespace) -> int:

@@ -183,9 +183,9 @@ class TestDuplicateDetection:
                 ]
             return []
 
-        # Patch where it's imported in create.py (inside _detect_duplicate_tickets)
+        # Patch 使用端（create.py 內部 import）
         return mocker.patch(
-            "ticket_system.lib.ticket_loader.list_tickets",
+            "ticket_system.commands.create.list_tickets",
             side_effect=_mock_impl,
         )
 
@@ -226,7 +226,7 @@ class TestDuplicateDetection:
             ]
 
         mocker.patch(
-            "ticket_system.lib.ticket_loader.list_tickets",
+            "ticket_system.commands.create.list_tickets",
             side_effect=mock_list_impl,
         )
 
@@ -263,7 +263,7 @@ class TestDuplicateDetection:
             ]
 
         mocker.patch(
-            "ticket_system.lib.ticket_loader.list_tickets",
+            "ticket_system.commands.create.list_tickets",
             side_effect=mock_list_impl,
         )
 
@@ -300,7 +300,7 @@ class TestDuplicateDetection:
             ]
 
         mocker.patch(
-            "ticket_system.lib.ticket_loader.list_tickets",
+            "ticket_system.commands.create.list_tickets",
             side_effect=mock_list_impl,
         )
 
@@ -336,7 +336,7 @@ class TestDuplicateDetection:
             ]
 
         mocker.patch(
-            "ticket_system.lib.ticket_loader.list_tickets",
+            "ticket_system.commands.create.list_tickets",
             side_effect=mock_list_impl,
         )
 
@@ -362,7 +362,7 @@ class TestDuplicateDetection:
             return []
 
         mocker.patch(
-            "ticket_system.lib.ticket_loader.list_tickets",
+            "ticket_system.commands.create.list_tickets",
             side_effect=mock_list_impl,
         )
 
@@ -380,7 +380,7 @@ class TestDuplicateDetection:
 
     # 自身排除邊界
     def test_b007_subtask_excludes_parent(self, mocker, capsys):
-        """B-007：建立子任務時，只排除自身 ID"""
+        """B-007：建立子任務時，也排除父任務 ID"""
 
         def mock_list_impl(version):
             return [
@@ -399,13 +399,13 @@ class TestDuplicateDetection:
             ]
 
         mocker.patch(
-            "ticket_system.lib.ticket_loader.list_tickets",
+            "ticket_system.commands.create.list_tickets",
             side_effect=mock_list_impl,
         )
 
         # 建立子任務 0.1.2-W3-001.1，與 parent 標題相似
-        # 但排除 ID 是 0.1.2-W3-001.1，不是 0.1.2-W3-001，所以 parent 不會被排除
-        # 因此應發現相似 Ticket（parent）
+        # 子任務含 "."，所以排除清單包含：自身 (0.1.2-W3-001.1) + 父任務 (0.1.2-W3-001)
+        # 因此 parent 會被排除，不應發現相似 Ticket
         _detect_duplicate_tickets(
             version="0.1.2",
             new_title="實作 SRP 偵測部分 A",
@@ -415,9 +415,8 @@ class TestDuplicateDetection:
 
         captured = capsys.readouterr()
 
-        # parent 應被視為相似 Ticket，輸出 WARNING
-        assert "[WARNING]" in captured.out
-        assert "0.1.2-W3-001" in captured.out
+        # parent 應被排除，不輸出 WARNING
+        assert captured.out == ""
 
     # 內容邊界
     def test_b008_empty_title_use_what(self, mocker, capsys):
@@ -434,7 +433,7 @@ class TestDuplicateDetection:
             ]
 
         mocker.patch(
-            "ticket_system.lib.ticket_loader.list_tickets",
+            "ticket_system.commands.create.list_tickets",
             side_effect=mock_list_impl,
         )
 
@@ -464,7 +463,7 @@ class TestDuplicateDetection:
             ]
 
         mocker.patch(
-            "ticket_system.lib.ticket_loader.list_tickets",
+            "ticket_system.commands.create.list_tickets",
             side_effect=mock_list_impl,
         )
 
@@ -484,7 +483,7 @@ class TestDuplicateDetection:
         """B-010：title 和 what 均為空 → 跳過重複偵測"""
 
         mocker.patch(
-            "ticket_system.lib.ticket_loader.list_tickets",
+            "ticket_system.commands.create.list_tickets",
             side_effect=lambda v: [
                 {
                     "id": "0.1.2-W3-001",
@@ -512,7 +511,7 @@ class TestDuplicateDetection:
         """B-011：list_tickets() 拋出例外 → 靜默通過"""
 
         mocker.patch(
-            "ticket_system.lib.ticket_loader.list_tickets",
+            "ticket_system.commands.create.list_tickets",
             side_effect=FileNotFoundError("Directory not found"),
         )
 
@@ -549,7 +548,7 @@ class TestDuplicateDetection:
             ]
 
         mocker.patch(
-            "ticket_system.lib.ticket_loader.list_tickets",
+            "ticket_system.commands.create.list_tickets",
             side_effect=mock_list_impl,
         )
 
@@ -589,7 +588,7 @@ class TestDuplicateDetection:
         """B-013：pending tickets 目錄為空 → 靜默通過"""
 
         mocker.patch(
-            "ticket_system.lib.ticket_loader.list_tickets",
+            "ticket_system.commands.create.list_tickets",
             side_effect=lambda v: [],
         )
 
@@ -619,7 +618,7 @@ class TestIntegration:
         # 此測試驗證呼叫位置，在 execute() 中進行
         # 這裡只驗證函式簽名和行為
         mock = mocker.patch(
-            "ticket_system.lib.ticket_loader.list_tickets",
+            "ticket_system.commands.create.list_tickets",
             side_effect=lambda v: [],
         )
 
@@ -638,7 +637,7 @@ class TestIntegration:
         """I-002：偵測結果不影響後續儲存流程"""
 
         mocker.patch(
-            "ticket_system.lib.ticket_loader.list_tickets",
+            "ticket_system.commands.create.list_tickets",
             side_effect=lambda v: [
                 {
                     "id": "0.1.2-W3-001",
@@ -670,7 +669,7 @@ class TestIntegration:
         )
 
         mocker.patch(
-            "ticket_system.lib.ticket_loader.list_tickets",
+            "ticket_system.commands.create.list_tickets",
             side_effect=lambda v: [
                 {
                     "id": "0.1.2-W3-001",
@@ -698,7 +697,7 @@ class TestIntegration:
         """I-004：_detect_duplicate_tickets 異常不阻斷建立"""
 
         mocker.patch(
-            "ticket_system.lib.ticket_loader.list_tickets",
+            "ticket_system.commands.create.list_tickets",
             side_effect=RuntimeError("Unexpected error"),
         )
 
@@ -736,7 +735,7 @@ class TestPerformance:
         ]
 
         mocker.patch(
-            "ticket_system.lib.ticket_loader.list_tickets",
+            "ticket_system.commands.create.list_tickets",
             side_effect=lambda v: pending_tickets,
         )
 
@@ -767,7 +766,7 @@ class TestPerformance:
         ]
 
         mocker.patch(
-            "ticket_system.lib.ticket_loader.list_tickets",
+            "ticket_system.commands.create.list_tickets",
             side_effect=lambda v: pending_tickets,
         )
 
