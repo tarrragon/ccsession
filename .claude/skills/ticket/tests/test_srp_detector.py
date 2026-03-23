@@ -290,10 +290,9 @@ class TestDetectSrpViolations:
         acceptance = None
 
         # When
-        has_issue, warnings = detect_srp_violations(what, acceptance)
+        warnings = detect_srp_violations(what, acceptance)
 
         # Then
-        assert has_issue is True
         assert len(warnings) > 0
         # 應包含 what 多目標的警告
         assert any("連接詞" in w for w in warnings)
@@ -308,8 +307,7 @@ class TestDetectSrpViolations:
             "auditor.py 檢查",
             "constants.py 定義"
         ]
-        has_issue, warnings = detect_srp_violations(what, acceptance)
-        assert has_issue is True
+        warnings = detect_srp_violations(what, acceptance)
         assert len(warnings) > 0
         # 應包含跨模組的警告
         assert any("模組" in w for w in warnings)
@@ -324,8 +322,7 @@ class TestDetectSrpViolations:
             "auditor.py 檢查",
             "constants.py 定義"
         ]
-        has_issue, warnings = detect_srp_violations(what, acceptance)
-        assert has_issue is True
+        warnings = detect_srp_violations(what, acceptance)
         assert len(warnings) >= 2  # 應有兩個警告
 
     # 場景 4：what 無連接詞，acceptance 無跨模組
@@ -337,8 +334,7 @@ class TestDetectSrpViolations:
             "功能實作完成",
             "測試通過"
         ]
-        has_issue, warnings = detect_srp_violations(what, acceptance)
-        assert has_issue is False
+        warnings = detect_srp_violations(what, acceptance)
         assert warnings == []
 
     # 場景 5：what 為 None
@@ -347,8 +343,7 @@ class TestDetectSrpViolations:
         """場景 5：what 為 None"""
         what = None
         acceptance = []
-        has_issue, warnings = detect_srp_violations(what, acceptance)
-        assert has_issue is False
+        warnings = detect_srp_violations(what, acceptance)
         assert warnings == []
 
     # 場景 6：what 和 acceptance 都為 None
@@ -357,8 +352,7 @@ class TestDetectSrpViolations:
         """場景 6：what 和 acceptance 都為 None"""
         what = None
         acceptance = None
-        has_issue, warnings = detect_srp_violations(what, acceptance)
-        assert has_issue is False
+        warnings = detect_srp_violations(what, acceptance)
         assert warnings == []
 
     # 場景 7：acceptance 為空陣列
@@ -367,8 +361,7 @@ class TestDetectSrpViolations:
         """場景 7：acceptance 為空陣列"""
         what = "實作 A 和修復 B"
         acceptance = []
-        has_issue, warnings = detect_srp_violations(what, acceptance)
-        assert has_issue is True
+        warnings = detect_srp_violations(what, acceptance)
         assert len(warnings) > 0
         # 只有 what 觸發
         assert any("連接詞" in w for w in warnings)
@@ -383,10 +376,9 @@ class TestDetectSrpViolations:
             None,
             "constants.py 定義"
         ]
-        has_issue, warnings = detect_srp_violations(what, acceptance)
+        warnings = detect_srp_violations(what, acceptance)
         # 應優雅處理，與 ["create.py 實作", "constants.py 定義"] 相同
         # 2 個模組，不超過閾值
-        assert has_issue is False
         assert warnings == []
 
 
@@ -404,11 +396,10 @@ class TestSrpInCreateCommand:
         acceptance = None
 
         # When
-        has_issue, warnings = detect_srp_violations(what, acceptance)
+        warnings = detect_srp_violations(what, acceptance)
 
         # Then
         # 應偵測到 SRP 疑慮
-        assert has_issue is True
         # 應包含警告訊息
         assert len(warnings) > 0
         # 警告應包含「連接詞」或「Atomic Ticket」字樣
@@ -425,10 +416,9 @@ class TestSrpInCreateCommand:
         ]
 
         # When
-        has_issue, warnings = detect_srp_violations(what, acceptance)
+        warnings = detect_srp_violations(what, acceptance)
 
         # Then
-        assert has_issue is True
         assert len(warnings) > 0
         # 警告應包含「模組」或「Atomic Ticket」字樣
         assert any("模組" in w or "Atomic" in w for w in warnings)
@@ -443,9 +433,8 @@ class TestSrpInCreateCommand:
         ]
 
         # When
-        has_issue, warnings = detect_srp_violations(what, acceptance)
+        warnings = detect_srp_violations(what, acceptance)
 
         # Then
         # 應無 SRP 疑慮
-        assert has_issue is False
         assert warnings == []

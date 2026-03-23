@@ -382,7 +382,7 @@ def validate_acceptance_consistency(
 
 def detect_vague_acceptance(
     acceptance_list: Optional[List[str]],
-) -> Tuple[bool, List[str]]:
+) -> List[str]:
     """
     偵測驗收條件中的模糊詞彙
 
@@ -394,12 +394,12 @@ def detect_vague_acceptance(
         acceptance_list: 驗收條件清單（YAML list 或 None）
 
     Returns:
-        Tuple[bool, List[str]]: (無嚴重問題, 警告訊息清單)
-        - (True, []): 無模糊詞或有量化指標
-        - (True, [warnings...]): 有模糊詞但無嚴重問題（只警告）
+        List[str]: 警告訊息清單
+        - []: 無模糊詞或有量化指標
+        - [warnings...]: 偵測到的模糊詞警告
     """
     if not acceptance_list or len(acceptance_list) == 0:
-        return True, []
+        return []
 
     warnings = []
 
@@ -436,8 +436,7 @@ def detect_vague_acceptance(
                     f"建議補充量化指標（如：「5 個案例」「100% 通過」等）"
                 )
 
-    # 警告不導致失敗，只返回 True + 警告清單
-    return True, warnings
+    return warnings
 
 
 # ============================================================
@@ -521,7 +520,7 @@ def _detect_srp_cross_module(acceptance_list: Optional[List[str]]) -> Tuple[bool
 def detect_srp_violations(
     what_text: str,
     acceptance_list: Optional[List[str]],
-) -> Tuple[bool, List[str]]:
+) -> List[str]:
     """
     偵測 Ticket 是否有潛在的 SRP（單一職責原則）違規。
 
@@ -537,12 +536,12 @@ def detect_srp_violations(
         acceptance_list: 驗收條件清單（可為 None）
 
     Returns:
-        Tuple[bool, List[str]]:
-        - (False, []): 未偵測到 SRP 疑慮
-        - (True, [warning_messages]): 偵測到疑慮，回傳警告訊息清單
+        List[str]: 警告訊息清單
+        - []: 未偵測到 SRP 疑慮
+        - [warning_messages...]: 偵測到的疑慮，回傳警告訊息清單
 
     Note:
-        回傳值第一個元素為 True 表示「有疑慮」（與 detect_vague_acceptance 的語義不同）。
+        回傳為警告清單，調用端用 `if warnings:` 判斷有無疑慮。
         偵測結果只用於輸出 WARNING，不影響 create 命令的回傳碼。
     """
     # Guard Clause
@@ -552,7 +551,6 @@ def detect_srp_violations(
         acceptance_list = []
 
     warning_messages = []
-    has_any_issue = False
 
     # Lazy import：只在需要時才載入（減少依賴開銷）
     from .command_lifecycle_messages import CreateMessages
@@ -564,7 +562,6 @@ def detect_srp_violations(
             conjunctions="、".join(conjunctions)
         )
         warning_messages.append(message)
-        has_any_issue = True
 
     # 執行 acceptance 欄位偵測
     has_accept_issue, modules = _detect_srp_cross_module(acceptance_list)
@@ -573,12 +570,8 @@ def detect_srp_violations(
             modules="、".join(modules)
         )
         warning_messages.append(message)
-        has_any_issue = True
 
-    # 回傳結果
-    if has_any_issue:
-        return True, warning_messages
-    return False, []
+    return warning_messages
 
 
 # ============================================================
@@ -900,9 +893,9 @@ def run_audit(ticket_id: str, version: Optional[str] = None) -> AuditReport:
 
     # Step 4: 驗收條件一致性檢查（Bug 2 修正）
     # 從 body 中提取 Solution 和 Test Results 區段
-    # 使用非捕獲組 (?:) 確保 group(1) 總是捕獲內容部分，而不會因為選擇分支而返回 None
-    solution_match = re.search(r"^(?:##|###)\s+Solution\s*$(.*?)(?=^##\s+|^###\s+|\Z)", body, re.MULTILINE | re.DOTALL)
-    test_results_match = re.search(r"^(?:##|###)\s+Test Results\s*$(.*?)(?=^##\s+|^###\s+|\Z)", body, re.MULTILINE | re.DOTALL)
+    # 使用 lookahead (?=^##\s+[^#]|\Z) 確保只在 ## 後跟非 # 時截斷，允許 ### 子標題
+    solution_match = re.search(r"^(?:##|###)\s+Solution\s*$(.*?)(?=^##\s+[^#]|\Z)", body, re.MULTILINE | re.DOTALL)
+    test_results_match = re.search(r"^(?:##|###)\s+Test Results\s*$(.*?)(?=^##\s+[^#]|\Z)", body, re.MULTILINE | re.DOTALL)
 
     solution_text = solution_match.group(1).strip() if solution_match else ""
     test_results_text = test_results_match.group(1).strip() if test_results_match else ""
@@ -920,10 +913,10 @@ def run_audit(ticket_id: str, version: Optional[str] = None) -> AuditReport:
     ))
 
     # Step 4.5: 含糊驗收條件偵測
-    vague_passed, vague_warnings = detect_vague_acceptance(acceptance)
+    vague_warnings = detect_vague_acceptance(acceptance)
     report.add_step(AuditStep(
         name="含糊驗收條件偵測",
-        passed=vague_passed,
+        passed=len(vague_warnings) == 0,
         warnings=vague_warnings
     ))
 

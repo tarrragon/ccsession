@@ -628,8 +628,8 @@ def _print_create_checklist(
     if new_ticket:
         what_text = new_ticket.get("what", "") or ""
         acceptance = new_ticket.get("acceptance", []) or []
-        has_srp_issue, srp_warnings = detect_srp_violations(what_text, acceptance)
-        if has_srp_issue and srp_warnings:
+        srp_warnings = detect_srp_violations(what_text, acceptance)
+        if srp_warnings:
             for warning in srp_warnings:
                 print(format_warning(warning))
 
@@ -641,12 +641,12 @@ def _print_create_checklist(
     if used_default_acceptance:
         print(format_warning(CreateMessages.DEFAULT_ACCEPTANCE_WARNING))
 
-    # 問題 4 修正：檢查含糊驗收條件（無論是否使用預設）
+    # 問題 1 修正：檢查含糊驗收條件（無論是否使用預設）
     if new_ticket:
         acceptance = new_ticket.get("acceptance", [])
         if acceptance:
-            vague_passed, vague_warnings = detect_vague_acceptance(acceptance)
-            if not vague_passed and vague_warnings:
+            vague_warnings = detect_vague_acceptance(acceptance)
+            if vague_warnings:
                 for warning in vague_warnings:
                     print(format_warning(CreateMessages.VAGUE_ACCEPTANCE_WARNING, vague_words=warning))
 
