@@ -76,7 +76,6 @@ class FileStatus:
 
     特殊限制：
     - Renamed/Copied 檔案：file_path 包含 " -> " 分隔符，格式為 "old_name -> new_name"
-    - is_modified / is_added / is_deleted：檢查「任一位置」（X 或 Y）是否包含該狀態（staged 或 unstaged 任一即為 True）
     """
     status: str  # 完整的 XY 狀態碼（如 " M"、"A "、"??"）
     file_path: str  # 檔案路徑

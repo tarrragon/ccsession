@@ -567,7 +567,7 @@ def _build_and_save_ticket(
     version: str,
     ticket_id: str,
     config: TicketConfig,
-) -> tuple[Dict[str, Any], str]:
+) -> Dict[str, Any]:
     """持久化層：建構並儲存 Ticket。
 
     負責：
@@ -581,7 +581,7 @@ def _build_and_save_ticket(
         config: Ticket 配置
 
     Returns:
-        tuple[Dict, str]: (建立的 Ticket 物件, Ticket 檔案路徑)
+        Dict[str, Any]: 建立的 Ticket 物件
     """
     frontmatter = create_ticket_frontmatter(config)
     body = create_ticket_body(frontmatter["what"], frontmatter["who"]["current"])
@@ -593,7 +593,7 @@ def _build_and_save_ticket(
     ticket_path = get_ticket_path(version, ticket_id)
     save_ticket(ticket, ticket_path)
 
-    return ticket, str(ticket_path)
+    return ticket
 
 
 def _update_parent_and_get_parent_info(
@@ -638,6 +638,7 @@ def _report_creation_success(
     ticket: Dict[str, Any],
     parent_info: Optional[Dict[str, Any]],
     tdd_result: Any,
+    ticket_path: str,
 ) -> None:
     """報告層：輸出建立成功的完整報告。
 
@@ -651,12 +652,12 @@ def _report_creation_success(
         ticket_id: Ticket ID
         config: Ticket 配置
         args: 命令行參數（含 parent 欄位）
-        ticket: 新建立的 Ticket 物件（含 ticket_path 資訊）
+        ticket: 新建立的 Ticket 物件
         parent_info: 父 Ticket 資訊（若為子任務）
         tdd_result: TDD 序列建議結果
+        ticket_path: Ticket 檔案路徑
     """
-    # 輸出建立訊息（從持久化層移入報告層）
-    ticket_path = ticket.get("_ticket_path", "")
+    # 輸出建立訊息
     print(format_info(InfoMessages.TICKET_CREATED, ticket_id=ticket_id))
     print(format_msg(CreateMessages.TICKET_LOCATION, ticket_path=ticket_path))
     print(format_msg(CreateMessages.TASK_TYPE_LABEL, task_type=config["ticket_type"]))
@@ -703,8 +704,8 @@ def _persist_and_report(
         return 1
 
     # 步驟 2：持久化
-    ticket, ticket_path = _build_and_save_ticket(version, ticket_id, config)
-    ticket["_ticket_path"] = ticket_path
+    ticket = _build_and_save_ticket(version, ticket_id, config)
+    ticket_path = str(get_ticket_path(version, ticket_id))
 
     # 步驟 3：更新關係
     parent_info = _update_parent_and_get_parent_info(args, version, ticket_id)
@@ -717,6 +718,7 @@ def _persist_and_report(
         ticket=ticket,
         parent_info=parent_info,
         tdd_result=tdd_result,
+        ticket_path=ticket_path,
     )
 
     return 0
