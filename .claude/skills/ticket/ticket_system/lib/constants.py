@@ -227,6 +227,52 @@ SRP_ACCEPTANCE_MODULE_THRESHOLD: int = 2
 DUPLICATE_DETECTION_THRESHOLD: float = 0.3
 
 
+# ============================================================
+# Protocol Version 常數（v0.1.2 新增）
+# ============================================================
+
+# 當前協議版本（新 ticket 使用）
+PROTOCOL_VERSION_CURRENT: str = "2.0"
+
+# 舊 ticket 推斷版本（無 protocol_version 欄位時的預設值）
+PROTOCOL_VERSION_DEFAULT: str = "1.0"
+
+# 支援的協議版本清單
+PROTOCOL_VERSIONS_SUPPORTED: List[str] = ["1.0", "2.0"]
+
+# 協議版本格式：Major.Minor（例如 "2.0", "1.0"）
+# 格式說明：
+#   - Major：非負整數，代表主版本號（破壞性改變時遞增）
+#   - Minor：非負整數，代表次版本號（向後相容新增時遞增）
+#   - 分隔符：英文句號 "."
+PROTOCOL_VERSION_PATTERN: str = r"^\d+\.\d+$"
+
+# 預編譯協議版本正則表達式，避免重複編譯
+PROTOCOL_VERSION_RE = re.compile(PROTOCOL_VERSION_PATTERN)
+
+# 協議版本遷移鏈（支援未來擴展）
+# 定義版本之間的遷移規則和相容性
+PROTOCOL_VERSION_MIGRATIONS: Dict[str, Dict] = {
+    "1.0": {
+        "target": "2.0",
+        "handler": "migrate_v1_to_v2",
+        "breaking_changes": False,  # v1→v2 向後相容
+    },
+    # 未來可擴展：
+    # "2.0": {
+    #     "target": "3.0",
+    #     "handler": "migrate_v2_to_v3",
+    #     "breaking_changes": True,
+    # }
+}
+
+# 協議版本語義文檔
+PROTOCOL_VERSION_SEMANTICS: Dict[str, str] = {
+    "major_increment": "欄位刪除、語義改變、必填新增（破壞性）",
+    "minor_increment": "可選欄位新增、可接受值擴充（向後相容）",
+}
+
+
 if __name__ == "__main__":
     from ticket_system.lib.messages import print_not_executable_and_exit
     print_not_executable_and_exit()
