@@ -483,7 +483,7 @@ def _detect_srp_cross_module(acceptance_list: Optional[List[str]]) -> Tuple[bool
     """
     偵測驗收條件中的跨模組特徵。
 
-    從驗收條件文字中識別模組名稱（檔案路徑、snake_case、PascalCase）。
+    從驗收條件文字中識別模組名稱（.py 檔案）。
     若不同模組數量超過閾值，視為跨模組。
 
     Args:
@@ -506,24 +506,10 @@ def _detect_srp_cross_module(acceptance_list: Optional[List[str]]) -> Tuple[bool
         if not isinstance(item, str):
             continue
 
-        # 識別方式 1：檔案路徑（含 .py）
+        # 識別方式：檔案路徑（含 .py）
         # 匹配 xxx.py 或 xxx_yyy.py 格式
-        file_matches = re.findall(r'(\w+)\.py', item)
-        for match in file_matches:
-            detected_modules.add(match.lower())
-
-        # 識別方式 2：Python 模組名（snake_case）
-        # 匹配 snake_case 模組名
-        snake_case_matches = re.findall(r'\b([a-z_]+)\b', item)
-        for match in snake_case_matches:
-            if match and len(match) > 2:  # 過濾過短的詞
-                detected_modules.add(match.lower())
-
-        # 識別方式 3：類別名稱（PascalCase）
-        # 匹配 PascalCase 名稱
-        pascal_case_matches = re.findall(r'\b([A-Z][a-zA-Z]+)\b', item)
-        for match in pascal_case_matches:
-            detected_modules.add(match.lower())
+        file_matches = re.findall(r'\b(\w+)\.py\b', item)
+        detected_modules.update(m.lower() for m in file_matches)
 
     # 判斷是否跨模組
     module_count = len(detected_modules)
@@ -568,10 +554,12 @@ def detect_srp_violations(
     warning_messages = []
     has_any_issue = False
 
+    # Lazy import：只在需要時才載入（減少依賴開銷）
+    from .command_lifecycle_messages import CreateMessages
+
     # 執行 what 欄位偵測
     has_what_issue, conjunctions = _detect_srp_multi_target(what_text)
     if has_what_issue and conjunctions:
-        from .command_lifecycle_messages import CreateMessages
         message = CreateMessages.SRP_MULTI_TARGET_WARNING.format(
             conjunctions="、".join(conjunctions)
         )
@@ -581,7 +569,6 @@ def detect_srp_violations(
     # 執行 acceptance 欄位偵測
     has_accept_issue, modules = _detect_srp_cross_module(acceptance_list)
     if has_accept_issue and modules:
-        from .command_lifecycle_messages import CreateMessages
         message = CreateMessages.SRP_CROSS_MODULE_WARNING.format(
             modules="、".join(modules)
         )
