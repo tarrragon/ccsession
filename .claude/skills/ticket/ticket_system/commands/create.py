@@ -567,7 +567,7 @@ def _build_and_save_ticket(
     version: str,
     ticket_id: str,
     config: TicketConfig,
-) -> Dict[str, Any]:
+) -> tuple[Dict[str, Any], str]:
     """持久化層：建構並儲存 Ticket。
 
     負責：
@@ -581,7 +581,7 @@ def _build_and_save_ticket(
         config: Ticket 配置
 
     Returns:
-        建立的 Ticket 物件（含 frontmatter 和 body）
+        tuple[Dict, str]: (建立的 Ticket 物件, Ticket 檔案路徑)
     """
     frontmatter = create_ticket_frontmatter(config)
     body = create_ticket_body(frontmatter["what"], frontmatter["who"]["current"])
@@ -593,11 +593,7 @@ def _build_and_save_ticket(
     ticket_path = get_ticket_path(version, ticket_id)
     save_ticket(ticket, ticket_path)
 
-    print(format_info(InfoMessages.TICKET_CREATED, ticket_id=ticket_id))
-    print(format_msg(CreateMessages.TICKET_LOCATION, ticket_path=ticket_path))
-    print(format_msg(CreateMessages.TASK_TYPE_LABEL, task_type=config["ticket_type"]))
-
-    return ticket
+    return ticket, str(ticket_path)
 
 
 def _update_parent_and_get_parent_info(
@@ -646,18 +642,25 @@ def _report_creation_success(
     """報告層：輸出建立成功的完整報告。
 
     負責：
-    1. 輸出建立時檢查清單
-    2. 輸出 TDD 順序建議
-    3. 輸出並行分析結果（如適用）
+    1. 輸出建立訊息（建立成功、檔案位置、任務類型）
+    2. 輸出建立時檢查清單
+    3. 輸出 TDD 順序建議
+    4. 輸出並行分析結果（如適用）
 
     Args:
         ticket_id: Ticket ID
         config: Ticket 配置
         args: 命令行參數（含 parent 欄位）
-        ticket: 新建立的 Ticket 物件
+        ticket: 新建立的 Ticket 物件（含 ticket_path 資訊）
         parent_info: 父 Ticket 資訊（若為子任務）
         tdd_result: TDD 序列建議結果
     """
+    # 輸出建立訊息（從持久化層移入報告層）
+    ticket_path = ticket.get("_ticket_path", "")
+    print(format_info(InfoMessages.TICKET_CREATED, ticket_id=ticket_id))
+    print(format_msg(CreateMessages.TICKET_LOCATION, ticket_path=ticket_path))
+    print(format_msg(CreateMessages.TASK_TYPE_LABEL, task_type=config["ticket_type"]))
+
     used_default_acceptance = config.get("acceptance") is None
     _print_create_checklist(
         ticket_id=ticket_id,
@@ -700,7 +703,8 @@ def _persist_and_report(
         return 1
 
     # 步驟 2：持久化
-    ticket = _build_and_save_ticket(version, ticket_id, config)
+    ticket, ticket_path = _build_and_save_ticket(version, ticket_id, config)
+    ticket["_ticket_path"] = ticket_path
 
     # 步驟 3：更新關係
     parent_info = _update_parent_and_get_parent_info(args, version, ticket_id)

@@ -15,7 +15,7 @@ from git_utils import (
     get_current_branch,
     get_project_root,
     get_uncommitted_files,
-    get_uncommitted_status_lines,
+    _get_uncommitted_status_lines,
     get_worktree_list,
     is_allowed_branch,
     is_protected_branch,
@@ -194,7 +194,7 @@ class TestUncommittedStatusLines(unittest.TestCase):
 ?? file2.txt
 A  file3.py
 """)
-        status_lines = get_uncommitted_status_lines()
+        status_lines = _get_uncommitted_status_lines()
         self.assertEqual(len(status_lines), 3)
         self.assertIn(" M file1.txt", status_lines)
         self.assertIn("?? file2.txt", status_lines)
@@ -204,14 +204,14 @@ A  file3.py
     def test_no_uncommitted_changes(self, mock_run):
         """測試無未提交變更時回傳空列表"""
         mock_run.return_value = (True, "")
-        status_lines = get_uncommitted_status_lines()
+        status_lines = _get_uncommitted_status_lines()
         self.assertEqual(status_lines, [])
 
     @patch('git_utils.run_git_command')
     def test_git_command_failure(self, mock_run):
         """測試 git 命令失敗時回傳空列表"""
         mock_run.return_value = (False, "fatal: not a git repository")
-        status_lines = get_uncommitted_status_lines()
+        status_lines = _get_uncommitted_status_lines()
         self.assertEqual(status_lines, [])
 
     @patch('git_utils.run_git_command')
@@ -221,7 +221,7 @@ A  file3.py
 ?? untracked.txt
  D deleted.txt
 """)
-        status_lines = get_uncommitted_status_lines()
+        status_lines = _get_uncommitted_status_lines()
         # 驗證格式完整性（含狀態和空格）
         self.assertTrue(any(line.startswith(" M") for line in status_lines))
         self.assertTrue(any(line.startswith("??") for line in status_lines))

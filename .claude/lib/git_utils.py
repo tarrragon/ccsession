@@ -11,7 +11,7 @@ Git 操作共用工具
 - get_project_root: 獲取專案根目錄
 - FileStatus: 結構化檔案狀態資訊（高階 API）
 - get_uncommitted_files: 獲取未提交變更的結構化資訊（高階 API）
-- _get_uncommitted_status_lines: 獲取未提交變更狀態行（內部，已棄用）
+- _get_uncommitted_status_lines: 獲取未提交變更狀態行（內部 API）
 - get_worktree_list: 獲取 worktree 列表
 - is_protected_branch: 檢查是否為保護分支
 - is_allowed_branch: 檢查是否為允許編輯的分支
@@ -73,6 +73,10 @@ class FileStatus:
     - "A  file.py"：staged 新增
     - "?? untracked.txt"：未追蹤檔案
     - "RM old.txt -> new.txt"：renamed
+
+    特殊限制：
+    - Renamed/Copied 檔案：file_path 包含 " -> " 分隔符，格式為 "old_name -> new_name"
+    - is_modified / is_added / is_deleted：檢查「任一位置」（X 或 Y）是否包含該狀態（staged 或 unstaged 任一即為 True）
     """
     status: str  # 完整的 XY 狀態碼（如 " M"、"A "、"??"）
     file_path: str  # 檔案路徑
@@ -84,17 +88,17 @@ class FileStatus:
 
     @property
     def is_modified(self) -> bool:
-        """檢查是否為修改狀態"""
+        """檢查是否為修改狀態（staged 或 unstaged 任一位置包含 'M'）"""
         return 'M' in self.status
 
     @property
     def is_added(self) -> bool:
-        """檢查是否為新增狀態"""
+        """檢查是否為新增狀態（staged 或 unstaged 任一位置包含 'A'）"""
         return 'A' in self.status
 
     @property
     def is_deleted(self) -> bool:
-        """檢查是否為刪除狀態"""
+        """檢查是否為刪除狀態（staged 或 unstaged 任一位置包含 'D'）"""
         return 'D' in self.status
 
     @property
@@ -249,16 +253,6 @@ def _get_uncommitted_status_lines() -> list[str]:
 
     lines = output.split("\n")
     return [line for line in lines if line.strip()]
-
-
-# 向後相容別名（已棄用，僅用於測試）
-def get_uncommitted_status_lines() -> list[str]:
-    """
-    向後相容別名，轉向 _get_uncommitted_status_lines()
-
-    已棄用：建議改用 get_uncommitted_files() 高階 API
-    """
-    return _get_uncommitted_status_lines()
 
 
 def get_worktree_list() -> list[dict]:
