@@ -600,7 +600,7 @@ def _persist_and_report(
             print(f"   Parent: {args.parent} (已更新 children)")
             parent_info = load_ticket(version, args.parent)
         else:
-            print(format_warning(WarningMessages.PARENT_UPDATE_FAILED, parent_id=args.parent))
+            print(format_warning(WarningMessages.PARENT_UPDATE_FAILED, parent_id=args.parent, child_id=ticket_id))
 
     # 顯示建立時檢查清單
     used_default_acceptance = config.get("acceptance") is None
