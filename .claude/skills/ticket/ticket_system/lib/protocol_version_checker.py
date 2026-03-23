@@ -1,18 +1,11 @@
-#!/usr/bin/env -S uv run --quiet --script
-# /// script
-# requires-python = ">=3.11"
-# dependencies = []
-# ///
-
-r"""
-Protocol Version Check Hook - Library Function
+"""
+Protocol Version Checker - Library Function
 
 功能：在 ticket 被載入時自動偵測和處理版本遷移
 - 檢測 ticket 的 protocol_version 欄位
 - 若缺失或格式異常，觸發自動遷移至最新版本
 - 記錄遷移過程（雙通道：stderr + 日誌檔）
 
-此檔案目前是 library function，等待整合到 ticket_loader.py
 觸發時機：ticket 載入時（由 ticket_loader.py 或相關模組呼叫）
 
 設計原則：
@@ -78,11 +71,7 @@ def check_protocol_version(ticket_data: Dict[str, Any]) -> Dict[str, Any]:
     - 若遷移成功，輸出 INFO 級別訊息記錄
     """
     try:
-        # 動態導入遷移模組（避免循環依賴）
-        ticket_module_path = Path(__file__).parent.parent / "skills" / "ticket"
-        if str(ticket_module_path) not in sys.path:
-            sys.path.insert(0, str(ticket_module_path))
-
+        # 導入遷移模組
         from ticket_system.lib.migrations import (
             migrate_ticket,
             ProtocolVersionError,
@@ -121,14 +110,3 @@ def check_protocol_version(ticket_data: Dict[str, Any]) -> Dict[str, Any]:
         log_exception("遷移過程中發生異常", error=e)
 
     return ticket_data
-
-
-if __name__ == "__main__":
-    # 測試：若直接執行此腳本
-    test_ticket = {
-        "id": "0.1.0-W1-001",
-        "title": "Test",
-        # 無 protocol_version
-    }
-    result = check_protocol_version(test_ticket)
-    print(json.dumps(result, indent=2, ensure_ascii=False))
