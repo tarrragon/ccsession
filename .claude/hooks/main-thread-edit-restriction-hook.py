@@ -18,6 +18,7 @@ Main Thread Edit Restriction Hook - PreToolUse Hook
 觸發時機: 執行 Edit/Write 工具時
 
 許可的檔案路徑（具體白名單）:
+  ^\.claude/[^/]+\.(json|yaml)$  # .claude/ 根目錄配置檔（settings.json 等）
   ^\.claude/plans/.*              # plan 檔案
   ^\.claude/rules/.*              # 規則檔案
   ^\.claude/methodologies/.*      # 方法論
@@ -81,6 +82,7 @@ EXIT_BLOCK = 2
 # 允許的檔案路徑模式（正則）
 # 注意：Ticket 檔案由 ticket-file-access-guard-hook.py 專責處理
 ALLOWED_PATTERNS = [
+    r"^\.claude/[^/]+\.(json|yaml)$",  # .claude/ 根目錄配置檔（settings.json 等）
     r"^\.claude/plans/.*",              # plan 檔案
     r"^\.claude/rules/.*",              # 規則檔案
     r"^\.claude/methodologies/.*",      # 方法論
