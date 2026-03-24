@@ -52,7 +52,6 @@ class ValidationResult:
     """驗證結果容器"""
     errors: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
-    infos: list[str] = field(default_factory=list)
 
     @property
     def can_proceed(self) -> bool:
@@ -138,9 +137,20 @@ class PhaseContractValidator:
             # 判斷是否為 legacy 文件
             is_legacy = self._is_legacy_artifact(file_path)
 
+            # 一次讀取檔案內容，供 Layer 2/3/4 使用（優化：避免重複讀檔）
+            file_content = self._read_file_safely(file_path)
+            if file_content is None:
+                # 無法讀取檔案
+                msg = "P-FORMAT-002: 無法讀取檔案"
+                if is_legacy:
+                    result.warnings.append(f"[Legacy降級] {msg}")
+                else:
+                    result.errors.append(msg)
+                continue
+
             # Layer 2：格式驗證
             format_errors, format_warnings = self._check_format(
-                file_path, artifact_spec, is_legacy
+                file_content, artifact_spec, is_legacy
             )
             result.errors.extend(format_errors)
             result.warnings.extend(format_warnings)
@@ -151,13 +161,13 @@ class PhaseContractValidator:
 
             # Layer 3：結構驗證
             structure_errors, structure_warnings = self._check_structure(
-                file_path, artifact_spec, is_legacy
+                file_content, artifact_spec, is_legacy
             )
             result.errors.extend(structure_errors)
             result.warnings.extend(structure_warnings)
 
             # Layer 4：內容驗證（始終為 WARNING，不阻止轉移）
-            content_warnings = self._check_content(file_path, artifact_spec)
+            content_warnings = self._check_content(file_content, artifact_spec)
             result.warnings.extend(content_warnings)
 
         return result
@@ -170,7 +180,7 @@ class PhaseContractValidator:
             "3a": "phase3a_output",
             "3b": "phase3b_output",
         }
-        return mapping.get(phase, f"phase{phase}_output")
+        return mapping.get(phase, "")
 
     def _resolve_artifact_path(
         self, ticket_id: str, artifact_spec: dict, ticket_dir: str
@@ -221,6 +231,19 @@ class PhaseContractValidator:
 
         return None
 
+    def _read_file_safely(self, file_path: str) -> str | None:
+        """
+        安全讀取檔案內容
+
+        Returns:
+            檔案內容，或 None 若讀取失敗
+        """
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                return f.read()
+        except (OSError, IOError):
+            return None
+
     def _check_existence(
         self, ticket_id: str, artifact_spec: dict, ticket_dir: str
     ) -> list[str]:
@@ -238,9 +261,14 @@ class PhaseContractValidator:
         return errors
 
     def _check_format(
-        self, file_path: str, artifact_spec: dict, is_legacy: bool
+        self, content: str, artifact_spec: dict, is_legacy: bool
     ) -> tuple[list[str], list[str]]:
-        """Layer 2：格式驗證，返回 (errors, warnings)"""
+        """
+        Layer 2：格式驗證，返回 (errors, warnings)
+
+        Args:
+            content: 檔案內容（已在 validate() 中讀取快取）
+        """
         errors = []
         warnings = []
 
@@ -249,35 +277,30 @@ class PhaseContractValidator:
 
         # 對 markdown 格式檔案驗證 frontmatter
         if artifact_type == "markdown":
-            try:
-                with open(file_path, "r", encoding="utf-8") as f:
-                    content = f.read()
-
-                # 嘗試解析 frontmatter
-                if content.startswith("---"):
-                    parts = content.split("---", 2)
-                    if len(parts) >= 2:
-                        try:
-                            yaml.safe_load(parts[1])
-                        except yaml.YAMLError:
-                            msg = "P-FORMAT-001: Frontmatter YAML 格式錯誤"
-                            if is_legacy:
-                                warnings.append(f"[Legacy降級] {msg}")
-                            else:
-                                errors.append(msg)
-            except (OSError, IOError) as e:
-                msg = f"P-FORMAT-002: 無法讀取檔案：{e}"
-                if is_legacy:
-                    warnings.append(f"[Legacy降級] {msg}")
-                else:
-                    errors.append(msg)
+            # 嘗試解析 frontmatter
+            if content.startswith("---"):
+                parts = content.split("---", 2)
+                if len(parts) >= 2:
+                    try:
+                        yaml.safe_load(parts[1])
+                    except yaml.YAMLError:
+                        msg = "P-FORMAT-001: Frontmatter YAML 格式錯誤"
+                        if is_legacy:
+                            warnings.append(f"[Legacy降級] {msg}")
+                        else:
+                            errors.append(msg)
 
         return errors, warnings
 
     def _check_structure(
-        self, file_path: str, artifact_spec: dict, is_legacy: bool
+        self, content: str, artifact_spec: dict, is_legacy: bool
     ) -> tuple[list[str], list[str]]:
-        """Layer 3：結構驗證，返回 (errors, warnings)"""
+        """
+        Layer 3：結構驗證，返回 (errors, warnings)
+
+        Args:
+            content: 檔案內容（已在 validate() 中讀取快取）
+        """
         errors = []
         warnings = []
 
@@ -286,74 +309,59 @@ class PhaseContractValidator:
 
         # 對 markdown 檔案驗證必要 Section
         if artifact_type == "markdown":
-            try:
-                with open(file_path, "r", encoding="utf-8") as f:
-                    content = f.read()
+            # 提取所有 Section（## 標題）
+            sections = re.findall(r"^##\s+(.+?)$", content, re.MULTILINE)
+            section_set = {s.strip() for s in sections}
 
-                # 提取所有 Section（## 標題）
-                sections = re.findall(r"^##\s+(.+?)$", content, re.MULTILINE)
-                section_set = {s.strip() for s in sections}
+            # 檢查必要 Section
+            for section in artifact_spec.get("content_sections", []):
+                section_name = section.get("name")
+                section_required = section.get("required", False)
 
-                # 檢查必要 Section
-                for section in artifact_spec.get("content_sections", []):
-                    section_name = section.get("name")
-                    section_required = section.get("required", False)
-
-                    if section_required and section_name not in section_set:
-                        msg = f"P-STRUCT-001: 必要 Section '{section_name}' 缺失"
-                        if is_legacy:
-                            warnings.append(f"[Legacy降級] {msg}")
-                        else:
-                            errors.append(msg)
-            except (OSError, IOError) as e:
-                msg = f"P-STRUCT-002: 無法讀取檔案：{e}"
-                if is_legacy:
-                    warnings.append(f"[Legacy降級] {msg}")
-                else:
-                    errors.append(msg)
+                if section_required and section_name not in section_set:
+                    msg = f"P-STRUCT-001: 必要 Section '{section_name}' 缺失"
+                    if is_legacy:
+                        warnings.append(f"[Legacy降級] {msg}")
+                    else:
+                        errors.append(msg)
 
         return errors, warnings
 
-    def _check_content(self, file_path: str, artifact_spec: dict) -> list[str]:
+    def _check_content(self, content: str, artifact_spec: dict) -> list[str]:
         """
         Layer 4：內容驗證，始終返回 warnings（無 errors）
 
         檢查項目：
         - 驗收條件至少 3 條
         - direction 欄位格式符合規範
+
+        Args:
+            content: 檔案內容（已在 validate() 中讀取快取）
         """
         warnings = []
 
-        try:
-            with open(file_path, "r", encoding="utf-8") as f:
-                content = f.read()
-
-            # 檢查驗收條件數量（Phase 1）
-            acceptance_criteria = re.findall(
-                r"^-\s+\[\s*\]\s+.+?$", content, re.MULTILINE
+        # 檢查驗收條件數量（Phase 1）
+        acceptance_criteria = re.findall(
+            r"^-\s+\[\s*\]\s+.+?$", content, re.MULTILINE
+        )
+        if len(acceptance_criteria) < 3:
+            warnings.append(
+                f"P-CONTENT-001: [WARNING] 驗收條件少於 3 條（目前 {len(acceptance_criteria)} 條）"
             )
-            if len(acceptance_criteria) < 3:
+
+        # 檢查 direction 欄位格式（Phase 3a）
+        direction_pattern = r"direction:\s*['\"]?(.+?)['\"]?\s*$"
+        direction_matches = re.findall(direction_pattern, content, re.MULTILINE)
+        for direction_value in direction_matches:
+            direction_value = direction_value.strip().strip("'\"")
+            # 允許的格式：to-{type}[:target_id]
+            if not re.match(
+                r"^to-(sibling|parent|child|context-refresh)(?::[\w.-]+)?$",
+                direction_value,
+            ):
                 warnings.append(
-                    f"P-CONTENT-001: [WARNING] 驗收條件少於 3 條（目前 {len(acceptance_criteria)} 條）"
+                    f"P-CONTENT-002: [WARNING] direction 欄位格式不符規範：'{direction_value}'"
                 )
-
-            # 檢查 direction 欄位格式（Phase 3a）
-            direction_pattern = r"direction:\s*['\"]?(.+?)['\"]?\s*$"
-            direction_matches = re.findall(direction_pattern, content, re.MULTILINE)
-            for direction_value in direction_matches:
-                direction_value = direction_value.strip().strip("'\"")
-                # 允許的格式：to-{type}[:target_id]
-                if not re.match(
-                    r"^to-(sibling|parent|child|context-refresh)(?::[\w.-]+)?$",
-                    direction_value,
-                ):
-                    warnings.append(
-                        f"P-CONTENT-002: [WARNING] direction 欄位格式不符規範：'{direction_value}'"
-                    )
-
-        except (OSError, IOError):
-            # 無法讀取檔案時不記錄 warning
-            pass
 
         return warnings
 
@@ -406,9 +414,6 @@ def format_validation_result(result: ValidationResult) -> str:
 
     for warning in result.warnings:
         lines.append(f"[WARNING] {warning}")
-
-    for info in result.infos:
-        lines.append(f"[INFO] {info}")
 
     return "\n".join(lines) if lines else "驗證通過"
 
