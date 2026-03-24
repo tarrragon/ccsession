@@ -173,6 +173,38 @@ class TestNormalizePath:
         assert normalize_path("") == ""
         assert normalize_path(None) == ""
 
+    # ========================================================================
+    # 新增：.. 路徑遍歷防護測試（Stack Pop 策略）
+    # ========================================================================
+
+    def test_parent_directory_single_level(self):
+        """單層 .. 遍歷：a/../b → b"""
+        assert normalize_path("a/../b") == "b"
+
+    def test_parent_directory_leading(self):
+        """前綴 .. 遍歷：../config → config"""
+        assert normalize_path("../config") == "config"
+
+    def test_parent_directory_multiple_levels(self):
+        """多層 .. 遍歷：a/b/../../c → c"""
+        assert normalize_path("a/b/../../c") == "c"
+
+    def test_parent_directory_nested(self):
+        """巢狀 .. 遍歷：a/b/../c/d/../../e → a/e"""
+        assert normalize_path("a/b/../c/d/../../e") == "a/e"
+
+    def test_parent_directory_excessive(self):
+        """超過路徑深度的 .. 遍歷：../../../a → a"""
+        assert normalize_path("../../../a") == "a"
+
+    def test_parent_directory_with_dot_slash(self):
+        """.. 與 ./ 組合：./a/../b → b"""
+        assert normalize_path("./a/../b") == "b"
+
+    def test_parent_directory_preserves_other_rules(self):
+        """.. 遍歷與其他規則組合：.\\A\\..//B/"""
+        assert normalize_path(".\\A\\..//B/") == "b"
+
 
 # ============================================================================
 # 測試：Ticket ID 提取

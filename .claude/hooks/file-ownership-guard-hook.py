@@ -103,7 +103,7 @@ def normalize_path(path: str) -> str:
     2. 簡化多重斜線 "//"
     3. 移除前綴 "./"
     4. 移除尾斜線 "/"
-    5. 拒絕或規範化 ".." 序列（防止目錄遍歷）
+    5. 消除 ".." 序列（stack pop 策略，防止目錄遍歷）
     6. 轉為小寫
 
     Args:
@@ -126,18 +126,19 @@ def normalize_path(path: str) -> str:
     while path.startswith("./"):
         path = path[2:]
 
-    # 防止目錄遍歷：移除 ".." 序列
-    # 規範化策略：移除所有 ".." 前綴和中間的 ".." 部分
+    # 防止目錄遍歷：使用 stack pop 策略消除 ".." 序列
+    # 若遇到 ".." 則 pop 前面的路徑部分，實現正確的路徑遍歷消除
     parts = path.split("/")
-    normalized_parts = []
+    stack = []
     for part in parts:
         if part == "..":
-            # 跳過 ".." 部分（不往上遍歷）
-            continue
+            # 消除前面的路徑部分（如有）
+            if stack:
+                stack.pop()
         elif part and part != ".":
             # 保留非空且非 "." 的部分
-            normalized_parts.append(part)
-    path = "/".join(normalized_parts)
+            stack.append(part)
+    path = "/".join(stack)
 
     # 移除尾斜線
     path = path.rstrip("/")

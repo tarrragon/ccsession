@@ -4,15 +4,15 @@ phase-contract-validator-hook.py
 
 TDD Phase Contract 四層驗證 Hook
 
-Hook 入口點，使用 hook_utils 中的共用驗證邏輯。
+Hook 入口點，使用 phase_contract_validator 中的共用驗證邏輯。
 
 驗證邏輯說明：
 - 四層驗證：存在性 → 格式 → 結構 → 內容
 - Legacy 文件自動降級：Layer 2/3 的 ERROR 降級為 WARNING
-- 具體實作見：.claude/lib/hook_utils.py
+- 具體實作見：.claude/lib/phase_contract_validator.py
 
 使用方式：
-    from hook_utils import PhaseContractValidator
+    from phase_contract_validator import PhaseContractValidator, ValidationResult
 
     validator = PhaseContractValidator(contracts_path=".claude/tdd/contracts.yaml")
     result = validator.validate(
@@ -41,7 +41,7 @@ from pathlib import Path
 lib_path = Path(__file__).parent.parent / "lib"
 sys.path.insert(0, str(lib_path))
 
-from hook_utils import PhaseContractValidator
+from phase_contract_validator import PhaseContractValidator, ValidationResult
 
 
 def format_validation_result(result) -> str:
