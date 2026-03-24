@@ -41,10 +41,14 @@ from ticket_system.lib.command_lifecycle_messages import (
     CreateMessages,
     format_msg,
 )
+from datetime import datetime, timedelta
 from ticket_system.lib.constants import (
     COGNITIVE_LOAD_FILE_THRESHOLD,
     STATUS_PENDING,
+    STATUS_IN_PROGRESS,
+    STATUS_COMPLETED,
     DUPLICATE_DETECTION_THRESHOLD,
+    DUPLICATE_DETECTION_COMPLETED_WINDOW_DAYS,
     DEFAULT_PRIORITY,
     DEFAULT_HOW_TASK_TYPE,
     DEFAULT_UNDEFINED_VALUE,
@@ -285,6 +289,61 @@ def _calculate_jaccard_similarity(text_a: str, text_b: str) -> float:
     return intersection / union
 
 
+def _is_in_detection_scope(ticket: Dict[str, Any], window_start: datetime) -> bool:
+    """判斷 Ticket 是否在重複偵測掃描範圍內。
+
+    掃描範圍：
+    - pending: 始終包含
+    - in_progress: 始終包含
+    - completed: 僅 7 天內完成者（completed_at >= window_start）
+    - 其他狀態: 排除
+
+    Args:
+        ticket: Ticket 字典
+        window_start: 時間窗口起點（now - N 天）
+
+    Returns:
+        True 表示在掃描範圍內
+    """
+    status = ticket.get("status")
+
+    if status == STATUS_PENDING:
+        return True
+
+    if status == STATUS_IN_PROGRESS:
+        return True
+
+    if status == STATUS_COMPLETED:
+        completed_at_str = ticket.get("completed_at")
+        if not completed_at_str:
+            return False
+        try:
+            completed_at = datetime.fromisoformat(completed_at_str)
+            return completed_at >= window_start
+        except (ValueError, TypeError):
+            return False
+
+    return False
+
+
+def _get_status_label(status: str) -> str:
+    """根據 Ticket 狀態返回顯示標籤。
+
+    pending 不加標籤（向下相容），in_progress 和 completed 加中文標籤。
+
+    Args:
+        status: Ticket 狀態字串
+
+    Returns:
+        狀態標籤字串，pending 返回空字串
+    """
+    if status == STATUS_IN_PROGRESS:
+        return CreateMessages.DUPLICATE_STATUS_LABEL_IN_PROGRESS
+    if status == STATUS_COMPLETED:
+        return CreateMessages.DUPLICATE_STATUS_LABEL_COMPLETED
+    return ""
+
+
 def _detect_duplicate_tickets(
     version: str,
     new_title: str,
@@ -292,9 +351,10 @@ def _detect_duplicate_tickets(
     new_ticket_id: str,
 ) -> None:
     """
-    偵測並警告同版本中可能重複的 pending Ticket。
+    偵測並警告同版本中可能重複的 Ticket。
 
-    掃描同版本的 pending Ticket，使用 Jaccard 相似度與即將建立的 Ticket 比對標題和目標。
+    掃描同版本的 pending/in_progress/completed（7 天內）Ticket，
+    使用 Jaccard 相似度與即將建立的 Ticket 比對標題和目標。
     若發現相似度達閾值的 Ticket，輸出 WARNING 提示使用者。
 
     此函式設計為容錯式：內部所有異常都被靜默捕捉，不影響後續建立流程。
@@ -315,7 +375,7 @@ def _detect_duplicate_tickets(
         if not new_title and not new_what:
             return
 
-        # 步驟 B：載入同版本 pending Ticket
+        # 步驟 B：載入同版本 Ticket 並過濾候選範圍
         all_tickets = list_tickets(version)
 
         # 計算需排除的 ID 清單
@@ -327,23 +387,28 @@ def _detect_duplicate_tickets(
             parent_id = new_ticket_id.rsplit(".", 1)[0]
             exclude_ids.add(parent_id)
 
-        # 過濾 pending Ticket，並排除自身及父任務
-        pending_tickets = [
+        # 計算時間窗口（迴圈外一次計算）
+        window_start = datetime.now() - timedelta(
+            days=DUPLICATE_DETECTION_COMPLETED_WINDOW_DAYS
+        )
+
+        # 過濾候選 Ticket：pending + in_progress + 7 天內 completed
+        candidate_tickets = [
             ticket
             for ticket in all_tickets
-            if ticket.get("status") == STATUS_PENDING
-            and ticket.get("id") not in exclude_ids
+            if ticket.get("id") not in exclude_ids
+            and _is_in_detection_scope(ticket, window_start)
         ]
 
-        # 若無 pending Ticket，靜默通過
-        if not pending_tickets:
+        # 若無候選 Ticket，靜默通過
+        if not candidate_tickets:
             return
 
         # 步驟 C：相似度計算
         new_combined = f"{new_title} {new_what}"
         similar_tickets = []
 
-        for ticket in pending_tickets:
+        for ticket in candidate_tickets:
             try:
                 # 合併候選 Ticket 的 title 和 what 進行比對
                 candidate_title = ticket.get("title", "")
@@ -355,18 +420,17 @@ def _detect_duplicate_tickets(
                     new_combined, candidate_combined
                 )
 
-                # 若達閾值，加入相似列表
+                # 若達閾值，加入相似列表（含狀態供標籤使用）
                 if similarity >= DUPLICATE_DETECTION_THRESHOLD:
                     similar_tickets.append(
-                        (ticket.get("id", ""), candidate_title)
+                        (ticket.get("id", ""), candidate_title, ticket.get("status", ""))
                     )
             except Exception as e:
                 # 單項異常不影響整體，跳過此 Ticket，繼續下一個
-                # 記錄異常類型到日誌（供除錯用）
                 sys.stderr.write(f"[DEBUG] 相似度計算異常 ({type(e).__name__}): {e}\n")
                 continue
 
-        # 步驟 D：輸出結果
+        # 步驟 D：輸出結果（含狀態標籤）
         if similar_tickets:
             # 組裝警告訊息
             warning_lines = [
@@ -376,14 +440,25 @@ def _detect_duplicate_tickets(
                 )
             ]
 
-            for ticket_id, title in similar_tickets:
-                warning_lines.append(
-                    format_msg(
-                        CreateMessages.DUPLICATE_TICKETS_WARNING_ITEM,
-                        ticket_id=ticket_id,
-                        title=title,
+            for ticket_id, title, status in similar_tickets:
+                status_label = _get_status_label(status)
+                if status_label:
+                    warning_lines.append(
+                        format_msg(
+                            CreateMessages.DUPLICATE_TICKETS_WARNING_ITEM_WITH_STATUS,
+                            ticket_id=ticket_id,
+                            title=title,
+                            status_label=status_label,
+                        )
                     )
-                )
+                else:
+                    warning_lines.append(
+                        format_msg(
+                            CreateMessages.DUPLICATE_TICKETS_WARNING_ITEM,
+                            ticket_id=ticket_id,
+                            title=title,
+                        )
+                    )
 
             warning_lines.append(
                 format_msg(CreateMessages.DUPLICATE_TICKETS_WARNING_SUGGESTION)

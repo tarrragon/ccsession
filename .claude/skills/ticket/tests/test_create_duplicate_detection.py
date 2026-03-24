@@ -9,15 +9,19 @@ import time
 from unittest.mock import patch, MagicMock
 import pytest
 
+from datetime import datetime, timedelta
 from ticket_system.commands.create import (
     _calculate_jaccard_similarity,
     _detect_duplicate_tickets,
+    _is_in_detection_scope,
+    _get_status_label,
 )
 from ticket_system.lib.constants import (
     STATUS_PENDING,
     STATUS_IN_PROGRESS,
     STATUS_COMPLETED,
     DUPLICATE_DETECTION_THRESHOLD,
+    DUPLICATE_DETECTION_COMPLETED_WINDOW_DAYS,
 )
 
 
@@ -280,8 +284,9 @@ class TestDuplicateDetection:
         assert captured.out == ""
 
     # 狀態過濾邊界
-    def test_b004_completed_ticket_excluded(self, mocker, capsys):
-        """B-004：completed Ticket 不觸發警告"""
+    def test_b004_completed_ticket_within_window_triggers_warning(self, mocker, capsys):
+        """B-004：7 天內 completed Ticket 觸發警告（含 [已完成] 標籤）"""
+        recent_time = (datetime.now() - timedelta(days=3)).isoformat()
 
         def mock_list_impl(version):
             return [
@@ -290,12 +295,7 @@ class TestDuplicateDetection:
                     "title": "實作 SRP 機制",
                     "what": "自動偵測 SRP 違規",
                     "status": "completed",
-                },
-                {
-                    "id": "0.1.2-W2-005",
-                    "title": "修復 WebSocket",
-                    "what": "連線重試",
-                    "status": "pending",
+                    "completed_at": recent_time,
                 },
             ]
 
@@ -313,25 +313,21 @@ class TestDuplicateDetection:
 
         captured = capsys.readouterr()
 
-        # completed Ticket 應被排除
-        assert captured.out == ""
+        # 7 天內 completed 應觸發警告
+        assert "[WARNING]" in captured.out
+        assert "0.1.2-W3-001" in captured.out
+        assert "已完成" in captured.out
 
-    def test_b005_in_progress_ticket_excluded(self, mocker, capsys):
-        """B-005：in_progress Ticket 不觸發警告"""
+    def test_b005_in_progress_ticket_triggers_warning(self, mocker, capsys):
+        """B-005：in_progress Ticket 觸發警告（含 [進行中] 標籤）"""
 
         def mock_list_impl(version):
             return [
                 {
                     "id": "0.1.2-W3-001",
                     "title": "實作 SRP 機制",
-                    "what": "自動偵測",
+                    "what": "自動偵測 SRP 違規",
                     "status": "in_progress",
-                },
-                {
-                    "id": "0.1.2-W2-005",
-                    "title": "修復 WebSocket",
-                    "what": "連線",
-                    "status": "pending",
                 },
             ]
 
@@ -349,8 +345,10 @@ class TestDuplicateDetection:
 
         captured = capsys.readouterr()
 
-        # in_progress Ticket 應被排除
-        assert captured.out == ""
+        # in_progress Ticket 應觸發警告
+        assert "[WARNING]" in captured.out
+        assert "0.1.2-W3-001" in captured.out
+        assert "進行中" in captured.out
 
     def test_b006_cross_version_no_comparison(self, mocker, capsys):
         """B-006：跨版本 Ticket 不比對"""
@@ -601,8 +599,253 @@ class TestDuplicateDetection:
 
         captured = capsys.readouterr()
 
-        # 無 pending，靜默通過
+        # 無候選 Ticket，靜默通過
         assert captured.out == ""
+
+
+# ============================================================
+# 擴展偵測範圍測試（ES-001 至 ES-008，W2-010 新增）
+# ============================================================
+
+
+class TestExtendedScopeDetection:
+    """擴展偵測範圍測試：completed（7 天內）+ in_progress"""
+
+    def test_es001_completed_within_7days_triggers_warning(self, mocker, capsys):
+        """ES-001：7 天內 completed Ticket 觸發警告"""
+        recent_time = (datetime.now() - timedelta(days=3)).isoformat()
+
+        mocker.patch(
+            "ticket_system.commands.create.list_tickets",
+            side_effect=lambda v: [
+                {
+                    "id": "0.1.2-W2-007",
+                    "title": "修正 Registry 模組品質問題",
+                    "what": "修正 5 項技術債",
+                    "status": "completed",
+                    "completed_at": recent_time,
+                },
+            ],
+        )
+
+        _detect_duplicate_tickets(
+            version="0.1.2",
+            new_title="修正 Registry 模組品質問題",
+            new_what="修正技術債",
+            new_ticket_id="0.1.2-W2-010",
+        )
+
+        captured = capsys.readouterr()
+        assert "[WARNING]" in captured.out
+        assert "0.1.2-W2-007" in captured.out
+        assert "已完成" in captured.out
+
+    def test_es002_completed_beyond_7days_excluded(self, mocker, capsys):
+        """ES-002：超過 7 天的 completed Ticket 不觸發警告"""
+        old_time = (datetime.now() - timedelta(days=10)).isoformat()
+
+        mocker.patch(
+            "ticket_system.commands.create.list_tickets",
+            side_effect=lambda v: [
+                {
+                    "id": "0.1.2-W1-001",
+                    "title": "修正 Registry 模組品質問題",
+                    "what": "修正技術債",
+                    "status": "completed",
+                    "completed_at": old_time,
+                },
+            ],
+        )
+
+        _detect_duplicate_tickets(
+            version="0.1.2",
+            new_title="修正 Registry 模組品質問題",
+            new_what="修正技術債",
+            new_ticket_id="0.1.2-W2-010",
+        )
+
+        captured = capsys.readouterr()
+        assert captured.out == ""
+
+    def test_es003_completed_exactly_7days_boundary(self, mocker, capsys):
+        """ES-003：恰好 7 天邊界的 completed Ticket 不被包含"""
+        # 7 天 + 1 秒前 → 應排除
+        boundary_time = (datetime.now() - timedelta(days=7, seconds=1)).isoformat()
+
+        mocker.patch(
+            "ticket_system.commands.create.list_tickets",
+            side_effect=lambda v: [
+                {
+                    "id": "0.1.2-W1-001",
+                    "title": "修正 Registry 模組品質問題",
+                    "what": "修正技術債",
+                    "status": "completed",
+                    "completed_at": boundary_time,
+                },
+            ],
+        )
+
+        _detect_duplicate_tickets(
+            version="0.1.2",
+            new_title="修正 Registry 模組品質問題",
+            new_what="修正技術債",
+            new_ticket_id="0.1.2-W2-010",
+        )
+
+        captured = capsys.readouterr()
+        assert captured.out == ""
+
+    def test_es004_in_progress_triggers_warning(self, mocker, capsys):
+        """ES-004：in_progress Ticket 觸發警告（含 [進行中] 標籤）"""
+        mocker.patch(
+            "ticket_system.commands.create.list_tickets",
+            side_effect=lambda v: [
+                {
+                    "id": "0.1.2-W2-008",
+                    "title": "建立檔案所有權隔離檢查 Hook",
+                    "what": "建立 where.files 自動檢查",
+                    "status": "in_progress",
+                },
+            ],
+        )
+
+        _detect_duplicate_tickets(
+            version="0.1.2",
+            new_title="建立檔案所有權隔離自動檢查",
+            new_what="where.files 檢查",
+            new_ticket_id="0.1.2-W2-011",
+        )
+
+        captured = capsys.readouterr()
+        assert "[WARNING]" in captured.out
+        assert "0.1.2-W2-008" in captured.out
+        assert "進行中" in captured.out
+
+    def test_es007_completed_no_completed_at_excluded(self, mocker, capsys):
+        """ES-007：completed 但無 completed_at 欄位 → 排除（保守策略）"""
+        mocker.patch(
+            "ticket_system.commands.create.list_tickets",
+            side_effect=lambda v: [
+                {
+                    "id": "0.1.2-W1-001",
+                    "title": "修正 Registry 模組品質問題",
+                    "what": "修正技術債",
+                    "status": "completed",
+                    # 無 completed_at 欄位
+                },
+            ],
+        )
+
+        _detect_duplicate_tickets(
+            version="0.1.2",
+            new_title="修正 Registry 模組品質問題",
+            new_what="修正技術債",
+            new_ticket_id="0.1.2-W2-010",
+        )
+
+        captured = capsys.readouterr()
+        assert captured.out == ""
+
+    def test_es008_completed_invalid_completed_at_excluded(self, mocker, capsys):
+        """ES-008：completed_at 格式異常 → 排除（保守策略）"""
+        mocker.patch(
+            "ticket_system.commands.create.list_tickets",
+            side_effect=lambda v: [
+                {
+                    "id": "0.1.2-W1-001",
+                    "title": "修正 Registry 模組品質問題",
+                    "what": "修正技術債",
+                    "status": "completed",
+                    "completed_at": "invalid-date-format",
+                },
+            ],
+        )
+
+        _detect_duplicate_tickets(
+            version="0.1.2",
+            new_title="修正 Registry 模組品質問題",
+            new_what="修正技術債",
+            new_ticket_id="0.1.2-W2-010",
+        )
+
+        captured = capsys.readouterr()
+        assert captured.out == ""
+
+    def test_es009_pending_no_status_label(self, mocker, capsys):
+        """ES-009：pending Ticket 不加標籤（向下相容）"""
+        mocker.patch(
+            "ticket_system.commands.create.list_tickets",
+            side_effect=lambda v: [
+                {
+                    "id": "0.1.2-W3-001",
+                    "title": "實作 SRP 自動偵測機制",
+                    "what": "自動偵測 SRP 違規",
+                    "status": "pending",
+                },
+            ],
+        )
+
+        _detect_duplicate_tickets(
+            version="0.1.2",
+            new_title="實作 SRP 偵測功能",
+            new_what="SRP 自動偵測",
+            new_ticket_id="0.1.2-W3-003",
+        )
+
+        captured = capsys.readouterr()
+        assert "[WARNING]" in captured.out
+        assert "0.1.2-W3-001" in captured.out
+        # pending 不應有狀態標籤
+        assert "進行中" not in captured.out
+        assert "已完成" not in captured.out
+
+
+class TestHelperFunctions:
+    """輔助函式單元測試"""
+
+    def test_is_in_scope_pending(self):
+        """pending Ticket 始終在範圍內"""
+        ticket = {"status": "pending"}
+        window_start = datetime.now() - timedelta(days=7)
+        assert _is_in_detection_scope(ticket, window_start) is True
+
+    def test_is_in_scope_in_progress(self):
+        """in_progress Ticket 始終在範圍內"""
+        ticket = {"status": "in_progress"}
+        window_start = datetime.now() - timedelta(days=7)
+        assert _is_in_detection_scope(ticket, window_start) is True
+
+    def test_is_in_scope_completed_recent(self):
+        """7 天內 completed Ticket 在範圍內"""
+        recent = (datetime.now() - timedelta(days=2)).isoformat()
+        ticket = {"status": "completed", "completed_at": recent}
+        window_start = datetime.now() - timedelta(days=7)
+        assert _is_in_detection_scope(ticket, window_start) is True
+
+    def test_is_in_scope_completed_old(self):
+        """超過 7 天的 completed Ticket 不在範圍內"""
+        old = (datetime.now() - timedelta(days=10)).isoformat()
+        ticket = {"status": "completed", "completed_at": old}
+        window_start = datetime.now() - timedelta(days=7)
+        assert _is_in_detection_scope(ticket, window_start) is False
+
+    def test_is_in_scope_blocked(self):
+        """blocked Ticket 不在範圍內"""
+        ticket = {"status": "blocked"}
+        window_start = datetime.now() - timedelta(days=7)
+        assert _is_in_detection_scope(ticket, window_start) is False
+
+    def test_get_status_label_pending(self):
+        """pending → 空字串"""
+        assert _get_status_label("pending") == ""
+
+    def test_get_status_label_in_progress(self):
+        """in_progress → 進行中"""
+        assert _get_status_label("in_progress") == "進行中"
+
+    def test_get_status_label_completed(self):
+        """completed → 已完成"""
+        assert _get_status_label("completed") == "已完成"
 
 
 # ============================================================

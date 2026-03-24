@@ -315,13 +315,16 @@ class CreateMessages:
 
     # 重複偵測警告訊息（W3-003）
     DUPLICATE_TICKETS_WARNING_HEADER = (
-        "[WARNING] 發現 {count} 個可能重複的 pending Ticket，"
+        "[WARNING] 發現 {count} 個可能重複的 Ticket，"
         "請確認是否需要建立新 Ticket："
     )
     DUPLICATE_TICKETS_WARNING_ITEM = "   - {ticket_id}: {title}"
+    DUPLICATE_TICKETS_WARNING_ITEM_WITH_STATUS = "   - {ticket_id}: {title} [{status_label}]"
     DUPLICATE_TICKETS_WARNING_SUGGESTION = (
         "   建議：執行 /ticket track list 查看所有現有 Ticket 後再決定"
     )
+    DUPLICATE_STATUS_LABEL_IN_PROGRESS = "進行中"
+    DUPLICATE_STATUS_LABEL_COMPLETED = "已完成"
 
     # 問題 4 新增常數（0.1.2-W4-001.1）
     EXEMPTED_PARTIAL_PARAMS_ERROR = (

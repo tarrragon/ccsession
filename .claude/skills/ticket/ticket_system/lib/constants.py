@@ -256,6 +256,10 @@ SRP_ACCEPTANCE_MODULE_THRESHOLD: int = 2
 # Phase 4 可根據實際誤報率調整此值
 DUPLICATE_DETECTION_THRESHOLD: float = 0.3
 
+# 重複偵測時間窗口（天數）：只掃描 N 天內完成的 completed Ticket
+# 防止大量歷史 Ticket 造成效能衰減和警告泛濫
+DUPLICATE_DETECTION_COMPLETED_WINDOW_DAYS: int = 7
+
 
 # ============================================================
 # Protocol Version 常數（v0.1.2 新增）
