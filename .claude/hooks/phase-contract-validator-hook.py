@@ -11,8 +11,9 @@ TDD Phase Contract 四層驗證 Hook
 4. Layer 4：內容驗證 - Section 內容符合規範（始終 WARNING）
 
 Legacy vs Non-legacy 文件判定：
-- Legacy 文件：mtime 早於 contracts.yaml，或缺少 frontmatter 中的 phase 欄位
+- Legacy 文件：mtime 嚴格早於 contracts.yaml 建立日期（包括日期邊界）
 - 降級策略：legacy 文件 Layer 2/3 的 ERROR 降級為 WARNING
+- 註：frontmatter 中 phase 欄位是 optional，缺少不代表 legacy（IMP-044 修復）
 
 使用方式：
     from phase_contract_validator_hook import PhaseContractValidator
@@ -361,8 +362,12 @@ class PhaseContractValidator:
         判斷是否為 legacy 文件
 
         Legacy 判定標準：
-        1. 檔案 mtime 早於 contracts.yaml 建立時間
-        2. 或檔案 frontmatter 缺少 phase 欄位
+        1. 檔案 mtime 嚴格早於 contracts.yaml 建立時間（日期邊界）
+        2. 不檢查 frontmatter（phase 欄位是 optional，缺少不代表 legacy）
+
+        IMP-044 修復：
+        - 時間比較使用 UTC 0:00:00 邊界（當天開始時）以確保一致性
+        - 移除不合理的 frontmatter.phase 檢查（違反 schema optional 定義）
         """
         if not self.legacy_threshold_date:
             return True
@@ -372,24 +377,17 @@ class PhaseContractValidator:
             file_mtime = os.path.getmtime(file_path)
             file_datetime = datetime.fromtimestamp(file_mtime)
 
-            # 解析 threshold date（ISO 格式）
-            threshold_datetime = datetime.fromisoformat(self.legacy_threshold_date)
+            # 解析 threshold date 並設定為當天的 UTC 0:00:00（日期邊界）
+            # 如 "2026-03-24" -> 2026-03-24 00:00:00
+            threshold_datetime = datetime.fromisoformat(self.legacy_threshold_date).replace(
+                hour=0, minute=0, second=0, microsecond=0
+            )
 
+            # legacy = 檔案 mtime 嚴格早於 threshold（不包含 threshold 當天）
+            # 例如：threshold = 2026-03-24 00:00:00
+            #  - 2026-03-23 23:59:59 之前的檔案 → legacy
+            #  - 2026-03-24 00:00:00 及以後的檔案 → non-legacy
             if file_datetime < threshold_datetime:
-                return True
-
-            # 也檢查 frontmatter 中是否有 phase 欄位
-            try:
-                with open(file_path, "r", encoding="utf-8") as f:
-                    content = f.read()
-                if content.startswith("---"):
-                    parts = content.split("---", 2)
-                    if len(parts) >= 2:
-                        frontmatter = yaml.safe_load(parts[1]) or {}
-                        if "phase" not in frontmatter:
-                            return True
-            except Exception:
-                # 無法解析時預設為 legacy（安全降級）
                 return True
 
         except (OSError, ValueError):
