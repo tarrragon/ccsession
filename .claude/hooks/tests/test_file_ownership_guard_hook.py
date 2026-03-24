@@ -264,21 +264,21 @@ class TestDetectPathConflicts:
         assert detect_path_conflicts(where, other) == ["lib/create.py"]
 
     def test_parent_to_child(self):
-        """父目錄 → 子檔案"""
-        where = ["lib/"]
+        """父目錄 → 子檔案（已規範化路徑）"""
+        where = ["lib"]
         other = ["lib/create.py"]
-        assert detect_path_conflicts(where, other) == ["lib/"]
+        assert detect_path_conflicts(where, other) == ["lib"]
 
     def test_child_to_parent(self):
-        """子檔案 ← 父目錄"""
+        """子檔案 ← 父目錄（已規範化路徑）"""
         where = ["lib/create.py"]
-        other = ["lib/"]
+        other = ["lib"]
         assert detect_path_conflicts(where, other) == ["lib/create.py"]
 
     def test_no_conflicts(self):
-        """完全獨立"""
-        where = ["lib/"]
-        other = [".claude/hooks/"]
+        """完全獨立（已規範化路徑）"""
+        where = ["lib"]
+        other = [".claude/hooks"]
         assert detect_path_conflicts(where, other) == []
 
     def test_partial_conflicts(self):

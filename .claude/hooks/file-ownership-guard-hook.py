@@ -131,6 +131,30 @@ def normalize_path(path: str) -> str:
     return path
 
 
+def _ensure_file_list(where_value: object) -> list[str]:
+    """確保 where.files 為列表格式
+
+    YAML 解析器將列表項目累積為換行符分隔的字符串，
+    此函式轉換回列表格式。
+
+    Args:
+        where_value: from YAML 解析結果（可能是字符串或列表）
+
+    Returns:
+        list[str]: 檔案路徑列表
+    """
+    if isinstance(where_value, list):
+        return where_value
+
+    if isinstance(where_value, str):
+        # 換行符分隔的字符串 → 列表
+        if not where_value:
+            return []
+        return [line.strip() for line in where_value.split('\n') if line.strip()]
+
+    return []
+
+
 def extract_ticket_id(input_data: dict) -> Optional[str]:
     """從派發指令中提取 Ticket ID
 
@@ -270,9 +294,14 @@ def get_active_tickets(
                 if status not in ["pending", "in_progress"]:
                     continue
 
-                where_files = frontmatter.get("where", {})
-                if isinstance(where_files, dict):
-                    where_files = where_files.get("files", [])
+                where_dict = frontmatter.get("where", {})
+                if isinstance(where_dict, dict):
+                    where_files = where_dict.get("files", [])
+                else:
+                    where_files = where_dict
+
+                # 確保 where_files 是列表（YAML 解析可能返回字符串）
+                where_files = _ensure_file_list(where_files)
 
                 if not where_files:
                     logger.debug(f"Ticket {ticket_id} 無 where.files，跳過")
@@ -374,9 +403,14 @@ def find_file_ownership_conflicts(
         if not target_frontmatter:
             return []
 
-        target_where = target_frontmatter.get("where", {})
-        if isinstance(target_where, dict):
-            target_where = target_where.get("files", [])
+        target_where_dict = target_frontmatter.get("where", {})
+        if isinstance(target_where_dict, dict):
+            target_where = target_where_dict.get("files", [])
+        else:
+            target_where = target_where_dict
+
+        # 確保 target_where 是列表（YAML 解析可能返回字符串）
+        target_where = _ensure_file_list(target_where)
 
         target_where_files = [normalize_path(f) for f in target_where if f]
         target_where_files = [f for f in target_where_files if f]
@@ -441,6 +475,11 @@ def find_file_ownership_conflicts(
             target_parent_id=target_parent_id,
             other_parent_id=ticket.parent_id
         ))
+
+    # 篩選：如果有兄弟衝突，則過濾掉父子衝突
+    # Hook 目的是檢查兄弟 Ticket 衝突，父子重疊不是主要關注
+    if any(c.conflict_type == CONFLICT_TYPE_BROTHER for c in conflicts):
+        conflicts = [c for c in conflicts if c.conflict_type != CONFLICT_TYPE_PARENT]
 
     return conflicts
 
