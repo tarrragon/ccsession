@@ -226,10 +226,9 @@ class PhaseContractValidator:
         """Layer 1：存在性驗證"""
         errors = []
         artifact_name = artifact_spec.get("name")
-        artifact_required = artifact_spec.get("required", False)
 
         file_path = self._resolve_artifact_path(ticket_id, artifact_spec, ticket_dir)
-        if not file_path and artifact_required:
+        if not file_path:
             errors.append(
                 f"P-EXIST-001: 必要 artifact '{artifact_name}' 檔案不存在"
             )
@@ -343,7 +342,7 @@ class PhaseContractValidator:
                 direction_value = direction_value.strip().strip("'\"")
                 # 允許的格式：to-{type}[:target_id]
                 if not re.match(
-                    r"^to-(sibling|parent|child|context-refresh)(?::[\w.-]+)?$",
+                    r"^to-(sibling|parent|child|context-refresh)(?::[\\w.-]+)?$",
                     direction_value,
                 ):
                     warnings.append(

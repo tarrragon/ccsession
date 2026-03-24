@@ -96,6 +96,7 @@ contracts:
           alternate_patterns:
             - "{ticket-id}-test-design.md"
             - "{ticket-id}-test-case-design.md"
+            - "{ticket-id}-phase2-tests.md"
 
         content_sections:
           - name: "測試策略"
@@ -191,7 +192,7 @@ contracts:
 
     artifacts:
       - name: "source-code"
-        required: true
+        required: false
         format:
           type: "dart"
           path_pattern: "ui/lib/**/*.dart"
