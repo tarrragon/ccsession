@@ -58,6 +58,9 @@ CONFLICT_TYPE_UNRELATED = "unrelated"
 CONFLICT_TYPE_PARENT = "parent"
 CONFLICT_TYPE_NONE = "none"
 
+# 活躍狀態
+ACTIVE_STATUSES = {"pending", "in_progress"}
+
 
 # ============================================================================
 # 資料結構
@@ -129,6 +132,74 @@ def normalize_path(path: str) -> str:
     path = path.lower()
 
     return path
+
+
+def _parse_ticket_files(
+    frontmatter: dict | None,
+    logger: logging.Logger
+) -> list[str]:
+    """從 Ticket frontmatter 提取並規範化 where.files
+
+    用於消除重複的 YAML where.files 解析邏輯。
+
+    Args:
+        frontmatter: 已解析的 Ticket frontmatter，或 None
+        logger: 日誌物件
+
+    Returns:
+        list[str]: 規範化後的檔案清單（空時返回 []）
+    """
+    if not frontmatter:
+        return []
+
+    where_dict = frontmatter.get("where", {})
+    if isinstance(where_dict, dict):
+        where_files = where_dict.get("files", [])
+    else:
+        where_files = where_dict
+
+    # 確保列表格式
+    where_files = _ensure_file_list(where_files)
+
+    # 規範化路徑
+    normalized = [normalize_path(f) for f in where_files if f]
+    return [f for f in normalized if f]  # 過濾空字串
+
+
+def _classify_conflict_type(
+    target_id: str,
+    target_parent_id: str | None,
+    other_id: str,
+    other_parent_id: str | None
+) -> tuple[str, bool, str | None]:
+    """分類衝突類型（父子、兄弟、無關）
+
+    用於判斷兩個 Ticket 的關係類型，支援：
+    - 父子關係（one is parent of other）
+    - 兄弟關係（common parent）
+    - 無關關係（independent）
+
+    Args:
+        target_id: 目標 Ticket ID
+        target_parent_id: 目標 Ticket 的父 ID（或 None）
+        other_id: 其他 Ticket ID
+        other_parent_id: 其他 Ticket 的父 ID（或 None）
+
+    Returns:
+        tuple: (conflict_type, is_parent_child, common_parent_id)
+    """
+    # 父子關係判斷
+    if other_parent_id == target_id:
+        return CONFLICT_TYPE_PARENT, True, None
+    if target_parent_id and target_parent_id == other_id:
+        return CONFLICT_TYPE_PARENT, True, None
+
+    # 兄弟關係判斷
+    if target_parent_id and other_parent_id and target_parent_id == other_parent_id:
+        return CONFLICT_TYPE_BROTHER, False, target_parent_id
+
+    # 無關
+    return CONFLICT_TYPE_UNRELATED, False, None
 
 
 def _ensure_file_list(where_value: object) -> list[str]:
@@ -291,28 +362,14 @@ def get_active_tickets(
                     continue
 
                 status = frontmatter.get("status")
-                if status not in ["pending", "in_progress"]:
+                if status not in ACTIVE_STATUSES:
                     continue
 
-                where_dict = frontmatter.get("where", {})
-                if isinstance(where_dict, dict):
-                    where_files = where_dict.get("files", [])
-                else:
-                    where_files = where_dict
-
-                # 確保 where_files 是列表（YAML 解析可能返回字符串）
-                where_files = _ensure_file_list(where_files)
-
-                if not where_files:
-                    logger.debug(f"Ticket {ticket_id} 無 where.files，跳過")
-                    continue
-
-                # 規範化路徑
-                normalized_files = [normalize_path(f) for f in where_files if f]
-                normalized_files = [f for f in normalized_files if f]
+                # 提取並規範化 where.files
+                normalized_files = _parse_ticket_files(frontmatter, logger)
 
                 if not normalized_files:
-                    logger.debug(f"Ticket {ticket_id} 的 where.files 規範化後為空，跳過")
+                    logger.debug(f"Ticket {ticket_id} 無有效 where.files，跳過")
                     continue
 
                 parent_id = frontmatter.get("parent_id")
@@ -403,17 +460,8 @@ def find_file_ownership_conflicts(
         if not target_frontmatter:
             return []
 
-        target_where_dict = target_frontmatter.get("where", {})
-        if isinstance(target_where_dict, dict):
-            target_where = target_where_dict.get("files", [])
-        else:
-            target_where = target_where_dict
-
-        # 確保 target_where 是列表（YAML 解析可能返回字符串）
-        target_where = _ensure_file_list(target_where)
-
-        target_where_files = [normalize_path(f) for f in target_where if f]
-        target_where_files = [f for f in target_where_files if f]
+        # 提取並規範化 where.files
+        target_where_files = _parse_ticket_files(target_frontmatter, logger)
 
         if not target_where_files:
             logger.debug(f"目標 Ticket {target_ticket_id} 無 where.files")
@@ -441,29 +489,13 @@ def find_file_ownership_conflicts(
         if not conflicting_files:
             continue
 
-        # 判斷衝突類型
-        is_parent_child = False
-        conflict_type = CONFLICT_TYPE_UNRELATED
-        common_parent_id = None
-
-        # 情況 1：target 是 ticket 的父
-        if ticket.parent_id == target_ticket_id:
-            is_parent_child = True
-            conflict_type = CONFLICT_TYPE_PARENT
-
-        # 情況 2：ticket 是 target 的父
-        elif target_parent_id and target_parent_id == ticket.ticket_id:
-            is_parent_child = True
-            conflict_type = CONFLICT_TYPE_PARENT
-
-        # 情況 3：兄弟（共同父）
-        elif (
-            target_parent_id
-            and ticket.parent_id
-            and target_parent_id == ticket.parent_id
-        ):
-            conflict_type = CONFLICT_TYPE_BROTHER
-            common_parent_id = target_parent_id
+        # 分類衝突類型
+        conflict_type, is_parent_child, common_parent_id = _classify_conflict_type(
+            target_ticket_id,
+            target_parent_id,
+            ticket.ticket_id,
+            ticket.parent_id
+        )
 
         conflicts.append(ConflictInfo(
             target_ticket_id=target_ticket_id,
