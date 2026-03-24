@@ -82,9 +82,6 @@ def complete_phase(
     for warning in result.warnings:
         print(f"[WARNING] {warning}")
 
-    for info in result.infos:
-        print(f"[INFO] {info}")
-
     # 將驗證結果寫入 Ticket execution log
     _write_validation_log(ticket_id, ticket_dir, result)
 
