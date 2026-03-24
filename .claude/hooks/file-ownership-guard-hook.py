@@ -1,0 +1,624 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+檔案所有權隔離檢查 Hook
+
+功能：派發前檢查同 Wave 中兄弟 Ticket 的 `where.files` 衝突。
+
+觸發：PreToolUse (Agent) — 當派發代理人執行 Ticket 時
+
+輸出：
+- 無衝突：靜默（DEFAULT_OUTPUT）
+- 有衝突：警告訊息到 additionalContext
+- 異常：錯誤日誌到 stderr + 日誌檔（雙通道）
+
+行為：永遠返回 exit 0（不阻塊派發），但提供可操作的警告供 PM 決策
+"""
+
+import json
+import logging
+import re
+import sys
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Optional
+
+from hook_utils.hook_base import get_project_root
+from hook_utils.hook_logging import setup_hook_logging
+from hook_utils.hook_io import read_json_from_stdin
+from hook_utils.hook_ticket import parse_ticket_frontmatter, find_ticket_file
+
+
+# ============================================================================
+# 常數定義
+# ============================================================================
+
+HOOK_NAME = "file-ownership-guard-hook"
+
+# 預設輸出格式（靜默通過）
+DEFAULT_OUTPUT = {
+    "hookSpecificOutput": {
+        "hookEventName": "PreToolUse"
+    }
+}
+
+# Ticket ID 正則表達式（符合規範格式）
+TICKET_ID_PATTERN = r"(\d+\.\d+\.\d+)-W(\d+)-(\d+(?:\.\d+)*)"
+
+# 訊息常數
+MSG_WARNING_HEADER = "============================================================"
+MSG_WARNING_TITLE = "[檔案所有權衝突警告]"
+MSG_CONFLICT_ANALYSIS_TITLE = "衝突分析"
+MSG_ACTION_TITLE = "建議行動"
+MSG_DECISION_TITLE = "決策建議"
+
+# 衝突類型
+CONFLICT_TYPE_BROTHER = "brother"
+CONFLICT_TYPE_UNRELATED = "unrelated"
+CONFLICT_TYPE_PARENT = "parent"
+CONFLICT_TYPE_NONE = "none"
+
+
+# ============================================================================
+# 資料結構
+# ============================================================================
+
+@dataclass
+class ConflictInfo:
+    """單個衝突的詳細資訊"""
+    target_ticket_id: str
+    conflicting_ticket_id: str
+    conflicting_files: list[str]
+    is_parent_child: bool
+    conflict_type: str = CONFLICT_TYPE_NONE
+    common_parent_id: Optional[str] = None
+    target_parent_id: Optional[str] = None
+    other_parent_id: Optional[str] = None
+
+
+@dataclass
+class TicketInfo:
+    """Ticket 的基本資訊"""
+    ticket_id: str
+    version: str
+    wave: int
+    status: str
+    parent_id: Optional[str] = None
+    where_files: list[str] = field(default_factory=list)
+
+
+# ============================================================================
+# 核心邏輯函式
+# ============================================================================
+
+
+def normalize_path(path: str) -> str:
+    """標準化路徑格式，用於跨來源比對
+
+    規則：
+    1. 統一使用正斜線 "/"
+    2. 簡化多重斜線 "//"
+    3. 移除前綴 "./"
+    4. 移除尾斜線 "/"
+    5. 轉為小寫
+
+    Args:
+        path: 原始路徑字串
+
+    Returns:
+        str: 標準化後的路徑
+    """
+    if not path:
+        return ""
+
+    # 轉換反斜線為正斜線（Windows 相容）
+    path = path.replace("\\", "/")
+
+    # 簡化多重斜線（必須在移除前綴前進行）
+    while "//" in path:
+        path = path.replace("//", "/")
+
+    # 移除前綴 "./"
+    while path.startswith("./"):
+        path = path[2:]
+
+    # 移除尾斜線
+    path = path.rstrip("/")
+
+    # 轉為小寫
+    path = path.lower()
+
+    return path
+
+
+def extract_ticket_id(input_data: dict) -> Optional[str]:
+    """從派發指令中提取 Ticket ID
+
+    支援多種格式：
+    - toolInput.target_id: "0.1.2-W2-003"
+    - toolInput.ticket_id: "0.1.2-W2-003"
+
+    Args:
+        input_data: PreToolUse Hook 的 stdin JSON
+
+    Returns:
+        str | None: 提取到的 Ticket ID，或 None
+    """
+    if not input_data:
+        return None
+
+    tool_input = input_data.get("toolInput", {})
+    if not isinstance(tool_input, dict):
+        return None
+
+    # 嘗試多個可能的欄位名稱
+    ticket_id = (
+        tool_input.get("target_id")
+        or tool_input.get("ticket_id")
+        or tool_input.get("id")
+    )
+
+    if not ticket_id:
+        return None
+
+    # 驗證格式
+    if re.match(TICKET_ID_PATTERN, str(ticket_id)):
+        return str(ticket_id)
+
+    return None
+
+
+def is_valid_trigger(input_data: dict) -> bool:
+    """判斷 Hook 觸發條件是否符合
+
+    觸發條件：
+    - hookEventName == "PreToolUse"
+    - toolName == "Agent"
+
+    Args:
+        input_data: Hook stdin JSON
+
+    Returns:
+        bool: 是否符合觸發條件
+    """
+    if not input_data:
+        return False
+
+    hook_event = input_data.get("hookEventName")
+    tool_name = input_data.get("toolName")
+
+    return hook_event == "PreToolUse" and tool_name == "Agent"
+
+
+def _extract_version_wave(ticket_id: str) -> tuple[str, int] | tuple[None, None]:
+    """從 Ticket ID 提取版本和 Wave
+
+    Args:
+        ticket_id: Ticket ID 字串（如 "0.1.2-W2-003"）
+
+    Returns:
+        tuple: (version, wave) 或 (None, None)
+    """
+    match = re.match(TICKET_ID_PATTERN, ticket_id)
+    if not match:
+        return None, None
+
+    version = match.group(1)
+    wave = int(match.group(2))
+    return version, wave
+
+
+def get_active_tickets(
+    target_ticket_id: str,
+    project_root: Path,
+    logger: logging.Logger
+) -> list[TicketInfo]:
+    """掃描同 Wave 的活躍 Ticket
+
+    篩選條件：
+    - 版本相同
+    - Wave 相同
+    - 狀態為 pending 或 in_progress
+    - 非目標 Ticket 本身
+    - where.files 非空
+
+    Args:
+        target_ticket_id: 派發目標的 Ticket ID
+        project_root: 專案根目錄
+        logger: 日誌物件
+
+    Returns:
+        list[TicketInfo]: 符合條件的 Ticket 清單
+    """
+    target_version, target_wave = _extract_version_wave(target_ticket_id)
+    if target_version is None:
+        logger.warning(f"無法從 {target_ticket_id} 提取版本和 Wave")
+        return []
+
+    # 掃描 Ticket 目錄
+    tickets_dir = project_root / "docs" / "work-logs" / f"v{target_version}" / "tickets"
+    if not tickets_dir.exists():
+        logger.debug(f"Ticket 目錄不存在: {tickets_dir}")
+        return []
+
+    active_tickets = []
+
+    try:
+        for ticket_file in tickets_dir.glob("*.md"):
+            filename = ticket_file.name
+            if not re.match(TICKET_ID_PATTERN, filename.replace(".md", "")):
+                continue
+
+            ticket_id = filename.replace(".md", "")
+
+            # 篩選版本和 Wave
+            version, wave = _extract_version_wave(ticket_id)
+            if version != target_version or wave != target_wave:
+                continue
+
+            # 篩選目標 Ticket 本身
+            if ticket_id == target_ticket_id:
+                continue
+
+            # 解析 Ticket
+            try:
+                frontmatter = parse_ticket_frontmatter(ticket_file, logger)
+                if not frontmatter:
+                    continue
+
+                status = frontmatter.get("status")
+                if status not in ["pending", "in_progress"]:
+                    continue
+
+                where_files = frontmatter.get("where", {})
+                if isinstance(where_files, dict):
+                    where_files = where_files.get("files", [])
+
+                if not where_files:
+                    logger.debug(f"Ticket {ticket_id} 無 where.files，跳過")
+                    continue
+
+                # 規範化路徑
+                normalized_files = [normalize_path(f) for f in where_files if f]
+                normalized_files = [f for f in normalized_files if f]
+
+                if not normalized_files:
+                    logger.debug(f"Ticket {ticket_id} 的 where.files 規範化後為空，跳過")
+                    continue
+
+                parent_id = frontmatter.get("parent_id")
+
+                active_tickets.append(TicketInfo(
+                    ticket_id=ticket_id,
+                    version=version,
+                    wave=wave,
+                    status=status,
+                    parent_id=parent_id,
+                    where_files=normalized_files
+                ))
+
+            except Exception as e:
+                logger.error(f"解析 Ticket {ticket_id} 失敗: {e}")
+                continue
+
+    except Exception as e:
+        logger.error(f"掃描 Ticket 目錄失敗: {e}")
+        return []
+
+    return active_tickets
+
+
+def detect_path_conflicts(where_files: list[str], other_files: list[str]) -> list[str]:
+    """偵測兩組檔案清單之間的衝突
+
+    衝突規則：
+    - 完全相同
+    - A 的前綴包含 B（目錄前綴）
+    - B 的前綴包含 A（目錄前綴）
+
+    Args:
+        where_files: 第一組檔案清單（已規範化）
+        other_files: 第二組檔案清單（已規範化）
+
+    Returns:
+        list[str]: 衝突的檔案（來自 where_files 的部分）
+    """
+    if not where_files or not other_files:
+        return []
+
+    conflicts = []
+
+    for file_a in where_files:
+        for file_b in other_files:
+            # 完全相同
+            if file_a == file_b:
+                conflicts.append(file_a)
+                break
+
+            # 前綴匹配（A 是 B 的父目錄）
+            if file_b.startswith(file_a + "/"):
+                conflicts.append(file_a)
+                break
+
+            # 前綴匹配（B 是 A 的父目錄）
+            if file_a.startswith(file_b + "/"):
+                conflicts.append(file_a)
+                break
+
+    return conflicts
+
+
+def find_file_ownership_conflicts(
+    target_ticket_id: str,
+    project_root: Path,
+    logger: logging.Logger
+) -> list[ConflictInfo]:
+    """偵測目標 Ticket 與同 Wave 其他活躍 Ticket 的檔案所有權衝突
+
+    Args:
+        target_ticket_id: 派發目標的 Ticket ID
+        project_root: 專案根目錄
+        logger: 日誌物件
+
+    Returns:
+        list[ConflictInfo]: 衝突清單
+    """
+    # 讀取目標 Ticket
+    try:
+        target_file = find_ticket_file(target_ticket_id, project_root, logger)
+        if not target_file:
+            logger.warning(f"無法找到 Ticket 檔案: {target_ticket_id}")
+            return []
+
+        target_frontmatter = parse_ticket_frontmatter(target_file, logger)
+        if not target_frontmatter:
+            return []
+
+        target_where = target_frontmatter.get("where", {})
+        if isinstance(target_where, dict):
+            target_where = target_where.get("files", [])
+
+        target_where_files = [normalize_path(f) for f in target_where if f]
+        target_where_files = [f for f in target_where_files if f]
+
+        if not target_where_files:
+            logger.debug(f"目標 Ticket {target_ticket_id} 無 where.files")
+            return []
+
+        target_parent_id = target_frontmatter.get("parent_id")
+
+    except Exception as e:
+        logger.error(f"讀取目標 Ticket {target_ticket_id} 失敗: {e}")
+        return []
+
+    # 掃描活躍 Ticket
+    active_tickets = get_active_tickets(target_ticket_id, project_root, logger)
+
+    if not active_tickets:
+        logger.debug(f"無同 Wave 其他活躍 Ticket，無衝突")
+        return []
+
+    # 檢查衝突
+    conflicts = []
+
+    for ticket in active_tickets:
+        conflicting_files = detect_path_conflicts(target_where_files, ticket.where_files)
+
+        if not conflicting_files:
+            continue
+
+        # 判斷衝突類型
+        is_parent_child = False
+        conflict_type = CONFLICT_TYPE_UNRELATED
+        common_parent_id = None
+
+        # 情況 1：target 是 ticket 的父
+        if ticket.parent_id == target_ticket_id:
+            is_parent_child = True
+            conflict_type = CONFLICT_TYPE_PARENT
+
+        # 情況 2：ticket 是 target 的父
+        elif target_parent_id and target_parent_id == ticket.ticket_id:
+            is_parent_child = True
+            conflict_type = CONFLICT_TYPE_PARENT
+
+        # 情況 3：兄弟（共同父）
+        elif (
+            target_parent_id
+            and ticket.parent_id
+            and target_parent_id == ticket.parent_id
+        ):
+            conflict_type = CONFLICT_TYPE_BROTHER
+            common_parent_id = target_parent_id
+
+        conflicts.append(ConflictInfo(
+            target_ticket_id=target_ticket_id,
+            conflicting_ticket_id=ticket.ticket_id,
+            conflicting_files=conflicting_files,
+            is_parent_child=is_parent_child,
+            conflict_type=conflict_type,
+            common_parent_id=common_parent_id,
+            target_parent_id=target_parent_id,
+            other_parent_id=ticket.parent_id
+        ))
+
+    return conflicts
+
+
+def format_conflict_warning(
+    target_ticket_id: str,
+    conflicts: list[ConflictInfo]
+) -> str:
+    """格式化衝突警告訊息
+
+    輸出結構：
+    - 標題和分隔符
+    - 衝突摘要
+    - 衝突詳細清單
+    - 建議行動
+    - 決策指引
+
+    Args:
+        target_ticket_id: 派發目標 Ticket ID
+        conflicts: 衝突清單
+
+    Returns:
+        str: 格式化後的警告訊息
+    """
+    if not conflicts:
+        return ""
+
+    lines = [
+        MSG_WARNING_HEADER,
+        MSG_WARNING_TITLE,
+        MSG_WARNING_HEADER,
+        "",
+        f"Ticket {target_ticket_id} 派發前偵測到以下檔案所有權衝突：",
+        "",
+        f"{MSG_CONFLICT_ANALYSIS_TITLE}（{len(conflicts)} 個衝突）：",
+        ""
+    ]
+
+    # 逐個衝突詳情
+    for idx, conflict in enumerate(conflicts, 1):
+        lines.append(f"衝突 {idx}：同 Wave {conflict.conflict_type.lower()} Ticket")
+        lines.append(f"  - 派發目標：{conflict.target_ticket_id}")
+        lines.append(f"  - 衝突對象：{conflict.conflicting_ticket_id}")
+
+        files_count = len(conflict.conflicting_files)
+        lines.append(f"  - 衝突檔案（{files_count} 個）：")
+        for file in conflict.conflicting_files:
+            lines.append(f"    - {file}")
+
+        if conflict.conflict_type == CONFLICT_TYPE_BROTHER:
+            lines.append(
+                f"  - 衝突類型：兄弟 Ticket（同父：{conflict.common_parent_id}）"
+            )
+        elif conflict.conflict_type == CONFLICT_TYPE_UNRELATED:
+            lines.append("  - 衝突類型：無關 Ticket（不同父）")
+        else:
+            lines.append("  - 衝突類型：父子 Ticket")
+
+        lines.append("")
+
+    # 建議行動
+    lines.append(f"{MSG_ACTION_TITLE}：")
+    lines.append("")
+    lines.append("[檢查清單] 確認並解決衝突：")
+    lines.append("")
+
+    for idx, conflict in enumerate(conflicts, 1):
+        if conflict.conflict_type == CONFLICT_TYPE_BROTHER:
+            lines.append(f"{idx}. 衝突 {idx} — 兄弟 Ticket （{conflict.conflicting_ticket_id}）：")
+        elif conflict.conflict_type == CONFLICT_TYPE_UNRELATED:
+            lines.append(f"{idx}. 衝突 {idx} — 無關 Ticket （{conflict.conflicting_ticket_id}）：")
+        else:
+            lines.append(f"{idx}. 衝突 {idx} — 父子 Ticket （允許重疊，已篩選）：")
+
+        lines.append("")
+        lines.append("   選項 A（推薦）：調整 where.files，移除與衝突對象重疊的檔案")
+        lines.append("   選項 B（次選）：建立 blockedBy 依賴或調整派發順序")
+        lines.append("   選項 C：合併任務（若兩個修改有邏輯聯繫）")
+        lines.append("")
+
+    # 決策指引
+    lines.append(f"{MSG_DECISION_TITLE}：")
+    lines.append("  - 優先檢查 Ticket 內容，判斷修改是否真的有依賴")
+    lines.append("  - 若修改獨立 → 調整 where.files 避免衝突")
+    lines.append("  - 若修改有依賴 → 建立 blockedBy 或序列派發")
+    lines.append("  - 如確認無誤，忽略此警告並繼續派發")
+    lines.append("")
+    lines.append(MSG_WARNING_HEADER)
+
+    message = "\n".join(lines)
+
+    # 長度控制（超過 2000 字元則截斷）
+    max_length = 2000
+    if len(message) > max_length:
+        message = message[:max_length - 20] + "\n[訊息已截斷...]"
+
+    return message
+
+
+# ============================================================================
+# Hook 生命週期
+# ============================================================================
+
+
+def main() -> int:
+    """Hook 主函式
+
+    流程：
+    1. 初始化日誌
+    2. 讀取 stdin JSON
+    3. 驗證觸發條件
+    4. 提取目標 Ticket ID
+    5. 執行衝突檢查
+    6. 根據結果輸出
+    7. 異常處理
+
+    Returns:
+        int: 退出碼（永遠 0，不阻塊派發）
+    """
+    logger = setup_hook_logging(HOOK_NAME)
+
+    try:
+        # Step 1: 讀取 stdin JSON
+        input_data = read_json_from_stdin(logger)
+
+        # Step 2: 驗證觸發條件
+        if not is_valid_trigger(input_data):
+            logger.debug("非目標觸發（非 Agent 工具或 PreToolUse 事件）")
+            print(json.dumps(DEFAULT_OUTPUT))
+            return 0
+
+        # Step 3: 提取目標 Ticket ID
+        target_ticket_id = extract_ticket_id(input_data)
+        if not target_ticket_id:
+            logger.debug("無法從派發指令中提取 Ticket ID")
+            print(json.dumps(DEFAULT_OUTPUT))
+            return 0
+
+        logger.info(f"檢查 Ticket {target_ticket_id} 的檔案所有權衝突")
+
+        # Step 4: 執行衝突檢查
+        project_root = get_project_root()
+        conflicts = find_file_ownership_conflicts(
+            target_ticket_id, project_root, logger
+        )
+
+        # Step 5: 篩選可操作的衝突（排除父子重疊）
+        actionable_conflicts = [
+            c for c in conflicts if not c.is_parent_child
+        ]
+
+        # Step 6: 根據結果輸出
+        if actionable_conflicts:
+            warning_msg = format_conflict_warning(
+                target_ticket_id, actionable_conflicts
+            )
+            logger.warning(warning_msg)
+
+            output = {
+                "hookSpecificOutput": {
+                    "hookEventName": "PreToolUse",
+                    "additionalContext": warning_msg
+                }
+            }
+        else:
+            # 靜默通過
+            logger.debug(f"無衝突，靜默通過")
+            output = DEFAULT_OUTPUT
+
+        print(json.dumps(output, ensure_ascii=False))
+        return 0
+
+    except Exception as e:
+        logger.critical(f"Hook 執行失敗: {e}", exc_info=True)
+        sys.stderr.write(f"[Hook Error] {HOOK_NAME}: {e}\n")
+        print(json.dumps(DEFAULT_OUTPUT))
+        return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
