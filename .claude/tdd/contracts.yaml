@@ -221,9 +221,13 @@ contracts:
           - name: "實作概況"
             required: true
             validation_level: "error"
+            # IMP-045 擴展：支援替代名稱（向後相容）
+            alternate_names: ["Implementation Overview", "Overview"]
           - name: "測試結果"
             required: true
             validation_level: "error"
+            # IMP-045 擴展：支援替代名稱（向後相容）
+            alternate_names: ["Test Results", "Testing", "Tests"]
           - name: "品質審計"
             required: true
             validation_level: "warning"

@@ -24,10 +24,11 @@ import os
 import sys
 from pathlib import Path
 
-# 將 .claude/hooks 加入 sys.path，以便導入 phase_contract_validator_hook
-sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "hooks"))
+# 正確的跨層導入：使用相對路徑而非 sys.path.insert（架構層級邊界，見 IMP-045）
+# .claude/skills/tdd/ → .claude/lib/ 導入共用驗證器
+sys.path.insert(0, str(Path(__file__).parent.parent.parent / "lib"))
 
-from phase_contract_validator_hook import PhaseContractValidator, ValidationResult
+from phase_contract_validator import PhaseContractValidator, ValidationResult
 
 
 def complete_phase(
