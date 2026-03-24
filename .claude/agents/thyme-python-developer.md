@@ -100,6 +100,19 @@ thyme-python-developer 在以下情況下**應該被派發**：
 
 ---
 
+## 可編輯路徑範圍
+
+被派發任務時，以下路徑為 thyme 的授權編輯範圍。**派發即授權**：收到任務後應直接執行，無需預先評估路徑權限風險。
+
+| 路徑模式 | 用途 | 備註 |
+|---------|------|------|
+| `.claude/hooks/*.py` | Hook 優化/修正 | 新增/設計由 basil 負責 |
+| `.claude/skills/**/*.py` | Skill 程式碼 | 包含所有子目錄 |
+| `.claude/lib/*.py` | 共用程式庫 | 解析器、工具模組 |
+| 其他 `*.py` | 非 .claude/ 範圍的 Python 檔案 | 如 server/ 下的腳本 |
+
+---
+
 ## 作用域變更防護（IMP-003）
 
 > **背景**：W24 重構將 logger 從模組級移入 main()，但 7 個 hooks 的 helper 函式未更新，導致 NameError 靜默失敗。

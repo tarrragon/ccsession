@@ -160,7 +160,9 @@ incident-responder 分析和分類
 | 格式化問題 | 縮排、空格 | 使用 lint 工具自動修復、記錄到日誌 |
 | 文件更新 | 非程式碼修改 | 不影響功能、記錄到日誌 |
 
-### 規則 5：主線程編輯限制（Level 3）
+### 規則 5：主線程編輯限制（Level 3，僅限 rosemary-project-manager）
+
+> **受眾限定**：以下允許/禁止清單**僅適用於主線程（PM）**。subagent 開發代理人被派發任務時，可編輯任何被指定的檔案路徑，不受此清單限制。
 
 主線程（rosemary-project-manager）只能編輯以下檔案範圍：
 
@@ -175,7 +177,7 @@ incident-responder 分析和分類
 | Ticket 檔案 | `docs/work-logs/*/tickets/*` | Ticket 檔案（唯一位置） |
 | 待辦清單 | `docs/todolist.yaml` | 結構化版本索引 |
 
-**禁止編輯**：
+**禁止編輯**（僅限主線程，subagent 不受影響）：
 
 | 禁止範圍 | 說明 |
 |---------|------|
@@ -186,6 +188,19 @@ incident-responder 分析和分類
 | `CHANGELOG.md` | 版本變更記錄（由流程自動產出） |
 
 **違規處理**：Hook 系統會在執行 Edit/Write 工具時驗證檔案路徑，如果超出允許範圍，將阻止操作並輸出警告訊息。
+
+### Subagent 可編輯路徑（參考）
+
+被 PM 派發的 subagent 開發代理人可編輯以下路徑（不受 Level 3 限制）：
+
+| 代理人 | 可編輯路徑 |
+|--------|-----------|
+| thyme-python-developer | `.claude/hooks/*.py`、`.claude/skills/**/*.py`、`.claude/lib/*.py`、其他 `*.py` |
+| parsley-flutter-developer | `lib/**/*.dart`、`test/**/*.dart`、`pubspec.yaml` |
+| basil-hook-architect | `.claude/hooks/*.py`（新增和設計）、`.claude/lib/*.py` |
+| fennel-go-developer | `server/**/*.go` |
+
+> **派發即授權**：PM 派發任務時已驗證路徑權限，subagent 應放心執行，無需預先評估風險。
 
 ### 規則 6：外部查詢工作流規則
 

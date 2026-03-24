@@ -50,14 +50,46 @@ if is_subagent_environment(input_data):
 
 ## 防護措施
 
+### Hook 類型區分（強制）
+
+開發 Hook 前必須先分類，不同類型有不同的 subagent 處理要求：
+
+| Hook 類型 | 定義 | subagent bypass | 範例 |
+|-----------|------|-----------------|------|
+| **限制類** | 阻擋操作（exit 1 或 `"decision": "block"`） | **必須加入** | main-thread-edit-restriction、branch-verify |
+| **檢查類** | 只提示不阻擋（exit 0，輸出 WARNING） | 通常不需要 | ticket-id-validator、output-style-check |
+| **引導類** | 輸出建議或提醒（exit 0，輸出 INFO） | 視情況 | askuserquestion-reminder、commit-handoff |
+
+### 限制類 Hook 必備程式碼模板
+
+```python
+import json
+import sys
+from hook_utils import is_subagent_environment, generate_hook_output
+
+EXIT_ALLOW = 0
+EXIT_BLOCK = 1
+
+def main():
+    input_data = json.loads(sys.stdin.read())
+
+    # [強制] 限制類 Hook 必須在早期跳過 subagent
+    if is_subagent_environment(input_data):
+        result = generate_hook_output(True, "subagent 不受此限制")
+        print(json.dumps(result, ensure_ascii=False))
+        return EXIT_ALLOW
+
+    # ... 主線程限制邏輯 ...
+```
+
 ### 新 Hook 開發檢查清單
 
-撰寫任何限制主線程行為的 PreToolUse Hook 時，必須確認：
+撰寫任何 PreToolUse Hook 時，必須確認：
 
-- [ ] 是否需要區分主線程和 subagent？（通常需要）
-- [ ] 是否已 import `is_subagent_environment`？
-- [ ] 是否在早期加入 subagent 跳過邏輯？
-- [ ] 錯誤訊息是否會誤導 subagent 改變行為？
+- [ ] Hook 是限制類、檢查類還是引導類？（見上方分類表）
+- [ ] 限制類 Hook 是否已 import `is_subagent_environment`？
+- [ ] 限制類 Hook 是否在早期（工具類型檢查之後、業務邏輯之前）加入 subagent 跳過？
+- [ ] 錯誤訊息是否會誤導 subagent 改變行為？（如「禁止編輯」可能讓 subagent 放棄嘗試）
 
 ### 判斷標準
 
