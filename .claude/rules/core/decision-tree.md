@@ -202,13 +202,15 @@ Skill 是預建的專用工具，優先於代理人派發。
 > Hook 派發原則：「Hook 該怎麼運作」→ basil；「Hook 程式碼該怎麼寫」→ thyme
 > IMP-003 防護：.claude/error-patterns/implementation/IMP-003-refactoring-scope-regression.md
 
-### 代理人可編輯路徑對照表
+### 代理人可編輯路徑對照表（Source of Truth）
 
-> **派發即授權**：PM 派發任務時已驗證路徑權限。subagent 被派發後應放心執行，無需預先評估風險。
+> **派發即授權**：PM 派發任務時已驗證路徑權限。subagent 被派發後應放心執行，無需預先評估風險。被阻擋時上報 PM 即可。
+>
+> **唯一來源**：本表是代理人路徑權限的唯一定義。其他檔案（skip-gate.md、agent 定義等）引用本表，不自行維護路徑清單。
 
 | 代理人 | 可編輯路徑（glob） | 說明 |
 |--------|-------------------|------|
-| thyme-python-developer | `.claude/hooks/*.py`、`.claude/skills/**/*.py`、`.claude/lib/*.py`、`*.py`（其他） | Hook 優化/修正、Skill 程式碼、共用程式庫 |
+| thyme-python-developer | `.claude/hooks/*.py`、`.claude/skills/**/*.py`、`.claude/lib/*.py` | Hook 優化/修正、Skill 程式碼、共用程式庫 |
 | parsley-flutter-developer | `ui/lib/**/*.dart`、`ui/test/**/*.dart`、`ui/pubspec.yaml` | Flutter 應用程式碼和測試 |
 | basil-hook-architect | `.claude/hooks/*.py`、`.claude/lib/*.py` | Hook 新增/設計、共用程式庫設計 |
 | fennel-go-developer | `server/**/*.go` | Go 後端程式碼 |

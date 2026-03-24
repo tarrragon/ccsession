@@ -65,10 +65,14 @@ if is_subagent_environment(input_data):
 ```python
 import json
 import sys
-from hook_utils import is_subagent_environment, generate_hook_output
+from hook_utils import is_subagent_environment
 
 EXIT_ALLOW = 0
 EXIT_BLOCK = 1
+
+def generate_hook_output(is_allowed: bool, reason: str) -> dict:
+    """限制類 Hook 的標準輸出格式。"""
+    return {"decision": "allow" if is_allowed else "block", "reason": reason}
 
 def main():
     input_data = json.loads(sys.stdin.read())

@@ -102,14 +102,9 @@ thyme-python-developer 在以下情況下**應該被派發**：
 
 ## 可編輯路徑範圍
 
-被派發任務時，以下路徑為 thyme 的授權編輯範圍。**派發即授權**：收到任務後應直接執行，無需預先評估路徑權限風險。
+**派發即授權**：收到任務後應直接嘗試 Edit/Write，被阻擋時上報 PM 即可。
 
-| 路徑模式 | 用途 | 備註 |
-|---------|------|------|
-| `.claude/hooks/*.py` | Hook 優化/修正 | 新增/設計由 basil 負責 |
-| `.claude/skills/**/*.py` | Skill 程式碼 | 包含所有子目錄 |
-| `.claude/lib/*.py` | 共用程式庫 | 解析器、工具模組 |
-| 其他 `*.py` | 非 .claude/ 範圍的 Python 檔案 | 如 server/ 下的腳本 |
+完整路徑清單見 decision-tree.md「代理人可編輯路徑對照表」（唯一 Source of Truth）。
 
 ---
 
