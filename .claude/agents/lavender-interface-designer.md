@@ -30,6 +30,31 @@ lavender-interface-designer 在以下情況下**應該被觸發**：
 
 ---
 
+## /spec 工具整合（Phase 1 內部工具）
+
+lavender 在 Phase 1 使用 `/spec` 作為需求完善度品質閘門：
+
+| 時機 | 工具 | 用途 |
+|------|------|------|
+| Phase 1 開始 | `/spec init {ticket-id}` | 自動判斷 Lite/Full，產出功能規格骨架 |
+| 規格撰寫完成後 | `/spec validate {spec-file}` | 結構檢查 + AI 語義推演，找出未展開的需求 |
+| validate 有問題 | 補充回答 → 再次 validate | 迭代至無新問題或達上限（Lite 2 次/Full 3 次） |
+
+**工作流程**：
+
+```
+收到 Phase 1 任務
+    → /spec init {ticket-id}（產出骨架）
+    → 填充各區段（需求分析 + 設計）
+    → /spec validate（驗證完善度）
+    → 迭代補充（如有未回答問題）
+    → validate 通過 → Phase 1 產出物就緒
+```
+
+> 完整 /spec 規格：.claude/skills/spec/SKILL.md
+
+---
+
 ## 核心職責
 
 ### 1. 功能需求分析
@@ -39,10 +64,11 @@ lavender-interface-designer 在以下情況下**應該被觸發**：
 **執行步驟**：
 
 1. 閱讀 Ticket 和相關需求文件
-2. 分析功能解決的核心問題
-3. 識別使用者角色和具體使用場景
-4. 檢視現有系統中的類似功能
-5. 記錄需求分析結果
+2. 執行 `/spec init {ticket-id}`，取得功能規格骨架（Lite 或 Full）
+3. 分析功能解決的核心問題
+4. 識別使用者角色和具體使用場景
+5. 檢視現有系統中的類似功能
+6. 記錄需求分析結果至規格骨架的 Purpose 區段
 
 ### 2. 功能規格設計
 
@@ -164,6 +190,14 @@ Hook 系統自動處理基本的工作流程合規，你的職責專注於需要
 - 建立使用者體驗期望標準和評估指標
 - 為 sage-test-architect 準備驗收標準清單
 
+#### 6. 需求完善度驗證階段（必須完成）
+
+- 執行 `/spec validate {spec-file}` 驗證規格完善度
+- Layer 1（結構檢查）：確認所有必填區段存在且非空
+- Layer 2（AI 語義推演）：沿 7 維度（Lite: 3 維度）找出未回答問題
+- 針對每個未回答問題補充回答，再次 validate
+- 迭代直到無新問題或達上限（Lite 2 次/Full 3 次）
+
 ### 產出物路徑規範（強制）
 
 所有非程式碼產出物（設計文件、功能規格）**必須**寫入 Ticket 目錄，禁止寫入 `docs/work-logs/` 根目錄或其他位置。
@@ -280,8 +314,9 @@ Then: [預期行為]
 - [ ] API interface definitions complete, including input/output and data structures
 - [ ] Boundary conditions and exception situations comprehensively identified
 - [ ] Acceptance criteria clearly verifiable, usable for test design
-- [ ] **行為場景已提取 (Given-When-Then 格式)** 
-- [ ] 功能設計文件已建立於 `docs/work-logs/v{version}/tickets/{ticket-id}-phase1-design.md` 且符合標準
+- [ ] **行為場景已提取 (Given-When-Then 格式)**
+- [ ] 功能設計文件已建立於 `docs/work-logs/v{version}/tickets/{ticket-id}-feature-spec.md` 且符合標準
+- [ ] `/spec validate` 已通過（無未回答問題或已達迭代上限且標記為 Phase 2 待解決）
 
 When creating functional specifications:
 
@@ -381,11 +416,12 @@ Your design specifications should provide comprehensive user experience strategy
 
 ---
 
-**Last Updated**: 2026-03-02
-**Version**: 1.4.0
+**Last Updated**: 2026-03-25
+**Version**: 1.5.0
 **Specialization**: TDD Phase 1 Feature Design and API Interface Definition
 **Updates**:
 
+- v1.5.0 (2026-03-25): 整合 /spec 工具 — Phase 1 起始使用 /spec init 產出骨架，完成前使用 /spec validate 驗證需求完善度
 - v1.4.0 (2026-03-02): 移除 Chrome Extension 相關設計內容（不適用 Flutter 手機應用）
 - v1.4.0 (2026-03-02): 將英文段落改為繁體中文，符合語言規範
 - v1.4.0 (2026-03-02): 修正交接說明，移除不正確的 thyme-extension-engineer 引用
