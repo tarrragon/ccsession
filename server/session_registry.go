@@ -83,8 +83,6 @@ func (r *SessionRegistry) UpsertFromSessionEvent(event SessionEvent) {
 		// 否則重新計算狀態
 		session.Status = r.computeStatus(session, now)
 	}
-
-	r.sessions[event.SessionID] = session
 }
 
 // UpsertFromHookEvent 依據 HTTP Hook 事件更新 SessionInfo。
@@ -168,10 +166,6 @@ func (r *SessionRegistry) UpsertFromHookEvent(event HookEvent) {
 		// 未知 Hook 事件類型，忽略
 		return
 	}
-
-	if exists {
-		r.sessions[event.SessionID] = session
-	}
 }
 
 // Get 查詢單一 session，若不存在返回 nil。
@@ -240,6 +234,11 @@ func (r *SessionRegistry) computeStatus(session *SessionInfo, now time.Time) Ses
 		return SessionStatusActive // 預設狀態
 	}
 
+	// completed 是終態，不可被時間計算覆蓋
+	if session.Status == SessionStatusCompleted {
+		return SessionStatusCompleted
+	}
+
 	elapsed := now.Sub(session.LastEventAt)
 
 	switch {
@@ -257,8 +256,8 @@ func truncateString(s string, maxLen int) string {
 	if len(s) <= maxLen {
 		return s
 	}
-	// 簡單截斷（不考慮 UTF-8 字符邊界）
-	// 若需完整 UTF-8 支援，可使用 []rune 轉換
+	// 使用 []rune 截斷，確保 UTF-8 字元邊界安全。
+	// 先做 byte 長度快速路徑避免不必要的 rune 轉換。
 	runes := []rune(s)
 	if len(runes) <= maxLen {
 		return s

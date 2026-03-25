@@ -455,6 +455,74 @@ func TestSessionRegistry_SummaryTruncation(t *testing.T) {
 	}
 }
 
+// TestScanAndUpdateStatus_DoesNotRevertCompleted 驗證 completed 是終態，
+// ScanAndUpdateStatus 的時間計算不可將其覆蓋回 active。
+func TestScanAndUpdateStatus_DoesNotRevertCompleted(t *testing.T) {
+	baseTime := time.Date(2026, 3, 25, 12, 0, 0, 0, time.UTC)
+	registry := NewSessionRegistry(func() time.Time { return baseTime })
+
+	// 建立 session
+	registry.UpsertFromSessionEvent(SessionEvent{
+		SessionID: "completed-guard-1",
+		Type:      EventTypeUser,
+		Timestamp: baseTime,
+	})
+
+	// 透過 SubagentStop 設為 completed
+	registry.UpsertFromHookEvent(HookEvent{
+		Type:      HookEventSubagentStop,
+		SessionID: "completed-guard-1",
+	})
+
+	session, _ := registry.Get("completed-guard-1")
+	if session.Status != SessionStatusCompleted {
+		t.Fatalf("expected completed after SubagentStop, got %q", session.Status)
+	}
+
+	// 不推進時間（elapsed < ActiveThreshold），觸發掃描
+	updated := registry.ScanAndUpdateStatus()
+
+	session, _ = registry.Get("completed-guard-1")
+	if session.Status != SessionStatusCompleted {
+		t.Errorf("expected completed to be preserved, got %q", session.Status)
+	}
+	if len(updated) != 0 {
+		t.Errorf("expected no updates for terminal completed session, got %d", len(updated))
+	}
+}
+
+// TestUpsertFromSessionEvent_DoesNotRevertCompleted 驗證 completed 是終態，
+// 後續非 session_completed 的 SessionEvent 不可將其覆蓋。
+func TestUpsertFromSessionEvent_DoesNotRevertCompleted(t *testing.T) {
+	baseTime := time.Date(2026, 3, 25, 12, 0, 0, 0, time.UTC)
+	registry := NewSessionRegistry(func() time.Time { return baseTime })
+
+	// 建立 session
+	registry.UpsertFromSessionEvent(SessionEvent{
+		SessionID: "completed-guard-2",
+		Type:      EventTypeUser,
+		Timestamp: baseTime,
+	})
+
+	// 透過 SubagentStop 設為 completed
+	registry.UpsertFromHookEvent(HookEvent{
+		Type:      HookEventSubagentStop,
+		SessionID: "completed-guard-2",
+	})
+
+	// 送入非 session_completed 的事件
+	registry.UpsertFromSessionEvent(SessionEvent{
+		SessionID: "completed-guard-2",
+		Type:      EventTypeAssistant,
+		Timestamp: baseTime,
+	})
+
+	session, _ := registry.Get("completed-guard-2")
+	if session.Status != SessionStatusCompleted {
+		t.Errorf("expected completed to be preserved after assistant event, got %q", session.Status)
+	}
+}
+
 // TestSessionRegistry_ComputeStatus 測試狀態計算邏輯
 func TestSessionRegistry_ComputeStatus(t *testing.T) {
 	tests := []struct {
