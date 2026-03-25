@@ -106,19 +106,49 @@ func (d *EventDispatcher) Run(ctx context.Context) {
 	}
 }
 
+// dispatchAfterUpdate 記錄舊狀態、執行 update、取得新狀態、推送事件。
+// 提取自 processSessionEvent 和 processHookEvent 的共同邏輯。
+func (d *EventDispatcher) dispatchAfterUpdate(sessionID string, timestamp time.Time, update func()) {
+	oldSession, _ := d.registry.Get(sessionID)
+	oldStatus := ""
+	if oldSession != nil {
+		oldStatus = string(oldSession.Status)
+	}
+
+	update()
+
+	newSession, _ := d.registry.Get(sessionID)
+	if newSession == nil {
+		return
+	}
+
+	var changeType ChangeType
+	if oldStatus == "" {
+		changeType = ChangeTypeNew
+	} else if string(newSession.Status) != oldStatus {
+		changeType = ChangeTypeStatusChanged
+	} else {
+		changeType = ChangeTypeUpdated
+	}
+
+	d.sendToOutCh(DispatchedEvent{
+		ChangeType: changeType,
+		Session:    newSession,
+		Timestamp:  timestamp,
+	})
+}
+
 // processSessionEvent 處理來自 JSONL 的 SessionEvent。
 func (d *EventDispatcher) processSessionEvent(event SessionEvent) {
 	logger := slog.Default()
 
 	// 構建去重鍵（用 MessageID 作為 AgentID）
-	agentID := event.MessageID
 	key := deduplicationKey{
-		AgentID:   agentID,
+		AgentID:   event.MessageID,
 		EventType: event.Type,
 		WindowKey: event.Timestamp.Truncate(DedupWindowDuration),
 	}
 
-	// 檢查去重表
 	d.dedupMu.Lock()
 	if source, exists := d.dedupTable[key]; exists && source == EventSourceHTTP {
 		d.dedupMu.Unlock()
@@ -131,52 +161,22 @@ func (d *EventDispatcher) processSessionEvent(event SessionEvent) {
 	d.dedupTable[key] = EventSourceJSONL
 	d.dedupMu.Unlock()
 
-	// 記錄舊狀態
-	oldSession, _ := d.registry.Get(event.SessionID)
-	oldStatus := ""
-	if oldSession != nil {
-		oldStatus = string(oldSession.Status)
-	}
-
-	// 更新 registry
-	d.registry.UpsertFromSessionEvent(event)
-
-	// 取得新狀態
-	newSession, _ := d.registry.Get(event.SessionID)
-	if newSession == nil {
-		return // 不應發生，但防禦性檢查
-	}
-
-	// 決定 ChangeType
-	var changeType ChangeType
-	if oldStatus == "" {
-		changeType = ChangeTypeNew
-	} else if string(newSession.Status) != oldStatus {
-		changeType = ChangeTypeStatusChanged
-	} else {
-		changeType = ChangeTypeUpdated
-	}
+	d.dispatchAfterUpdate(event.SessionID, d.now(), func() {
+		d.registry.UpsertFromSessionEvent(event)
+	})
 
 	logger.Info(LogJSONLEventProcessed,
 		"layer", "event_dispatcher",
 		"sessionID", event.SessionID,
-		"eventType", event.Type,
-		"changeType", string(changeType))
-
-	// 推送事件
-	d.sendToOutCh(DispatchedEvent{
-		ChangeType: changeType,
-		Session:    newSession,
-		Timestamp:  d.now(),
-	})
+		"eventType", event.Type)
 }
 
 // processHookEvent 處理來自 HTTP Hook 的 HookEvent。
 func (d *EventDispatcher) processHookEvent(event HookEvent) {
 	logger := slog.Default()
 
-	// 解析 Timestamp
-	var timestamp time.Time
+	// 解析 Timestamp，預設使用當前時間
+	timestamp := d.now()
 	if event.Timestamp != "" {
 		if t, err := time.Parse(time.RFC3339, event.Timestamp); err == nil {
 			timestamp = t
@@ -185,20 +185,15 @@ func (d *EventDispatcher) processHookEvent(event HookEvent) {
 				"layer", "event_dispatcher",
 				"timestamp", event.Timestamp,
 				"error", err)
-			timestamp = d.now()
 		}
-	} else {
-		timestamp = d.now()
 	}
 
-	// 構建去重鍵
 	key := deduplicationKey{
 		AgentID:   event.AgentID,
 		EventType: event.Type,
 		WindowKey: timestamp.Truncate(DedupWindowDuration),
 	}
 
-	// 檢查去重表
 	d.dedupMu.Lock()
 	if _, exists := d.dedupTable[key]; exists {
 		d.dedupMu.Unlock()
@@ -211,49 +206,16 @@ func (d *EventDispatcher) processHookEvent(event HookEvent) {
 	d.dedupTable[key] = EventSourceHTTP
 	d.dedupMu.Unlock()
 
-	// 記錄舊狀態
-	oldSession, _ := d.registry.Get(event.SessionID)
-	oldStatus := ""
-	if oldSession != nil {
-		oldStatus = string(oldSession.Status)
-	}
+	d.dispatchAfterUpdate(event.SessionID, timestamp, func() {
+		d.registry.UpsertFromHookEvent(event)
+	})
 
-	// 更新 registry
-	d.registry.UpsertFromHookEvent(event)
-
-	// 取得新狀態
-	newSession, _ := d.registry.Get(event.SessionID)
-	if newSession == nil {
-		// 若 UpsertFromHookEvent 未建立新 session（例如 SubagentStop 孤立事件），直接返回
-		logger.Debug("hook event not processed in registry",
-			"layer", "event_dispatcher",
-			"sessionID", event.SessionID,
-			"eventType", event.Type)
-		return
-	}
-
-	// 決定 ChangeType
-	var changeType ChangeType
-	if oldStatus == "" {
-		changeType = ChangeTypeNew
-	} else if string(newSession.Status) != oldStatus {
-		changeType = ChangeTypeStatusChanged
-	} else {
-		changeType = ChangeTypeUpdated
-	}
-
+	// 若 dispatchAfterUpdate 內 newSession 為 nil（孤立事件），
+	// 不會推送事件，此處 log 仍記錄嘗試
 	logger.Info(LogHookEventProcessed,
 		"layer", "event_dispatcher",
 		"sessionID", event.SessionID,
-		"hookType", event.Type,
-		"changeType", string(changeType))
-
-	// 推送事件
-	d.sendToOutCh(DispatchedEvent{
-		ChangeType: changeType,
-		Session:    newSession,
-		Timestamp:  timestamp,
-	})
+		"hookType", event.Type)
 }
 
 // sendToOutCh 嘗試將事件推送到輸出通道。
