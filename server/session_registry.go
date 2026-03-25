@@ -1,0 +1,276 @@
+package main
+
+import (
+	"sync"
+	"time"
+)
+
+// SessionRegistry 是所有 session 狀態的 Source of Truth。
+// 所有對 session 狀態的讀取和修改都透過此結構體進行。
+//
+// 並發安全：使用 sync.RWMutex 保護所有欄位存取。
+//   - 讀取操作（Get, List）使用 RLock
+//   - 寫入操作（Upsert, UpdateStatus）使用 Lock
+type SessionRegistry struct {
+	sessions map[string]*SessionInfo
+	mu       sync.RWMutex
+	now      func() time.Time // 時間提供者，便於測試注入
+}
+
+// NewSessionRegistry 建立並初始化一個空的 SessionRegistry。
+// timeProvider 用於注入時間函式（便於測試），若為 nil 則使用 time.Now。
+func NewSessionRegistry(timeProvider func() time.Time) *SessionRegistry {
+	if timeProvider == nil {
+		timeProvider = time.Now
+	}
+	return &SessionRegistry{
+		sessions: make(map[string]*SessionInfo),
+		now:      timeProvider,
+	}
+}
+
+// UpsertFromSessionEvent 依據 JSONL 事件更新或建立 SessionInfo。
+//
+// 行為規則：
+//   - 若 sessionID 不存在 → 建立新的 SessionInfo，Status 設為 active
+//   - 若 sessionID 已存在 → 更新 LastEventAt、EventCount（+1）
+//   - 若 type == "session_completed" → 強制設定 Status 為 completed
+//   - 其他類型 → 重新計算 Status（呼叫 computeStatus，傳入當前時間）
+//   - 若為首個 user 訊息（FirstUserMessageAt 未設定且 Type == "user"）→ 填入時戳
+//   - 若 EventCount == 0 且 Type == "user" → 填入 Summary（截斷至 MaxSummaryLength）
+func (r *SessionRegistry) UpsertFromSessionEvent(event SessionEvent) {
+	if event.SessionID == "" {
+		return // 忽略空 SessionID
+	}
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	now := r.now()
+	session, exists := r.sessions[event.SessionID]
+
+	if !exists {
+		// 新建 session
+		session = &SessionInfo{
+			ID:           event.SessionID,
+			ProjectPath:  event.ProjectPath,
+			Status:       SessionStatusActive,
+			FirstEventAt: now,
+			LastEventAt:  now,
+			EventCount:   0,
+		}
+		r.sessions[event.SessionID] = session
+	}
+
+	// 更新現有或新建的 session
+	session.EventCount++
+	session.LastEventAt = now
+
+	// 記錄首個 user 事件時戳
+	if event.Type == EventTypeUser && session.FirstUserMessageAt.IsZero() {
+		session.FirstUserMessageAt = now
+	}
+
+	// 若為首個 user 訊息，提取 Summary
+	if session.EventCount == 1 && event.Type == EventTypeUser {
+		session.Summary = truncateString(event.Content.Text, MaxSummaryLength)
+	}
+
+	// 若為 session_completed 事件，強制設定狀態
+	if event.Type == EventTypeSessionCompleted {
+		session.Status = SessionStatusCompleted
+	} else {
+		// 否則重新計算狀態
+		session.Status = r.computeStatus(session, now)
+	}
+
+	r.sessions[event.SessionID] = session
+}
+
+// UpsertFromHookEvent 依據 HTTP Hook 事件更新 SessionInfo。
+//
+// 行為規則（依 event.Type）：
+//   - SubagentStart:
+//     - 若 sessionID 不存在 → 建立 SessionInfo（最小化填充，等待 JSONL 補充）
+//     - 更新 AgentID、AgentType
+//     - 若 ParentAgentID 非空 → 填入 SessionInfo.ParentAgentID（v0.3 預留）
+//     - 強制設定 Status 為 active
+//   - SubagentStop:
+//     - 若 sessionID 不存在 → 忽略（孤立事件）
+//     - 更新 LastMessage、LastEventAt
+//     - 強制設定 Status 為 completed（即時，不等候超時）
+//   - TaskCompleted:
+//     - 若 sessionID 不存在 → 忽略
+//     - 更新 LastEventAt
+//     - 重新計算 Status（不強制 completed）
+//   - TeammateIdle:
+//     - 若 sessionID 不存在 → 忽略
+//     - 更新 LastEventAt
+//     - 強制設定 Status 為 idle
+func (r *SessionRegistry) UpsertFromHookEvent(event HookEvent) {
+	if event.SessionID == "" {
+		return // 忽略空 SessionID
+	}
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	now := r.now()
+	session, exists := r.sessions[event.SessionID]
+
+	// 根據事件類型進行不同的處理
+	switch event.Type {
+	case HookEventSubagentStart:
+		// SubagentStart 可創建新 session
+		if !exists {
+			session = &SessionInfo{
+				ID:         event.SessionID,
+				Status:     SessionStatusActive,
+				FirstEventAt: now,
+				LastEventAt:  now,
+			}
+			r.sessions[event.SessionID] = session
+		}
+		session.AgentID = event.AgentID
+		session.AgentType = event.AgentType
+		session.LastEventAt = now
+		if event.ParentAgentID != "" {
+			session.ParentAgentID = event.ParentAgentID
+		}
+		session.Status = SessionStatusActive
+
+	case HookEventSubagentStop:
+		// SubagentStop 必須在已存在的 session 上才處理（孤立事件忽略）
+		if !exists {
+			return // 孤立的 Stop 事件，不建立新 session
+		}
+		session.LastMessage = event.LastMessage
+		session.LastEventAt = now
+		session.Status = SessionStatusCompleted // 即時完成
+
+	case HookEventTaskCompleted:
+		// TaskCompleted 只在已存在的 session 上處理
+		if !exists {
+			return
+		}
+		session.LastEventAt = now
+		session.Status = r.computeStatus(session, now)
+
+	case HookEventTeammateIdle:
+		// TeammateIdle 只在已存在的 session 上處理
+		if !exists {
+			return
+		}
+		session.LastEventAt = now
+		session.Status = SessionStatusIdle // 強制 idle
+
+	default:
+		// 未知 Hook 事件類型，忽略
+		return
+	}
+
+	if exists {
+		r.sessions[event.SessionID] = session
+	}
+}
+
+// Get 查詢單一 session，若不存在返回 nil。
+func (r *SessionRegistry) Get(sessionID string) (*SessionInfo, bool) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	session, ok := r.sessions[sessionID]
+	if !ok {
+		return nil, false
+	}
+
+	// 返回深度複製，避免外部修改
+	return copySessionInfo(session), true
+}
+
+// List 返回所有 session 的深度複製列表。
+func (r *SessionRegistry) List() []*SessionInfo {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	result := make([]*SessionInfo, 0, len(r.sessions))
+	for _, session := range r.sessions {
+		result = append(result, copySessionInfo(session))
+	}
+	return result
+}
+
+// Count 返回當前 registry 中 session 的總數。
+func (r *SessionRegistry) Count() int {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	return len(r.sessions)
+}
+
+// ScanAndUpdateStatus 定時掃描所有 session，根據時間戳更新狀態。
+// 此方法應定期呼叫（例如每 30 秒一次），以驅動狀態機轉換。
+func (r *SessionRegistry) ScanAndUpdateStatus() []*SessionInfo {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	now := r.now()
+	updated := make([]*SessionInfo, 0)
+
+	for _, session := range r.sessions {
+		oldStatus := session.Status
+		newStatus := r.computeStatus(session, now)
+
+		if oldStatus != newStatus {
+			session.Status = newStatus
+			updated = append(updated, copySessionInfo(session))
+		}
+	}
+
+	return updated
+}
+
+// computeStatus 根據 LastEventAt 計算 session 應該處於的狀態。
+// 計算邏輯：
+//   - 若距上次事件 < 2 分鐘 → active
+//   - 若 2 分鐘 <= 距上次事件 < 30 分鐘 → idle
+//   - 若 >= 30 分鐘 → completed
+func (r *SessionRegistry) computeStatus(session *SessionInfo, now time.Time) SessionStatus {
+	if session == nil {
+		return SessionStatusActive // 預設狀態
+	}
+
+	elapsed := now.Sub(session.LastEventAt)
+
+	switch {
+	case elapsed < ActiveThreshold:
+		return SessionStatusActive
+	case elapsed < IdleThreshold:
+		return SessionStatusIdle
+	default:
+		return SessionStatusCompleted
+	}
+}
+
+// truncateString 將字串截斷至最多 maxLen 字元。
+func truncateString(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	// 簡單截斷（不考慮 UTF-8 字符邊界）
+	// 若需完整 UTF-8 支援，可使用 []rune 轉換
+	runes := []rune(s)
+	if len(runes) <= maxLen {
+		return s
+	}
+	return string(runes[:maxLen])
+}
+
+// copySessionInfo 返回 SessionInfo 的深度複製。
+func copySessionInfo(session *SessionInfo) *SessionInfo {
+	if session == nil {
+		return nil
+	}
+	copy := *session
+	return &copy
+}
