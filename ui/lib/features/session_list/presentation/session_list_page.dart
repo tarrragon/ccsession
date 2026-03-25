@@ -62,49 +62,51 @@ class _SessionGroupListView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 展平分組為 widget 列表
-    final items = <_ListItem>[];
-    for (final entry in grouped.entries) {
-      items.add(_ListItem.header(entry.key, entry.value.length));
-      for (final session in entry.value) {
-        items.add(_ListItem.tile(session));
-      }
-    }
+    final items = _flattenGroups(grouped);
 
     return ListView.builder(
       itemCount: items.length,
-      itemBuilder: (context, index) {
-        final item = items[index];
-        if (item.isHeader) {
-          return SessionGroupHeader(
-            status: item.status!,
-            count: item.count!,
-          );
-        }
-        final session = item.session!;
-        return SessionListTile(
-          session: session,
-          isSelected: session.id == selectedSessionId,
-          onTap: () => onSelectSession(session.id),
-        );
+      itemBuilder: (context, index) => switch (items[index]) {
+        _HeaderItem(:final status, :final count) => SessionGroupHeader(
+            status: status,
+            count: count,
+          ),
+        _TileItem(:final session) => SessionListTile(
+            session: session,
+            isSelected: session.id == selectedSessionId,
+            onTap: () => onSelectSession(session.id),
+          ),
       },
     );
   }
 }
 
+/// 需求：展平分組 Map 為 ListView 可消費的線性列表
+/// 約束：header-tile 交錯排列，每組 1 個 header + N 個 tile
+List<_ListItem> _flattenGroups(
+  Map<SessionStatus, List<SessionInfo>> grouped,
+) {
+  final items = <_ListItem>[];
+  for (final entry in grouped.entries) {
+    items.add(_HeaderItem(status: entry.key, count: entry.value.length));
+    for (final session in entry.value) {
+      items.add(_TileItem(session: session));
+    }
+  }
+  return items;
+}
+
 /// 內部輔助：ListView 項目（header 或 tile）
-class _ListItem {
-  _ListItem.header(this.status, this.count)
-      : session = null,
-        isHeader = true;
+/// 約束：sealed class + pattern matching，消除 nullable 欄位
+sealed class _ListItem {}
 
-  _ListItem.tile(this.session)
-      : status = null,
-        count = null,
-        isHeader = false;
+final class _HeaderItem extends _ListItem {
+  _HeaderItem({required this.status, required this.count});
+  final SessionStatus status;
+  final int count;
+}
 
-  final bool isHeader;
-  final SessionStatus? status;
-  final int? count;
-  final SessionInfo? session;
+final class _TileItem extends _ListItem {
+  _TileItem({required this.session});
+  final SessionInfo session;
 }

@@ -4,6 +4,11 @@ import 'package:flutter/material.dart';
 /// 需求：Session List Sidebar 相關常數
 /// 約束：所有數值和字串集中管理，禁止硬編碼
 abstract final class SessionListConstants {
+  /// 分組標題內距
+  static const groupHeaderPadding =
+      EdgeInsets.symmetric(horizontal: 16, vertical: 8);
+
+
   /// 摘要 fallback 截取長度上限
   static const summaryFallbackMaxLength = 50;
 

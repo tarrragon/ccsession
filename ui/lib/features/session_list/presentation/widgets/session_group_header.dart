@@ -19,7 +19,7 @@ class SessionGroupHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final displayName = SessionListConstants.statusDisplayName(status);
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: SessionListConstants.groupHeaderPadding,
       child: Text(
         '$displayName ($count)',
         style: Theme.of(context).textTheme.titleSmall?.copyWith(

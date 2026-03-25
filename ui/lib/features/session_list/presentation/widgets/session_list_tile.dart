@@ -29,12 +29,12 @@ class SessionListTile extends StatelessWidget {
       ),
       leading: StatusIndicator(status: session.status),
       title: Text(
-        _displaySummary(session),
+        _sessionTitle(session),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
       ),
       subtitle: Text(
-        _buildSubtitle(session),
+        _sessionSubtitle(session),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: theme.textTheme.bodySmall?.copyWith(
@@ -48,7 +48,7 @@ class SessionListTile extends StatelessWidget {
 
 /// 需求：摘要 fallback 邏輯
 /// 優先級：summary > lastMessage 前 N 字元 > id 前 8 字元
-String _displaySummary(SessionInfo session) {
+String _sessionTitle(SessionInfo session) {
   if (session.summary.isNotEmpty) {
     return session.summary;
   }
@@ -68,7 +68,7 @@ String _displaySummary(SessionInfo session) {
 }
 
 /// 需求：副標題組合專案名稱和 agentName
-String _buildSubtitle(SessionInfo session) {
+String _sessionSubtitle(SessionInfo session) {
   final projectName = extractProjectName(session.projectPath);
   final parts = <String>[
     if (projectName.isNotEmpty) projectName,

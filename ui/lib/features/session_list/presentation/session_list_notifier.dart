@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:ccsession/core/models/server_message.dart';
+import 'package:flutter/foundation.dart';
 import 'package:ccsession/core/models/session_info.dart';
 import 'package:ccsession/core/websocket/websocket_provider.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
@@ -28,6 +29,10 @@ abstract class SessionListState with _$SessionListState {
 class SessionListNotifier extends _$SessionListNotifier {
   StreamSubscription<ServerMessage>? _subscription;
 
+  /// 需求：安全取得當前狀態，初始化前 fallback 為預設值
+  SessionListState get _currentState =>
+      state.valueOrNull ?? const SessionListState();
+
   /// 需求：初始建構，訂閱 serverMessageProvider 並請求列表
   @override
   Future<SessionListState> build() async {
@@ -51,34 +56,42 @@ class SessionListNotifier extends _$SessionListNotifier {
 
   /// 需求：處理 Server 推送的訊息
   /// 維護：新增訊息類型時需擴充此 switch
+  /// 約束：異常不可中斷 stream，log 後繼續處理後續訊息
   void _handleMessage(ServerMessage message) {
-    switch (message.type) {
-      case 'session_list':
-        _handleSessionList(message);
-      case 'session_status_change':
-        _handleStatusChange(message);
+    try {
+      switch (message.type) {
+        case 'session_list':
+          _handleSessionList(message);
+        case 'session_status_change':
+          _handleStatusChange(message);
+      }
+    } on Object catch (error, stackTrace) {
+      // 需求：反序列化失敗不可取消 StreamSubscription
+      // 維護：目前 log 至 debugPrint，待 AppLogger 建立後遷移
+      debugPrint(
+        'SessionListNotifier: failed to handle ${message.type}: '
+        '$error\n$stackTrace',
+      );
     }
   }
 
   /// 需求：session_list 訊息替換整個列表
   void _handleSessionList(ServerMessage message) {
     final data = SessionListData.fromJson(message.data);
-    final currentState = state.valueOrNull ?? const SessionListState();
-    state = AsyncData(currentState.copyWith(sessions: data.sessions));
+    state = AsyncData(_currentState.copyWith(sessions: data.sessions));
   }
 
   /// 需求：session_status_change 更新單一 session 狀態
   /// 邊界：未知 sessionId 靜默忽略
   void _handleStatusChange(ServerMessage message) {
     final data = SessionStatusChangeData.fromJson(message.data);
-    final currentState = state.valueOrNull ?? const SessionListState();
-    final updatedSessions = currentState.sessions.map((session) {
+    final updatedSessions = _currentState.sessions.map((session) {
       if (session.id == data.sessionId) {
         return session.copyWith(status: data.status);
       }
       return session;
     }).toList();
-    state = AsyncData(currentState.copyWith(sessions: updatedSessions));
+    state = AsyncData(_currentState.copyWith(sessions: updatedSessions));
   }
 
   /// 需求：使用者點擊 session 時更新選中狀態
