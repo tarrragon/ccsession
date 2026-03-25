@@ -750,7 +750,66 @@ if _, known := knownFields[key]; !known {
 
 ---
 
-## 8. 參考資源
+## 8. v0.3 — Agent Graph 即時動畫元件
+
+> 此功能為 v0.3 版本規劃，v0.2 不包含此項目。
+
+### 8.1 功能需求
+
+#### 節點（Node）
+
+- 每個 Agent / Tool 為一個圓形節點
+- 節點狀態：idle / thinking / active / error
+- 各狀態對應不同視覺效果：
+  - idle：靜止，灰色
+  - thinking：旋轉光暈或 pulse 動畫，藍色
+  - active：發光效果，綠色
+  - error：閃爍，紅色
+
+#### 連線（Edge）
+
+- 當訊息在兩個節點間傳遞時，動態繪製帶方向的連線
+- 連線上有流動粒子（脈衝點）從來源節點移動到目標節點
+- 顏色依訊息類型區分：
+  - tool_call：橘色
+  - response：藍色
+  - error：紅色
+
+#### 資料介面
+
+元件接受以下資料結構驅動動畫：
+
+| 欄位 | 型別 | 說明 |
+|------|------|------|
+| agents | `List<AgentNode>` | id, label, status |
+| messages | `Stream<AgentMessage>` | fromId, toId, type, timestamp |
+
+### 8.2 技術要求
+
+- 使用 CustomPainter + AnimationController 實作
+- 使用 flutter_animate 套件處理節點狀態動畫
+- 元件需為獨立 Widget，可嵌入現有 Dashboard
+- 支援節點位置自動 layout（可用 force-directed 或手動指定座標）
+
+### 8.3 輸出元件
+
+1. `AgentGraphWidget`（主元件）
+2. `AgentNode` / `AgentMessage` data model
+3. 一個 mock data 的 demo 畫面供測試
+
+### 8.4 選型說明
+
+**為何選 CustomPainter**：連線、粒子、箭頭這類「不規則圖形 + 動態路徑」無法用標準 Widget 組合出來，CustomPainter 直接操作 Canvas，效能高且彈性最大，是 Flutter 中處理 graph 視覺化的標準做法。
+
+**為何選 AnimationController 而非 Rive**：節點狀態（thinking/active/error）是由程式邏輯即時驅動的，不是預先設計好的腳本動畫，用 AnimationController 可以在 runtime 動態切換，Rive 適合固定腳本的角色動畫。
+
+**為何加 flutter_animate**：節點的 pulse / 發光 / 進場效果用 flutter_animate 幾行就能完成，不需要為這類簡單效果手寫 AnimatedWidget，和 CustomPainter 各司其職。
+
+**資料驅動設計（Stream）**：用 `Stream<AgentMessage>` 接收訊息，元件內部監聽後觸發動畫，這樣元件和資料來源完全解耦，未來不管是 WebSocket、local event bus 還是 mock data 都可以接入。
+
+---
+
+## 9. 參考資源
 
 ### 社群類似專案
 
@@ -766,4 +825,4 @@ if _, known := knownFields[key]; !known {
 ---
 
 *最後更新: 2026-03-25*
-*版本: 1.4.0 - 新增 HTTP Hooks Handler（3.6）和事件融合策略（3.7）；更新架構圖為雙源架構；新增版本依賴說明（6.4）*
+*版本: 1.5.0 - 新增 v0.3 Agent Graph 即時動畫元件規劃（第 8 節）*
