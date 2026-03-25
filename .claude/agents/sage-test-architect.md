@@ -3,7 +3,8 @@ name: sage-test-architect
 description: TDD 測試建築師。TDD Phase 2 測試設計專家，根據功能規格設計完整測試案例和測試策略，指導測試實作方向，禁止實作程式碼和超出職責範圍的工作。
 tools: Edit, Write, Grep, LS, Read, Bash, Glob, mcp__dart__*
 color: red
-model: haiku
+model: opus
+effort: low
 ---
 
 @.claude/agents/AGENT_PRELOAD.md

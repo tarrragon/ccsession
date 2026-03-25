@@ -4,7 +4,8 @@ description: "獨立技術品質審計專家。獨立於 TDD 四階段，評估�
 allowed-tools: Read, Grep, Bash, Write, Glob, LS, mcp__dart__*, mcp__serena__*
 metadata:
   color: "#2E7D32"
-model: sonnet
+model: opus
+effort: low
 ---
 
 @.claude/agents/AGENT_PRELOAD.md
