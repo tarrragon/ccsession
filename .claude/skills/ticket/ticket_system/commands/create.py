@@ -1045,7 +1045,7 @@ def register(subparsers: argparse._SubParsersAction) -> None:
 
     parser.add_argument("--version", help="版本號（自動偵測）")
     parser.add_argument("--wave", type=int, required=False, help="Wave 編號（建立根任務時必須，子任務可省略）")
-    parser.add_argument("--seq", type=int, help="序號（自動產生）")
+    parser.add_argument("--seq", type=int, help="序號（自動產生，子任務由 --parent 決定，通常不需指定）")
     parser.add_argument("--action", required=True, help="動詞")
     parser.add_argument("--target", required=True, help="目標")
     parser.add_argument("--title", help="標題（預設: action + target）")
@@ -1059,14 +1059,14 @@ def register(subparsers: argparse._SubParsersAction) -> None:
     parser.add_argument(
         "--where-layer", help="架構層級: Domain, Application, Infrastructure, Presentation"
     )
-    parser.add_argument("--where", "--where-files", dest="where_files", help="影響檔案（逗號分隔）")
+    parser.add_argument("--where", "--where-files", dest="where_files", help="影響檔案（逗號分隔，如 'file1.py,file2.py'）")
     parser.add_argument("--why", help="需求依據")
     parser.add_argument("--how-type", help="Task Type: Implementation, Analysis, etc.")
     parser.add_argument("--how-strategy", help="實作策略")
-    parser.add_argument("--parent", help="父 Ticket ID")
-    parser.add_argument("--blocked-by", help="依賴的 Ticket IDs（逗號分隔）")
-    parser.add_argument("--related-to", help="相關的 Ticket IDs（逗號分隔，多對多關聯）")
-    parser.add_argument("--acceptance", action="append", help="驗收條件（可多次指定或 | 分隔）")
+    parser.add_argument("--parent", help="父 Ticket ID（子任務序號自動產生，勿指定 --seq）")
+    parser.add_argument("--blocked-by", help="依賴的 Ticket IDs（逗號分隔，如 'ID1,ID2'）")
+    parser.add_argument("--related-to", help="相關的 Ticket IDs（逗號分隔，如 'ID1,ID2'）")
+    parser.add_argument("--acceptance", action="append", help="驗收條件（多次 --acceptance 或 | 分隔，如 '條件A|條件B'）")
     parser.add_argument("--decision-tree-entry", help="進入決策樹的層級")
     parser.add_argument("--decision-tree-decision", help="做出的決策")
     parser.add_argument("--decision-tree-rationale", help="決策理由")

@@ -164,10 +164,31 @@ ticket create --version 0.31.0 --wave 4 --action "實作" --target "XXX"
 
 ### create - 建立新 Ticket
 
-建立 Atomic Ticket，支援 5W1H 引導式建立、子 Ticket 建立（create-child）、版本目錄初始化（init）。
+建立 Atomic Ticket，支援 5W1H 引導式建立、子 Ticket 建立、版本目錄初始化（init）。
 
 > 決策樹：Read `references/workflow-create.md`
 > 詳細用法：Read `references/create-command.md`
+
+**常用範例**：
+
+```bash
+# 建立根任務
+ticket create --version 0.2.0 --wave 2 --action "實作" --target "HTTP Handler" --type IMP
+
+# 建立子任務（--parent 自動產生子序號，不需指定 --seq）
+ticket create --parent "0.2.0-W2-001" --action "實作" --target "事件融合層"
+
+# 多值參數格式
+#   --acceptance：多次指定或用 | 分隔
+ticket create ... --acceptance "條件A" --acceptance "條件B"
+ticket create ... --acceptance "條件A|條件B|條件C"
+
+#   --where：逗號分隔
+ticket create ... --where "file1.py,file2.py"
+
+#   --blocked-by / --related-to：逗號分隔
+ticket create ... --blocked-by "0.2.0-W2-001.1,0.2.0-W2-001.2"
+```
 
 ### batch-create - 批次建立 Tickets
 
