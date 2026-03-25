@@ -4,6 +4,39 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.1.2] - 2026-03-25
+
+### Added
+
+- Phase Contract YAML schema 和四層驗證 Hook（存在性 -> 格式 -> 結構 -> 內容）
+- Ticket frontmatter protocol_version 欄位，支援 schema 演進和向後相容遷移
+- Agent Registry YAML（能力資料層），支援三種衝突檢查和派發驗證
+- 檔案所有權隔離自動檢查 Hook（where.files 衝突偵測）
+- ticket create 建立前 SRP 自動偵測和重複偵測查詢機制
+- 錯誤學習雙通道記錄保護機制（error-pattern + memory 同步）
+- 派發計數驗證 Hook（PC-020 防護）
+- 代理人可編輯路徑對照表和 subagent bypass 檢查清單
+- normalize_path() 路徑遍歷 stack 防護策略
+
+### Changed
+
+- ticket create execute() 重構為三段式結構（resolve -> parse -> persist）
+- Phase Contract Validator 重構消除 DRY 違反，統一 source of truth
+- file-ownership-guard-hook 品質改善（6 項 MEDIUM 修正，函式 <= 30 行）
+- skip-gate Level 3 明確區分主線程和 subagent 適用規則
+- parallel-dispatch.md 新增派發前路徑權限確認和派發後計數自檢
+- get_uncommitted_files() 高階 API 隱藏 porcelain 格式
+
+### Fixed
+
+- handoff-auto-resume-stop-hook 在背景代理人執行中時誤觸發
+- branch-verify-hook 誤攔 auto-memory 路徑
+- main-thread-edit-restriction-hook subagent 誤攔截 + plans 路徑白名單
+- phase_complete.py 引用不存在的 result.infos 欄位（AttributeError）
+- detect_srp_violations 和 detect_vague_acceptance 回傳語義相反
+- Phase Contract Validator legacy 判定 bug（mtime 比較和降級策略）
+- 500+ 現有 Ticket 事後驗證發現的 blockedBy 引用不存在問題
+
 ## [0.2.0] - 2026-03-04
 
 ### Added
