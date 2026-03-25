@@ -15,23 +15,44 @@
 ### 1.3 技術架構
 
 ```
-+-------------------+       WebSocket        +--------------------+
-|   Go Backend      | <--------------------> |  Flutter Frontend   |
-|                   |                         |                    |
-|  - File Watcher   |   session_list          |  - Session List    |
-|  - JSONL Parser   |   session_event         |  - Chat View       |
-|  - Session Mgr    |   session_history       |  - Split View      |
-|  - WS Server      |                         |  - WS Client       |
-+-------------------+                         +--------------------+
-        |
-        | fsnotify
-        v
-+-------------------+
-|  ~/.claude/       |
-|  projects/        |
-|    *.jsonl        |
-+-------------------+
++-------------------------------------------------------------+
+|                 Claude Code (v2.1.69+)                       |
+|                                                               |
+|  JSONL append                    Agent Lifecycle Events       |
+|  ~/.claude/projects/*.jsonl      SubagentStart/Stop/etc       |
++------------|-------------------------------|------------------+
+             |                               |
+             | [fsnotify]                    | [HTTP POST]
+             v                               v
++-----------------------------------------------------------+
+|   Go Backend (Port 8765)                                  |
+|                                                           |
+|  +-------------------+    +---------------------------+   |
+|  | File Watcher      |    | HTTP Hooks Handler        |   |
+|  | + JSONL Parser     |    | POST /hooks/agent-event  |   |
+|  +--------+-----------+    +----------+----------------+   |
+|           |                           |                    |
+|           +--------+------------------+                    |
+|                    v                                       |
+|           +------------------+                             |
+|           | Unified Event    |                             |
+|           | Dispatcher       |                             |
+|           +--------+---------+                             |
+|                    v                                       |
+|           +------------------+    +--------------------+   |
+|           | Session Registry |    | WebSocket Server   |   |
+|           +------------------+    +--------------------+   |
++-----------------------------------------------------------+
+                                           | WebSocket
+                                           v
+                                    +--------------------+
+                                    |  Flutter Frontend   |
+                                    +--------------------+
 ```
+
+**雙源架構**：Go Backend 同時接收兩個事件源 --
+- **JSONL file watching**（內容源）：完整對話內容、Tool chain、Boundary 信號
+- **HTTP Hooks**（事件源）：agent 生命週期事件（啟動/停止/完成），即時推送
 
 ---
 
@@ -313,6 +334,9 @@ type SessionInfo struct {
     Status      SessionStatus  // active, idle, completed
     LastEventAt time.Time
     EventCount  int
+    AgentID     string          // HTTP Hooks 提供的 agent 識別符
+    AgentType   string          // HTTP Hooks 提供的 agent 類型
+    LastMessage string          // SubagentStop 提供的最後回應摘要
 }
 ```
 
@@ -341,6 +365,85 @@ max_history_lines: 1000           # 單一 session 記憶體保留最大事件�
 ```bash
 ./ccsession-monitor --port 9999 --claude-home /custom/path
 ```
+
+### 3.6 HTTP Hooks Handler
+
+#### 職責
+
+- 接收 Claude Code HTTP Hooks 推送的 agent 生命週期事件
+- 解析事件並轉換為統一的 SessionEvent 格式
+- 更新 Session Registry 狀態
+- 作為 JSONL file watching 的補充事件源，提供即時的狀態變化通知
+
+#### 支援的 Hook 事件
+
+| Hook 事件 | 最低版本 | 觸發時機 | 關鍵欄位 |
+|-----------|---------|---------|---------|
+| `SubagentStart` | v2.1.30+ | subagent 生成時 | `agent_id`, `agent_type`, `session_id` |
+| `SubagentStop` | v2.1.50+ | subagent 完成時 | `agent_id`, `agent_transcript_path`, `last_assistant_message` |
+| `TaskCompleted` | v2.1.33+ | 任務完成時 | `task_id`, `task_subject`, `teammate_name` |
+| `TeammateIdle` | v2.1.33+ | Agent Team 隊友閒置 | `teammate_name`, `team_name` |
+| `WorktreeCreate` | v2.1.50+ | Worktree 建立時 | `worktree_path`, `branch` |
+| `WorktreeRemove` | v2.1.50+ | Worktree 刪除時 | `worktree_path` |
+
+#### 端點
+
+| 端點 | 方法 | 說明 |
+|------|------|------|
+| `/hooks/agent-event` | POST | 接收所有 agent 生命週期事件 |
+
+#### 事件格式
+
+```go
+type HookEvent struct {
+    Type           string `json:"type"`
+    AgentID        string `json:"agent_id"`
+    AgentType      string `json:"agent_type"`
+    SessionID      string `json:"session_id"`
+    Timestamp      string `json:"timestamp"`
+    TranscriptPath string `json:"agent_transcript_path,omitempty"`
+    LastMessage    string `json:"last_assistant_message,omitempty"`
+}
+```
+
+#### 容錯處理
+
+| 情境 | 處理方式 |
+|------|---------|
+| 無法映射到已知 session 的事件 | 記錄 WARN log，忽略 |
+| 未知 Hook 事件類型 | 記錄 WARN log，忽略 |
+| JSON 解析失敗 | 回傳 400，記錄 ERROR log |
+| HTTP Hooks 不可用（版本過舊） | 自動降級，完全依賴 JSONL watching |
+
+### 3.7 事件融合策略
+
+#### 雙源數據流
+
+Go Backend 同時接收兩個事件源，需要統一的融合策略：
+
+| 數據類型 | 來源 | 優先級 | 說明 |
+|---------|------|--------|------|
+| 系統狀態變化 | HTTP Hooks | 主 | SubagentStart/Stop/TaskCompleted，即時準確 |
+| 備用系統狀態 | JSONL 檔案存在/消失 | 備 | HTTP 事件遺失時的 fallback |
+| 對話內容 | JSONL 逐行內容 | 唯一 | 完整的訊息、Tool chain、Boundary 信號 |
+| 會話元數據 | sessions-index.json + HTTP 欄位 | 融合 | 兩者合並，HTTP 優先 |
+
+#### 狀態轉換規則（增強）
+
+Session Registry 的狀態轉換在原有 JSONL 基礎上新增 HTTP 事件驅動：
+
+| 狀態 | JSONL 觸發條件（原有） | HTTP 觸發條件（新增） |
+|------|----------------------|---------------------|
+| `active` | 最近 2 分鐘內有新事件 | 收到 SubagentStart |
+| `idle` | 2-30 分鐘內無新事件 | 收到 TeammateIdle |
+| `completed` | 30 分鐘以上無事件 | 收到 SubagentStop（即時，無需等 30 分鐘） |
+
+#### 去重機制
+
+同一 agent 生命週期事件可能同時被 HTTP Hooks 和 JSONL 檔案變化偵測到。去重策略：
+- 使用 `agent_id` + `event_type` + `timestamp` 組合作為去重鍵
+- HTTP 事件優先處理，後續 JSONL 偵測到的同一事件忽略
+- 去重窗口：5 秒內相同鍵的事件視為重複
 
 ---
 
@@ -502,6 +605,12 @@ max_history_lines: 1000           # 單一 session 記憶體保留最大事件�
 - WebSocket server 預設只監聽 localhost
 - 不提供遠端存取功能（除非明確配置）
 
+### 6.4 版本依賴
+
+- HTTP Hooks 功能需要 Claude Code v2.1.63+，SubagentStart/Stop 需 v2.1.30+，完整 agent_id/agent_type 欄位需 v2.1.69+
+- 系統啟動時應檢測 Claude Code 版本，版本不足時自動降級為純 JSONL watching
+- 降級模式下所有功能仍可正常運作，僅 session 狀態變化的即時性受影響（需等待 idle timeout 而非即時 HTTP 通知）
+
 ---
 
 ## 7. 可觀測性設計
@@ -656,5 +765,5 @@ if _, known := knownFields[key]; !known {
 
 ---
 
-*最後更新: 2026-03-05*
-*版本: 1.3.0 - 新增 IsLastContent 欄位（Boundary 信號方案，W1-008 決策）；補充 thinking 事件類型*
+*最後更新: 2026-03-25*
+*版本: 1.4.0 - 新增 HTTP Hooks Handler（3.6）和事件融合策略（3.7）；更新架構圖為雙源架構；新增版本依賴說明（6.4）*
