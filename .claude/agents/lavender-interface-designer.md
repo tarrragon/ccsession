@@ -270,43 +270,9 @@ Hook 系統自動處理基本的工作流程合規，你的職責專注於需要
 
 ## TDD Phase 1 Handoff Standards
 
-** Phase 1 行為場景提取職責** (新增 v1.2.0):
+**行為場景提取**：詳見本文件「核心職責 > 5. 行為場景提取」章節。
 
-**目標**: 從需求中識別使用者行為場景,為 Phase 2 測試設計奠定基礎。
-
-**執行步驟**:
-
-1. 閱讀功能需求描述
-2. 識別使用者角色和操作
-3. 使用 Given-When-Then 格式列出場景
-4. 涵蓋正常流程、異常流程、邊界條件
-
-**場景提取範例**:
-
-```markdown
-場景 1: [業務流程] - 成功（正常流程）
-Given: [前置條件]
-When: [使用者操作]
-Then: [預期結果]
-
-場景 2: [業務流程] - 失敗（異常流程）
-Given: [異常條件]
-When: [使用者操作]
-Then: [錯誤處理]
-
-場景 3: [業務流程] - 邊界條件
-Given: [極端情況]
-When: [使用者操作]
-Then: [預期行為]
-```
-
-**驗證標準**:
-
-- [ ] 每個場景代表獨立可驗證的行為
-- [ ] 涵蓋正常流程、異常流程、邊界條件
-- [ ] 使用業務語言而非技術術語
-
-**詳細規範請參考**: @.claude/methodologies/bdd-testing-methodology.md
+> 完整 BDD 規範：.claude/methodologies/bdd-testing-methodology.md
 
 **Handoff checklist to sage-test-architect (TDD Phase 2)**:
 
