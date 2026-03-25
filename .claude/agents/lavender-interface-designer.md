@@ -38,7 +38,7 @@ lavender 在 Phase 1 使用 `/spec` 作為需求完善度品質閘門：
 |------|------|------|
 | Phase 1 開始 | `/spec init {ticket-id}` | 自動判斷 Lite/Full，產出功能規格骨架 |
 | 規格撰寫完成後 | `/spec validate {spec-file}` | 結構檢查 + AI 語義推演，找出未展開的需求 |
-| validate 有問題 | 補充回答 → 再次 validate | 迭代至無新問題或達上限（Lite 2 次/Full 3 次） |
+| validate 有問題 | 補充回答 → 再次 validate | 迭代至無新問題或達上限（見 SKILL.md 迭代機制） |
 
 **工作流程**：
 
@@ -193,10 +193,10 @@ Hook 系統自動處理基本的工作流程合規，你的職責專注於需要
 #### 6. 需求完善度驗證階段（必須完成）
 
 - 執行 `/spec validate {spec-file}` 驗證規格完善度
-- Layer 1（結構檢查）：確認所有必填區段存在且非空
-- Layer 2（AI 語義推演）：沿 7 維度（Lite: 3 維度）找出未回答問題
-- 針對每個未回答問題補充回答，再次 validate
-- 迭代直到無新問題或達上限（Lite 2 次/Full 3 次）
+- 針對未回答問題補充回答，再次 validate
+- 迭代直到無新問題或達上限
+
+> 驗證維度和迭代規則詳見：.claude/skills/spec/SKILL.md
 
 ### 產出物路徑規範（強制）
 
