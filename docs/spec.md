@@ -234,7 +234,6 @@ type SessionEvent struct {
     IsLastContent bool            `json:"isLastContent"` // 是否為該 messageId 下的最後一個子事件
     Content       EventContent    `json:"content"`
     ToolName      string          `json:"toolName,omitempty"`
-    AgentID       string          `json:"agentId,omitempty"`    // v0.3 預留：產生此事件的 agent ID
 }
 ```
 
@@ -281,7 +280,7 @@ Server → Client：
 
 ```json
 {
-  "type": "session_list | session_event | session_history | session_status_change | agent_status_change | agent_message",
+  "type": "session_list | session_event | session_history | session_status_change",
   "data": { ... }
 }
 ```
@@ -309,8 +308,6 @@ Server → Client：
 | `session_event` | 新事件寫入 JSONL | 單一 SessionEvent |
 | `session_history` | Client 請求指定 session | SessionEvent 陣列（依 timestamp 升序排列） |
 | `session_status_change` | Session 狀態變更 | session ID + 新狀態 |
-| `agent_status_change` | Agent 節點狀態變更（v0.3 實作） | agentId + agentType + status（idle/thinking/active/error） |
-| `agent_message` | Agent 間訊息傳遞（v0.3 實作） | fromAgentId + toAgentId + messageType + timestamp |
 
 #### 連線管理
 
@@ -340,8 +337,6 @@ type SessionInfo struct {
     AgentID     string          // HTTP Hooks 提供的 agent 識別符
     AgentType   string          // HTTP Hooks 提供的 agent 類型
     LastMessage    string          // SubagentStop 提供的最後回應摘要
-    ParentAgentID  string          // v0.3 預留：派發此 agent 的父 agent ID
-    AgentName      string          // v0.3 預留：agent 顯示名稱（來自 teammate_name）
 }
 ```
 
@@ -812,6 +807,40 @@ if _, known := knownFields[key]; !known {
 
 **資料驅動設計（Stream）**：用 `Stream<AgentMessage>` 接收訊息，元件內部監聽後觸發動畫，這樣元件和資料來源完全解耦，未來不管是 WebSocket、local event bus 還是 mock data 都可以接入。
 
+### 8.5 Use Case 定義
+
+| UC | 描述 |
+|----|------|
+| UC-v0.3-01 | 使用者開啟 Agent Graph 面板，看到主 agent 及其派生的 subagent 拓撲圖 |
+| UC-v0.3-02 | Subagent 啟動時，Graph 即時新增節點並顯示 thinking/active 狀態動畫 |
+| UC-v0.3-03 | Subagent 完成時，節點轉為 idle 狀態或從 Graph 移除 |
+| UC-v0.3-04 | 使用者點擊 Graph 節點，跳轉到對應 session 的對話視圖 |
+
+### 8.6 已知限制與前提條件
+
+| 限制 | 說明 | 來源 |
+|------|------|------|
+| `parent_agent_id` 不可用 | Claude Code SubagentStart HTTP Hook 不包含父 agent ID（GitHub Issue #14859）。替代方案：解析 `SubagentStop.agent_transcript_path` 路徑結構推導巢狀層級 | W5-004 實測 |
+| 拓撲建立時機延遲 | 因 parent-child 關係需從 SubagentStop 的 transcript path 推導，agent 拓撲只能在 subagent 完成後確認，執行期間無法即時顯示正確層級 | W5-001 分析 |
+| Session 1:1 vs Agent 1:N | v0.2 SessionRegistry 以 sessionId 為 key（1:1），v0.3 需要多個 AgentNode 對應。需決定是擴充 SessionRegistry 還是新增 AgentRegistry | W5-001 分析 |
+| 狀態語義分歧 | v0.2 SessionStatus（active/idle/completed）是 session 生命週期狀態，v0.3 AgentNode status（idle/thinking/active/error）是節點視覺狀態，兩者不應混用 | W5-001 分析 |
+| `teammate_name` 填充路徑 | HookEvent struct 未定義 teammate_name 欄位，AgentNode.label 的來源路徑需在 v0.3 設計時補完 | 三人組審查 |
+
+### 8.7 版本銜接設計索引
+
+v0.3 實作時需在 v0.2 基礎上新增以下設計項目：
+
+| v0.3 需求 | 對應 v0.2 元件 | 需新增/修改 |
+|-----------|---------------|-----------|
+| AgentNode.id | SessionInfo.AgentID | 已有，可沿用 |
+| AgentNode.label | SessionInfo（無對應） | 新增 AgentName 欄位 + HookEvent teammate_name 解析 |
+| AgentNode.status | SessionStatus（語義不同） | 新增 AgentStatus 類型（idle/thinking/active/error） |
+| AgentMessage.fromId/toId | SessionEvent（無對應） | 新增 AgentID 欄位 + 事件融合層推導邏輯 |
+| Parent-Child 拓撲 | SessionInfo（無對應） | 新增 ParentAgentID 欄位 + transcript path 解析 |
+| agent_status_change | WebSocket 協議（無對應） | 新增訊息類型 |
+| agent_message | WebSocket 協議（無對應） | 新增訊息類型 |
+| Stream 接入 | Flutter 事件層 | SessionEventRepository 介面 + .where().map() 轉換 |
+
 ---
 
 ## 9. 參考資源
@@ -830,4 +859,4 @@ if _, known := knownFields[key]; !known {
 ---
 
 *最後更新: 2026-03-25*
-*版本: 1.6.0 - 新增 v0.3 Agent Graph 預留欄位和協議預告（W5-003）*
+*版本: 1.7.0 - v0.3 預留欄位從 §3 移至 §8，補充 Use Case、已知限制和版本銜接索引（W5-006）*
