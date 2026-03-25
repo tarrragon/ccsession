@@ -19,5 +19,7 @@ const (
 	LogWSDispatchChClosed    = "dispatch channel closed"
 	LogWSEventDispatched     = "dispatched event processed"
 	LogWSInvalidParams       = "invalid parameters from client"
-	LogWSSessionNotFound     = "session not found"
+	LogWSSessionNotFound      = "session not found"
+	LogWSMarshalFailed        = "failed to marshal server message"
+	LogWSInvalidBeforeFormat  = "invalid before timestamp format, ignoring filter"
 )

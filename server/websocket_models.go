@@ -17,7 +17,7 @@ type ClientMessage struct {
 // ServerMessage represents a message sent from Server to Client.
 type ServerMessage struct {
 	Type string      `json:"type"`
-	Data interface{} `json:"data"`
+	Data any `json:"data"`
 }
 
 // SessionListData is the payload for session_list messages.
@@ -27,9 +27,8 @@ type SessionListData struct {
 
 // SessionEventData is the payload for session_event messages.
 type SessionEventData struct {
-	SessionID string        `json:"sessionId"`
-	Event     *SessionEvent `json:"event,omitempty"`
-	AgentID   string        `json:"agentId,omitempty"`
+	SessionID string `json:"sessionId"`
+	AgentID   string `json:"agentId,omitempty"`
 }
 
 // SessionStatusChangeData is the payload for session_status_change messages.
@@ -56,4 +55,5 @@ type Client struct {
 	send          chan []byte
 	subscriptions map[string]struct{}
 	mu            sync.RWMutex
+	closeOnce     sync.Once
 }

@@ -63,7 +63,7 @@ func (s *WebSocketServer) HandleWS(w http.ResponseWriter, r *http.Request) {
 	s.registerClient(client)
 	logger.Info(LogWSClientConnected, "layer", "ws_server", "clientAddr", conn.RemoteAddr().String(), "totalClients", s.clientCount())
 
-	s.sendInitialSessionList(client)
+	s.handleGetSessionList(client)
 
 	go s.readPump(client)
 	go s.writePump(client)
@@ -109,20 +109,22 @@ func (s *WebSocketServer) unregisterClient(client *Client) {
 	logger := slog.Default()
 
 	s.mu.Lock()
+	var remaining int
 	if _, ok := s.clients[client]; ok {
 		delete(s.clients, client)
-		close(client.send)
+		client.closeOnce.Do(func() { close(client.send) })
 	}
+	remaining = len(s.clients)
 	s.mu.Unlock()
 
-	logger.Info(LogWSClientDisconnected, "layer", "ws_server", "totalClients", s.clientCount())
+	logger.Info(LogWSClientDisconnected, "layer", "ws_server", "totalClients", remaining)
 }
 
 func (s *WebSocketServer) closeAllClients() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for client := range s.clients {
-		close(client.send)
+		client.closeOnce.Do(func() { close(client.send) })
 		delete(s.clients, client)
 	}
 }
@@ -162,7 +164,6 @@ func (s *WebSocketServer) readPump(client *Client) {
 func (s *WebSocketServer) writePump(client *Client) {
 	ticker := time.NewTicker(HeartbeatInterval)
 	defer ticker.Stop()
-	defer client.conn.Close()
 
 	for {
 		select {
@@ -271,8 +272,9 @@ func (s *WebSocketServer) handleGetSessionHistory(client *Client, msg ClientMess
 	if msg.Before != "" {
 		if t, err := time.Parse(time.RFC3339, msg.Before); err == nil {
 			before = t
+		} else {
+			logger.Debug(LogWSInvalidBeforeFormat, "layer", "ws_server", "before", msg.Before, "error", err)
 		}
-		// Invalid format: ignore, treat as zero (no filter)
 	}
 
 	events, hasMore, err := s.querier.GetHistory(msg.SessionID, limit, before)
@@ -296,34 +298,36 @@ func (s *WebSocketServer) handleGetSessionHistory(client *Client, msg ClientMess
 	logger.Info(LogWSSessionHistorySent, "layer", "ws_server", "sessionID", msg.SessionID, "count", len(events))
 }
 
-func (s *WebSocketServer) sendInitialSessionList(client *Client) {
-	sessions := s.querier.List()
-	if sessions == nil {
-		sessions = []*SessionInfo{}
+// marshalMessage serialises a ServerMessage to JSON bytes.
+func marshalMessage(msg ServerMessage) ([]byte, error) {
+	return json.Marshal(msg)
+}
+
+// enqueueUnsafe attempts a non-blocking send on client.send.
+// Caller must hold at least s.mu.RLock; it never closes the channel.
+func enqueueUnsafe(client *Client, data []byte) {
+	select {
+	case client.send <- data:
+	default:
+		slog.Default().Warn(LogWSSendBufferFull, "layer", "ws_server")
 	}
-	s.sendToClient(client, ServerMessage{
-		Type: MsgTypeSessionList,
-		Data: SessionListData{Sessions: sessions},
-	})
 }
 
 func (s *WebSocketServer) sendToClient(client *Client, msg ServerMessage) {
-	data, err := json.Marshal(msg)
+	data, err := marshalMessage(msg)
 	if err != nil {
-		slog.Default().Error("failed to marshal server message", "layer", "ws_server", "error", err)
+		slog.Default().Error(LogWSMarshalFailed, "layer", "ws_server", "error", err)
 		return
 	}
 
 	select {
 	case client.send <- data:
-		// success
 	default:
-		// buffer full - slow consumer
 		slog.Default().Warn(LogWSSendBufferFull, "layer", "ws_server")
 		s.mu.Lock()
 		if _, ok := s.clients[client]; ok {
 			delete(s.clients, client)
-			close(client.send)
+			client.closeOnce.Do(func() { close(client.send) })
 		}
 		s.mu.Unlock()
 	}
@@ -365,19 +369,27 @@ func (s *WebSocketServer) broadcastSessionList() {
 	if sessions == nil {
 		sessions = []*SessionInfo{}
 	}
-	msg := ServerMessage{
+	data, err := marshalMessage(ServerMessage{
 		Type: MsgTypeSessionList,
 		Data: SessionListData{Sessions: sessions},
+	})
+	if err != nil {
+		return
 	}
 
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	for client := range s.clients {
-		s.sendToClientUnsafe(client, msg)
+		enqueueUnsafe(client, data)
 	}
 }
 
 func (s *WebSocketServer) pushToSubscribers(sessionID string, msg ServerMessage) {
+	data, err := marshalMessage(msg)
+	if err != nil {
+		return
+	}
+
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	for client := range s.clients {
@@ -385,38 +397,26 @@ func (s *WebSocketServer) pushToSubscribers(sessionID string, msg ServerMessage)
 		_, subscribed := client.subscriptions[sessionID]
 		client.mu.RUnlock()
 		if subscribed {
-			s.sendToClientUnsafe(client, msg)
+			enqueueUnsafe(client, data)
 		}
 	}
 }
 
 func (s *WebSocketServer) broadcastStatusChange(sessionID string, status SessionStatus) {
-	msg := ServerMessage{
+	data, err := marshalMessage(ServerMessage{
 		Type: MsgTypeSessionStatusChange,
 		Data: SessionStatusChangeData{
 			SessionID: sessionID,
 			Status:    status,
 		},
+	})
+	if err != nil {
+		return
 	}
 
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	for client := range s.clients {
-		s.sendToClientUnsafe(client, msg)
-	}
-}
-
-// sendToClientUnsafe sends a message without acquiring s.mu (caller must hold at least RLock).
-func (s *WebSocketServer) sendToClientUnsafe(client *Client, msg ServerMessage) {
-	data, err := json.Marshal(msg)
-	if err != nil {
-		return
-	}
-
-	select {
-	case client.send <- data:
-	default:
-		// buffer full - handled by writePump draining
-		slog.Default().Warn(LogWSSendBufferFull, "layer", "ws_server")
+		enqueueUnsafe(client, data)
 	}
 }
