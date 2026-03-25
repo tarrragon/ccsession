@@ -44,7 +44,7 @@ import sys
 import json
 import re
 from pathlib import Path
-from typing import Dict, Any, Optional, Tuple
+from typing import Dict, Any, Optional
 
 sys.path.insert(0, str(Path(__file__).parent))
 
@@ -65,22 +65,22 @@ SKILL_CLI_COMMANDS = [
 ]
 
 # SKILL 引導缺陷的錯誤模式
-# 格式: (pattern, error_type, severity)
+# 格式: (pattern, error_type)
 SKILL_ERROR_PATTERNS = [
     # 參數不存在
-    (r"unrecognized arguments?:", "參數不存在", "medium"),
-    (r"unrecognized sub-command", "參數不存在", "medium"),
-    (r"argument .+ not recognized", "參數不存在", "medium"),
+    (r"unrecognized arguments?:", "參數不存在"),
+    (r"unrecognized sub-command", "參數不存在"),
+    (r"argument .+ not recognized", "參數不存在"),
 
     # 參數格式錯誤
-    (r"error: argument .+: ", "參數格式錯誤", "medium"),
-    (r"invalid argument", "參數格式錯誤", "medium"),
-    (r"argument .+ expected", "參數格式錯誤", "medium"),
+    (r"error: argument .+: ", "參數格式錯誤"),
+    (r"invalid argument", "參數格式錯誤"),
+    (r"argument .+ expected", "參數格式錯誤"),
 
     # 未知子命令
-    (r"invalid choice: '([^']+)'", "未知子命令", "medium"),
-    (r"unknown command '([^']+)'", "未知子命令", "medium"),
-    (r"no such command", "未知子命令", "medium"),
+    (r"invalid choice: '([^']+)'", "未知子命令"),
+    (r"unknown command '([^']+)'", "未知子命令"),
+    (r"no such command", "未知子命令"),
 ]
 
 # 排除的錯誤模式（業務邏輯錯誤，不是 SKILL 引導問題）
@@ -137,10 +137,25 @@ SKILL_CLI_ERROR_FEEDBACK_TEMPLATE = """
 # ============================================================================
 
 def is_skill_cli_command(command: str) -> bool:
-    """判斷命令是否為 ticket/skill CLI 命令"""
-    for prefix in SKILL_CLI_COMMANDS:
-        if prefix in command:
-            return True
+    """判斷命令是否為 ticket/skill CLI 命令（首 token 比對）
+
+    處理 && 鏈式命令、管道命令、子 shell 等情況，避免子字串誤判
+    （例如 echo "ticket" 或 grep ticket 不應被認為是 ticket CLI 命令）
+    """
+    # 將命令分段：處理 && 鏈式、管道、子 shell 等
+    for segment in re.split(r'[|&;]+', command):
+        segment = segment.strip().lstrip('(').strip()
+        if not segment:
+            continue
+        # 取第一個 token（空格分隔）
+        tokens = segment.split()
+        if tokens:
+            first_token = tokens[0]
+            # 移除斜線前綴（/ticket → ticket）
+            if first_token.startswith("/"):
+                first_token = first_token[1:]
+            if first_token in SKILL_CLI_COMMANDS:
+                return True
     return False
 
 
@@ -166,14 +181,14 @@ def detect_skill_error_type(stderr: str, stdout: str) -> Optional[str]:
     """
     combined = stderr + " " + stdout
 
-    for pattern, error_type, severity in SKILL_ERROR_PATTERNS:
+    for pattern, error_type in SKILL_ERROR_PATTERNS:
         if re.search(pattern, combined, re.IGNORECASE):
             return error_type
 
     return None
 
 
-def extract_command_summary(command: str, stderr: str) -> Tuple[str, str]:
+def extract_command_summary(command: str, stderr: str) -> tuple[str, str]:
     """
     提取命令摘要和基本命令
 
@@ -245,6 +260,14 @@ def main() -> int:
     else:
         stderr = tool_response.get("stderr", "")
         stdout = tool_response.get("stdout", "")
+
+    # 檢查退出碼：exit_code=0 表示命令成功，跳過
+    if isinstance(tool_response, dict):
+        exit_code = tool_response.get("exit_code")
+        if exit_code is not None and exit_code == 0:
+            logger.debug("命令成功（exit_code=0），跳過")
+            print(json.dumps(DEFAULT_OUTPUT, ensure_ascii=False))
+            return EXIT_SUCCESS
 
     # 若無錯誤信息，命令可能成功，跳過
     if not stderr and not stdout:
