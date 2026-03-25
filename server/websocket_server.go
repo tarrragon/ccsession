@@ -160,13 +160,27 @@ func (s *WebSocketServer) readPump(client *Client) {
 }
 
 func (s *WebSocketServer) writePump(client *Client) {
+	ticker := time.NewTicker(HeartbeatInterval)
+	defer ticker.Stop()
 	defer client.conn.Close()
 
-	for msg := range client.send {
-		client.conn.SetWriteDeadline(s.now().Add(WriteWaitTimeout))
-		if err := client.conn.WriteMessage(websocket.TextMessage, msg); err != nil {
-			slog.Default().Debug(LogWSWriteError, "layer", "ws_server", "error", err)
-			return
+	for {
+		select {
+		case msg, ok := <-client.send:
+			if !ok {
+				return
+			}
+			client.conn.SetWriteDeadline(s.now().Add(WriteWaitTimeout))
+			if err := client.conn.WriteMessage(websocket.TextMessage, msg); err != nil {
+				slog.Default().Debug(LogWSWriteError, "layer", "ws_server", "error", err)
+				return
+			}
+		case <-ticker.C:
+			client.conn.SetWriteDeadline(s.now().Add(WriteWaitTimeout))
+			if err := client.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+				slog.Default().Debug(LogWSWriteError, "layer", "ws_server", "error", err)
+				return
+			}
 		}
 	}
 }
