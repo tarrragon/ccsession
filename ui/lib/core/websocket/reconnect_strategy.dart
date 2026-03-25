@@ -9,18 +9,9 @@ class ReconnectStrategy {
 
   /// 計算下一次重連延遲（呼叫後內部遞增）
   Duration nextDelay() {
-    final delaySeconds = DurationConstants.reconnectInitialDelay.inSeconds *
-        math.pow(
-          DurationConstants.reconnectBackoffMultiplier,
-          _attempt,
-        ).toInt();
+    final delay = currentDelay;
     _attempt++;
-    return Duration(
-      seconds: math.min(
-        delaySeconds,
-        DurationConstants.reconnectMaxDelay.inSeconds,
-      ),
-    );
+    return delay;
   }
 
   /// 當前延遲時間（不遞增）
