@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
+
 import 'package:ccsession/core/constants/duration_constants.dart';
 import 'package:ccsession/core/constants/websocket_constants.dart';
 import 'package:ccsession/core/models/client_message.dart';
@@ -205,8 +207,9 @@ class WebSocketServiceImpl implements WebSocketService {
       final map = jsonDecode(raw as String) as Map<String, dynamic>;
       final message = ServerMessage.fromJson(map);
       _messageController.add(message);
-    } on Object {
+    } on Object catch (e) {
       // 需求：JSON 解析失敗時 log ERROR，丟棄該訊息，不中斷連線
+      debugPrint('WebSocketService: _onData error: $e');
     }
   }
 
