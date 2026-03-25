@@ -9,43 +9,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
+import '../helpers/test_session_factory.dart';
+
 // -- Mock --
 
 class MockWebSocketService extends Mock implements WebSocketService {}
 
 // -- Test helpers --
-
-final _baseTime = DateTime(2026, 3, 25, 10, 0);
-
-SessionInfo _createTestSession({
-  String id = 'session-1',
-  String projectPath = '/Users/test/project',
-  String summary = 'Test summary',
-  SessionStatus status = SessionStatus.active,
-  DateTime? lastEventAt,
-  String lastMessage = '',
-  String agentName = 'claude',
-}) {
-  return SessionInfo(
-    id: id,
-    projectPath: projectPath,
-    summary: summary,
-    status: status,
-    firstEventAt: _baseTime,
-    lastEventAt: lastEventAt ?? _baseTime,
-    lastMessage: lastMessage,
-    agentName: agentName,
-  );
-}
-
-ServerMessage _createSessionListMessage(List<SessionInfo> sessions) {
-  return ServerMessage(
-    type: 'session_list',
-    data: {
-      'sessions': sessions.map((s) => s.toJson()).toList(),
-    },
-  );
-}
 
 ServerMessage _createStatusChangeMessage(
   String sessionId,
@@ -107,11 +77,11 @@ void main() {
       await initNotifier();
 
       final sessions = [
-        _createTestSession(id: 's1', status: SessionStatus.active),
-        _createTestSession(id: 's2', status: SessionStatus.idle),
-        _createTestSession(id: 's3', status: SessionStatus.completed),
+        createTestSession(id: 's1', status: SessionStatus.active),
+        createTestSession(id: 's2', status: SessionStatus.idle),
+        createTestSession(id: 's3', status: SessionStatus.completed),
       ];
-      await sendMessage(_createSessionListMessage(sessions));
+      await sendMessage(createSessionListMessage(sessions));
 
       final state = container.read(sessionListNotifierProvider).valueOrNull;
       expect(state, isNotNull);
@@ -129,7 +99,7 @@ void main() {
     // TC-10-02: 初始載入 — 空列表
     test('handles empty session list', () async {
       await initNotifier();
-      await sendMessage(_createSessionListMessage([]));
+      await sendMessage(createSessionListMessage([]));
 
       final state = container.read(sessionListNotifierProvider).valueOrNull;
       expect(state, isNotNull);
@@ -144,9 +114,9 @@ void main() {
     test('updates session status on session_status_change', () async {
       await initNotifier();
 
-      await sendMessage(_createSessionListMessage([
-        _createTestSession(id: 'session-A', status: SessionStatus.active),
-        _createTestSession(id: 'session-B', status: SessionStatus.idle),
+      await sendMessage(createSessionListMessage([
+        createTestSession(id: 'session-A', status: SessionStatus.active),
+        createTestSession(id: 'session-B', status: SessionStatus.idle),
       ]));
 
       final notifier =
@@ -181,8 +151,8 @@ void main() {
     // TC-10-04: 選擇 session
     test('selectSession updates selectedSessionId', () async {
       await initNotifier();
-      await sendMessage(_createSessionListMessage([
-        _createTestSession(id: 'session-A'),
+      await sendMessage(createSessionListMessage([
+        createTestSession(id: 'session-A'),
       ]));
 
       expect(
@@ -205,9 +175,9 @@ void main() {
     // TC-10-05: 切換選擇 session
     test('switching selection updates selectedSessionId', () async {
       await initNotifier();
-      await sendMessage(_createSessionListMessage([
-        _createTestSession(id: 'session-A'),
-        _createTestSession(id: 'session-B'),
+      await sendMessage(createSessionListMessage([
+        createTestSession(id: 'session-A'),
+        createTestSession(id: 'session-B'),
       ]));
 
       final notifier =
@@ -232,26 +202,26 @@ void main() {
         () async {
       await initNotifier();
 
-      await sendMessage(_createSessionListMessage([
-        _createTestSession(
+      await sendMessage(createSessionListMessage([
+        createTestSession(
           id: 'session-1',
           status: SessionStatus.active,
-          lastEventAt: _baseTime.add(const Duration(hours: 3)),
+          lastEventAt: baseTime.add(const Duration(hours: 3)),
         ),
-        _createTestSession(
+        createTestSession(
           id: 'session-2',
           status: SessionStatus.active,
-          lastEventAt: _baseTime.add(const Duration(hours: 1)),
+          lastEventAt: baseTime.add(const Duration(hours: 1)),
         ),
-        _createTestSession(
+        createTestSession(
           id: 'session-3',
           status: SessionStatus.idle,
-          lastEventAt: _baseTime.add(const Duration(hours: 2)),
+          lastEventAt: baseTime.add(const Duration(hours: 2)),
         ),
-        _createTestSession(
+        createTestSession(
           id: 'session-4',
           status: SessionStatus.completed,
-          lastEventAt: _baseTime,
+          lastEventAt: baseTime,
         ),
       ]));
 
@@ -276,8 +246,8 @@ void main() {
     // TC-10-07: 未知 sessionId 狀態變更 — 靜默忽略
     test('ignores status change for unknown sessionId', () async {
       await initNotifier();
-      await sendMessage(_createSessionListMessage([
-        _createTestSession(id: 'session-A'),
+      await sendMessage(createSessionListMessage([
+        createTestSession(id: 'session-A'),
       ]));
 
       final stateBefore =
@@ -300,9 +270,9 @@ void main() {
     test('session_list message replaces entire list', () async {
       await initNotifier();
 
-      await sendMessage(_createSessionListMessage([
-        _createTestSession(id: 's1'),
-        _createTestSession(id: 's2'),
+      await sendMessage(createSessionListMessage([
+        createTestSession(id: 's1'),
+        createTestSession(id: 's2'),
       ]));
       expect(
         container.read(sessionListNotifierProvider).valueOrNull!
@@ -310,12 +280,12 @@ void main() {
         equals(2),
       );
 
-      await sendMessage(_createSessionListMessage([
-        _createTestSession(id: 's3'),
-        _createTestSession(id: 's4'),
-        _createTestSession(id: 's5'),
-        _createTestSession(id: 's6'),
-        _createTestSession(id: 's7'),
+      await sendMessage(createSessionListMessage([
+        createTestSession(id: 's3'),
+        createTestSession(id: 's4'),
+        createTestSession(id: 's5'),
+        createTestSession(id: 's6'),
+        createTestSession(id: 's7'),
       ]));
       expect(
         container.read(sessionListNotifierProvider).valueOrNull!
@@ -327,9 +297,9 @@ void main() {
     // TC-10-09: 空分組不出現在 groupedSessions
     test('empty groups are excluded from groupedSessions', () async {
       await initNotifier();
-      await sendMessage(_createSessionListMessage([
-        _createTestSession(id: 's1', status: SessionStatus.active),
-        _createTestSession(id: 's2', status: SessionStatus.active),
+      await sendMessage(createSessionListMessage([
+        createTestSession(id: 's1', status: SessionStatus.active),
+        createTestSession(id: 's2', status: SessionStatus.active),
       ]));
 
       final notifier =

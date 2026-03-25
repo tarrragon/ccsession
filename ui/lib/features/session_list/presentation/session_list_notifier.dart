@@ -64,6 +64,10 @@ class SessionListNotifier extends _$SessionListNotifier {
           _handleSessionList(message);
         case 'session_status_change':
           _handleStatusChange(message);
+        default:
+          debugPrint(
+            'SessionListNotifier: unknown message type: ${message.type}',
+          );
       }
     } on Object catch (error, stackTrace) {
       // 需求：反序列化失敗不可取消 StreamSubscription

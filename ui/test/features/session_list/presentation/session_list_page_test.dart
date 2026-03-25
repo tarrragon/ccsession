@@ -10,43 +10,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
+import '../helpers/test_session_factory.dart';
+
 // -- Mock --
 
 class MockWebSocketService extends Mock implements WebSocketService {}
-
-// -- Test helpers --
-
-final _baseTime = DateTime(2026, 3, 25, 10, 0);
-
-SessionInfo _createTestSession({
-  String id = 'session-1',
-  String projectPath = '/Users/test/project',
-  String summary = 'Test summary',
-  SessionStatus status = SessionStatus.active,
-  DateTime? lastEventAt,
-  String lastMessage = '',
-  String agentName = 'claude',
-}) {
-  return SessionInfo(
-    id: id,
-    projectPath: projectPath,
-    summary: summary,
-    status: status,
-    firstEventAt: _baseTime,
-    lastEventAt: lastEventAt ?? _baseTime,
-    lastMessage: lastMessage,
-    agentName: agentName,
-  );
-}
-
-ServerMessage _createSessionListMessage(List<SessionInfo> sessions) {
-  return ServerMessage(
-    type: 'session_list',
-    data: {
-      'sessions': sessions.map((s) => s.toJson()).toList(),
-    },
-  );
-}
 
 void main() {
   group('TG-12: SessionListPage', () {
@@ -99,10 +67,10 @@ void main() {
       await tester.pumpWidget(buildSubject());
       await tester.pump();
 
-      await sendMessage(tester, _createSessionListMessage([
-        _createTestSession(id: 's1', status: SessionStatus.active),
-        _createTestSession(id: 's2', status: SessionStatus.active),
-        _createTestSession(id: 's3', status: SessionStatus.idle),
+      await sendMessage(tester, createSessionListMessage([
+        createTestSession(id: 's1', status: SessionStatus.active),
+        createTestSession(id: 's2', status: SessionStatus.active),
+        createTestSession(id: 's3', status: SessionStatus.idle),
       ]));
 
       expect(find.text('Active (2)'), findsOneWidget);
@@ -115,7 +83,7 @@ void main() {
       await tester.pumpWidget(buildSubject());
       await tester.pump();
 
-      await sendMessage(tester, _createSessionListMessage([]));
+      await sendMessage(tester, createSessionListMessage([]));
 
       expect(find.text('No sessions'), findsOneWidget);
     });
@@ -148,8 +116,8 @@ void main() {
       await tester.pumpWidget(buildSubject());
       await tester.pump();
 
-      await sendMessage(tester, _createSessionListMessage([
-        _createTestSession(id: 'session-A', summary: 'My Task'),
+      await sendMessage(tester, createSessionListMessage([
+        createTestSession(id: 'session-A', summary: 'My Task'),
       ]));
 
       await tester.tap(find.text('My Task'));
@@ -165,9 +133,9 @@ void main() {
       await tester.pumpWidget(buildSubject());
       await tester.pump();
 
-      await sendMessage(tester, _createSessionListMessage([
-        _createTestSession(id: 'session-A', summary: 'Task A'),
-        _createTestSession(id: 'session-B', summary: 'Task B'),
+      await sendMessage(tester, createSessionListMessage([
+        createTestSession(id: 'session-A', summary: 'Task A'),
+        createTestSession(id: 'session-B', summary: 'Task B'),
       ]));
 
       // Select session-A
