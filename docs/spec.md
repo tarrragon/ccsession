@@ -133,7 +133,7 @@
 | `uuid` | 該行的唯一識別符 | `"3809ab6c-f022-4e5b-87bb-a2c8bab2d5db"` |
 | `sessionId` | 所屬 session UUID | `"f635f2ad-9e19-4fca-ba65-4f836ab7b737"` |
 | `timestamp` | ISO 8601 UTC 毫秒時間戳 | `"2026-03-05T04:44:24.361Z"` |
-| `parentUuid` | 父訊息 UUID（對話樹結構） | `"0adb42a3-..."` 或 `null` |
+| `parentUuid` | 父訊息 UUID（對話樹結構）。注意：此為訊息級別的父子關係，不代表 agent 層級的 parent-child 關係。Agent 間的上下層關係需透過 HTTP Hooks 的 SubagentStart 事件追蹤。 | `"0adb42a3-..."` 或 `null` |
 | `version` | Claude Code 版本號 | `"2.1.69"` |
 | `gitBranch` | 當前 Git 分支 | `"feat/my-feature"` |
 | `cwd` | 當前工作目錄 | `"/Users/user/project"` |
@@ -234,6 +234,7 @@ type SessionEvent struct {
     IsLastContent bool            `json:"isLastContent"` // 是否為該 messageId 下的最後一個子事件
     Content       EventContent    `json:"content"`
     ToolName      string          `json:"toolName,omitempty"`
+    AgentID       string          `json:"agentId,omitempty"`    // v0.3 預留：產生此事件的 agent ID
 }
 ```
 
@@ -280,7 +281,7 @@ Server → Client：
 
 ```json
 {
-  "type": "session_list | session_event | session_history | session_status_change",
+  "type": "session_list | session_event | session_history | session_status_change | agent_status_change | agent_message",
   "data": { ... }
 }
 ```
@@ -308,6 +309,8 @@ Server → Client：
 | `session_event` | 新事件寫入 JSONL | 單一 SessionEvent |
 | `session_history` | Client 請求指定 session | SessionEvent 陣列（依 timestamp 升序排列） |
 | `session_status_change` | Session 狀態變更 | session ID + 新狀態 |
+| `agent_status_change` | Agent 節點狀態變更（v0.3 實作） | agentId + agentType + status（idle/thinking/active/error） |
+| `agent_message` | Agent 間訊息傳遞（v0.3 實作） | fromAgentId + toAgentId + messageType + timestamp |
 
 #### 連線管理
 
@@ -336,7 +339,9 @@ type SessionInfo struct {
     EventCount  int
     AgentID     string          // HTTP Hooks 提供的 agent 識別符
     AgentType   string          // HTTP Hooks 提供的 agent 類型
-    LastMessage string          // SubagentStop 提供的最後回應摘要
+    LastMessage    string          // SubagentStop 提供的最後回應摘要
+    ParentAgentID  string          // v0.3 預留：派發此 agent 的父 agent ID
+    AgentName      string          // v0.3 預留：agent 顯示名稱（來自 teammate_name）
 }
 ```
 
@@ -825,4 +830,4 @@ if _, known := knownFields[key]; !known {
 ---
 
 *最後更新: 2026-03-25*
-*版本: 1.5.0 - 新增 v0.3 Agent Graph 即時動畫元件規劃（第 8 節）*
+*版本: 1.6.0 - 新增 v0.3 Agent Graph 預留欄位和協議預告（W5-003）*
