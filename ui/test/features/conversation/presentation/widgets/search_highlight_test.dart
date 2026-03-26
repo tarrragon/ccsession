@@ -25,7 +25,7 @@ void main() {
     test('單一高亮（普通匹配）有黃色背景', () {
       final spans = buildHighlightedSpans(
         'Hello world',
-        [(start: 6, end: 11, isCurrent: false)],
+        [(start: 6, end: 11, isCurrent: false, field: 'text')],
         baseStyle,
       );
 
@@ -43,7 +43,7 @@ void main() {
     test('當前聚焦匹配有橘色背景', () {
       final spans = buildHighlightedSpans(
         'Hello world',
-        [(start: 6, end: 11, isCurrent: true)],
+        [(start: 6, end: 11, isCurrent: true, field: 'text')],
         baseStyle,
       );
 
@@ -60,8 +60,8 @@ void main() {
       final spans = buildHighlightedSpans(
         'error in error',
         [
-          (start: 0, end: 5, isCurrent: false),
-          (start: 9, end: 14, isCurrent: true),
+          (start: 0, end: 5, isCurrent: false, field: 'text'),
+          (start: 9, end: 14, isCurrent: true, field: 'text'),
         ],
         baseStyle,
       );
@@ -93,7 +93,7 @@ void main() {
             body: AssistantMessageBubble(
               event: event,
               highlightRanges: const [
-                (start: 6, end: 11, isCurrent: false),
+                (start: 6, end: 11, isCurrent: false, field: 'text'),
               ],
             ),
           ),
@@ -113,7 +113,7 @@ void main() {
             body: UserMessageBubble(
               event: event,
               highlightRanges: const [
-                (start: 7, end: 11, isCurrent: true),
+                (start: 7, end: 11, isCurrent: true, field: 'text'),
               ],
             ),
           ),
@@ -136,7 +136,7 @@ void main() {
             body: ToolUseBubble(
               event: event,
               highlightRanges: const [
-                (start: 0, end: 4, isCurrent: false),
+                (start: 0, end: 4, isCurrent: false, field: 'toolName'),
               ],
             ),
           ),

@@ -18,11 +18,13 @@ class ConversationSearchBar extends ConsumerStatefulWidget {
 class _ConversationSearchBarState
     extends ConsumerState<ConversationSearchBar> {
   final _focusNode = FocusNode();
+  final _keyboardListenerFocusNode = FocusNode();
   final _controller = TextEditingController();
 
   @override
   void dispose() {
     _focusNode.dispose();
+    _keyboardListenerFocusNode.dispose();
     _controller.dispose();
     super.dispose();
   }
@@ -76,7 +78,7 @@ class _ConversationSearchBarState
 
   Widget _buildTextField() {
     return KeyboardListener(
-      focusNode: FocusNode(),
+      focusNode: _keyboardListenerFocusNode,
       onKeyEvent: _handleKeyEvent,
       child: TextField(
         controller: _controller,

@@ -22,15 +22,18 @@ abstract final class MessageBubbleFactory {
       'assistant' => AssistantMessageBubble(event: event, highlightRanges: highlightRanges),
       'tool_use' => ToolUseBubble(event: event, highlightRanges: highlightRanges),
       'tool_result' => ToolResultBubble(event: event, highlightRanges: highlightRanges),
-      'thinking' => _buildThinkingOrEmpty(event),
+      'thinking' => _buildThinkingOrEmpty(event, highlightRanges),
       _ => const SizedBox.shrink(),
     };
   }
 
-  static Widget _buildThinkingOrEmpty(SessionEvent event) {
+  static Widget _buildThinkingOrEmpty(
+    SessionEvent event,
+    List<HighlightRange>? highlightRanges,
+  ) {
     if (event.content.text.isEmpty) {
       return const SizedBox.shrink();
     }
-    return ThinkingBubble(event: event);
+    return ThinkingBubble(event: event, highlightRanges: highlightRanges);
   }
 }

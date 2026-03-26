@@ -1,12 +1,20 @@
+import 'package:ccsession/core/constants/search_constants.dart';
 import 'package:ccsession/core/models/session_event.dart';
+import 'package:ccsession/features/conversation/presentation/widgets/search_highlight_utils.dart';
 import 'package:flutter/material.dart';
 
 /// 需求：模型思考過程 Bubble（Phase 1 3.3）
 /// 約束：斜體樣式，可摺疊區塊
+/// 維護：highlightRanges 依 field='text' 過濾（0.2.0-W2-011）
 class ThinkingBubble extends StatelessWidget {
-  const ThinkingBubble({required this.event, super.key});
+  const ThinkingBubble({
+    required this.event,
+    this.highlightRanges,
+    super.key,
+  });
 
   final SessionEvent event;
+  final List<HighlightRange>? highlightRanges;
 
   @override
   Widget build(BuildContext context) {
@@ -29,12 +37,25 @@ class ThinkingBubble extends StatelessWidget {
         children: [
           Padding(
             padding: const EdgeInsets.all(12),
-            child: Text(
-              event.content.text,
-              style: const TextStyle(fontStyle: FontStyle.italic),
-            ),
+            child: _buildThinkingContent(),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildThinkingContent() {
+    final ranges = filterRangesByField(highlightRanges, SearchConstants.fieldText);
+    if (ranges == null || ranges.isEmpty) {
+      return Text(
+        event.content.text,
+        style: const TextStyle(fontStyle: FontStyle.italic),
+      );
+    }
+    const baseStyle = TextStyle(fontStyle: FontStyle.italic);
+    return RichText(
+      text: TextSpan(
+        children: buildHighlightedSpans(event.content.text, ranges, baseStyle),
       ),
     );
   }

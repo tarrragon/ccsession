@@ -3,7 +3,18 @@ import 'package:flutter/material.dart';
 
 /// 需求：高亮範圍定義（Phase 1 5.2）
 /// 約束：start/end 為文字偏移量，isCurrent 標記當前聚焦匹配
-typedef HighlightRange = ({int start, int end, bool isCurrent});
+typedef HighlightRange = ({int start, int end, bool isCurrent, String field});
+
+/// 需求：依欄位名稱過濾高亮範圍（0.2.0-W2-011）
+/// 約束：避免將不同欄位的 offset 套用到錯誤的文字上，防止 RangeError
+List<HighlightRange>? filterRangesByField(
+  List<HighlightRange>? ranges,
+  String field,
+) {
+  if (ranges == null || ranges.isEmpty) return null;
+  final filtered = ranges.where((r) => r.field == field).toList();
+  return filtered.isEmpty ? null : filtered;
+}
 
 /// 需求：將純文字 + 高亮範圍轉換為 TextSpan 列表（Phase 1 5.2）
 /// 約束：non-overlapping ranges，按 start 排序

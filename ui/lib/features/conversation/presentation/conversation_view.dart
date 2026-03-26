@@ -153,6 +153,7 @@ List<HighlightRange>? _computeHighlightRanges(
             start: match.startOffset,
             end: match.endOffset,
             isCurrent: match == currentMatch,
+            field: match.field,
           ))
       .toList();
 }
