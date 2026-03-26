@@ -105,8 +105,8 @@ Level 1 入口層 → Level 2 執行層 → Level 3 完成層 → Level 4 驗收
 
 ## 相關文件
 
-- @.claude/rules/core/decision-tree.md - 主線程決策樹
-- @.claude/rules/forbidden/skip-gate.md - Skip-gate 防護機制
+- @.claude/pm-rules/decision-tree.md - 主線程決策樹
+- @.claude/pm-rules/skip-gate.md - Skip-gate 防護機制
 - @.claude/rules/core/cognitive-load.md - 認知負擔設計原則
 - @.claude/rules/flows/tdd-flow.md - TDD 流程
 - @.claude/rules/flows/incident-response.md - 事件回應流程

@@ -383,7 +383,7 @@ L1 monorepo 版本是否需要更新？
 
 ## 相關文件
 
-- .claude/rules/flows/version-progression.md - 版本推進決策規則（何時升版）
+- .claude/pm-rules/version-progression.md - 版本推進決策規則（何時升版）
 - .claude/skills/version-release/SKILL.md - 版本發布工具
 - docs/work-logs/v0.1.1/tickets/0.1.1-W5-001-monorepo-version-strategy-report.md - 分析報告（來源）
 

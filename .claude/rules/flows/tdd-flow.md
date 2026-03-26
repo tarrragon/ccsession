@@ -225,7 +225,7 @@ PM 收到代理人回報後執行：
 
 - .claude/skills/tdd/SKILL.md - `/tdd` SKILL（統一 TDD 流程入口，含 `/tdd start`、`/tdd next`、`/tdd split`、`/tdd status`、`/tdd phase4-exempt`）
 - .claude/references/tdd-flow-details.md - 豁免規則詳細、Phase 詳細描述、異常處理、日誌模板
-- @.claude/rules/core/decision-tree.md - 主線程決策樹
+- .claude/pm-rules/decision-tree.md - 主線程決策樹
 - @.claude/rules/core/quality-baseline.md - 品質基線（Phase 4 不可跳過）
 
 ---

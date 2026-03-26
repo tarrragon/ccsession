@@ -87,7 +87,7 @@ Claude Code 的所有對話紀錄以 JSONL 格式即時寫入 `~/.claude/` 目�
 - A 的發現會改變 B → Agent Teams 或 PM 中轉
 - 不可拆分 → 單獨派發代理人
 
-> 詳見 `.claude/rules/core/decision-tree.md`
+> 詳見 `.claude/pm-rules/decision-tree.md`
 
 ### 用戶決策必須使用 AskUserQuestion
 
@@ -97,7 +97,7 @@ PM 需要用戶確認決策時，**必須使用 AskUserQuestion 工具**，禁�
 
 **關鍵場景**：驗收確認、後續步驟、Wave 收尾、派發方式、Commit 後路由。
 
-> 詳見 `.claude/rules/core/askuserquestion-rules.md`
+> 詳見 `.claude/pm-rules/askuserquestion-rules.md`
 
 ---
 
@@ -130,7 +130,7 @@ Ticket 建立後需通過 acceptance-auditor + system-analyst 並行審核（`cr
 | Level 2 | 開發命令執行前驗證 Ticket 存在性（Hook 自動檢查） |
 | Level 3 | PM 只能編輯允許列表中的檔案路徑 |
 
-> 詳細規則、違規判定、Hook 實作：`.claude/rules/forbidden/skip-gate.md`
+> 詳細規則、違規判定、Hook 實作：`.claude/pm-rules/skip-gate.md`
 
 ---
 

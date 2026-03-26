@@ -130,7 +130,7 @@ Skill 是預建的專用工具，優先於代理人派發。
 
 **主線程允許親自處理**：用戶溝通、任務拆分設計、Ticket 建立和指派、閱讀報告和最終決策、驗收結果。其餘一律派發代理人。
 
-**Subagent 禁止事項**：Subagent 遇到多方案選擇或路由決策時，**禁止**直接向用戶呈現選擇（禁止使用 AskUserQuestion），必須在產出物中標記「需 PM 決策」後回報主線程，由 PM 中轉。詳見：.claude/rules/core/askuserquestion-rules.md（使用對象限制章節）
+**Subagent 禁止事項**：Subagent 遇到多方案選擇或路由決策時，**禁止**直接向用戶呈現選擇（禁止使用 AskUserQuestion），必須在產出物中標記「需 PM 決策」後回報主線程，由 PM 中轉。詳見：.claude/pm-rules/askuserquestion-rules.md（使用對象限制章節）
 
 **派發方式判斷**：「Agent A 的發現會改變 Agent B 正在進行的工作嗎？」
 
@@ -144,8 +144,8 @@ Skill 是預建的專用工具，優先於代理人派發。
 
 派發代理人時，**預設使用背景模式**（`run_in_background: true`）。完整的派發模式表格、例外場景和背景派發後跟蹤規則：
 
-> 詳見：.claude/rules/guides/parallel-dispatch.md（派發模式：預設背景章節）
-> AskUserQuestion 強制使用規則：.claude/rules/core/askuserquestion-rules.md
+> 詳見：.claude/pm-rules/parallel-dispatch.md（派發模式：預設背景章節）
+> AskUserQuestion 強制使用規則：.claude/pm-rules/askuserquestion-rules.md
 
 ---
 
@@ -185,7 +185,7 @@ Skill 是預建的專用工具，優先於代理人派發。
 
 **SKILL 提示強制採納**：當 Hook 輸出 `[SKILL 提示]` 時，**必須**使用建議的 SKILL 指令。
 
-> 完整派發對照表：.claude/rules/guides/query-vs-research.md
+> 完整派發對照表：.claude/pm-rules/query-vs-research.md
 
 ---
 
@@ -258,7 +258,7 @@ Skill 是預建的專用工具，優先於代理人派發。
 | 獨立問題、不同模組 | 獨立 Ticket | 發現另一個模組的 bug |
 | 跨版本的技術債 | 獨立 Ticket（歸入 todolist） | 長期架構改善 |
 
-> 識別條件、強制處理流程、禁止行為清單：.claude/rules/flows/plan-to-ticket-flow.md（「執行中額外發現」章節）
+> 識別條件、強制處理流程、禁止行為清單：.claude/pm-rules/plan-to-ticket-flow.md（「執行中額外發現」章節）
 
 ---
 
@@ -286,7 +286,7 @@ Skill 是預建的專用工具，優先於代理人派發。
 **Handoff 方向選擇（AskUserQuestion）**：當 handoff 有多個可能方向時，**必須**使用 AskUserQuestion 讓使用者選擇。
 
 > Ticket 生命週期：.claude/rules/flows/ticket-lifecycle.md
-> 並行派發規則：.claude/rules/guides/parallel-dispatch.md
+> 並行派發規則：.claude/pm-rules/parallel-dispatch.md
 
 ---
 
@@ -411,7 +411,7 @@ Step 4: ticket track complete <id>
 **Resume 後接手（Checkpoint R）**：resume 後先確認範圍再 claim，不直接開始實作。
 
 > Checkpoint 0-4 完整流程、情境子規則、Checkpoint R 詳細步驟：.claude/references/decision-tree-checkpoint-details.md
-> AskUserQuestion 場景 11-17：.claude/rules/core/askuserquestion-rules.md
+> AskUserQuestion 場景 11-17：.claude/pm-rules/askuserquestion-rules.md
 > 模板：.claude/references/ticket-askuserquestion-templates.md
 
 ---
@@ -473,12 +473,12 @@ Level 5: TDD 階段代理人 + thyme-python-developer
 
 ## 相關文件
 
-- .claude/rules/guides/parallel-dispatch.md - 並行派發指南（場景表、安全檢查）
+- .claude/pm-rules/parallel-dispatch.md - 並行派發指南（場景表、安全檢查）
 - .claude/rules/flows/tdd-flow.md - TDD 流程
 - .claude/rules/flows/incident-response.md - 事件回應流程（錯誤分類表）
 - .claude/rules/flows/ticket-lifecycle.md - Ticket 生命週期（驗收流程）
-- .claude/rules/forbidden/skip-gate.md - Skip-gate 防護
-- @.claude/rules/core/askuserquestion-rules.md - AskUserQuestion 強制使用規則
+- .claude/pm-rules/skip-gate.md - Skip-gate 防護
+- @.claude/pm-rules/askuserquestion-rules.md - AskUserQuestion 強制使用規則
 - .claude/references/decision-tree-checkpoint-details.md - 第八層 Checkpoint 詳細流程（情境 A/B/C/D、#11a/11b、Handoff 說明）
 
 ---

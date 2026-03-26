@@ -145,11 +145,11 @@ PM 需要用戶做任何決策時（包含多選路由和二元 yes/no 確認）
 
 ## 相關文件
 
-- .claude/rules/core/decision-tree.md - 主線程決策樹
+- .claude/pm-rules/decision-tree.md - 主線程決策樹
 - .claude/rules/flows/ticket-lifecycle.md - Ticket 生命週期
 - .claude/references/askuserquestion-scene-details.md - 場景 1-17 完整操作細節
 - .claude/references/ticket-askuserquestion-templates.md - AskUserQuestion 模板
-- .claude/rules/guides/parallel-dispatch.md - 並行派發指南
+- .claude/pm-rules/parallel-dispatch.md - 並行派發指南
 
 ---
 

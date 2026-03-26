@@ -118,8 +118,8 @@ CLI 或內部工具報錯時，**禁止假設歸因**，必須依序：查語法
 - .claude/methodologies/operational-error-root-cause-methodology.md - 操作失誤三層根因分析方法論
 - .claude/references/incident-response-details.md - 詳細規則（多視角分析、安全等級、報告格式）
 - .claude/agents/incident-responder.md - 代理人定義
-- .claude/rules/forbidden/skip-gate.md - Skip-gate 防護
-- .claude/rules/core/decision-tree.md - 主線程決策樹
+- .claude/pm-rules/skip-gate.md - Skip-gate 防護
+- .claude/pm-rules/decision-tree.md - 主線程決策樹
 
 ---
 

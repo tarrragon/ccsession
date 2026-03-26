@@ -103,7 +103,7 @@
 
 - .claude/references/task-splitting-strategies.md - 策略詳細說明和範例
 - .claude/rules/core/cognitive-load.md - 認知負擔設計原則
-- .claude/rules/guides/parallel-dispatch.md - 並行派發指南
+- .claude/pm-rules/parallel-dispatch.md - 並行派發指南
 
 ---
 

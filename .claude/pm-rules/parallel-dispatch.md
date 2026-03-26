@@ -283,8 +283,8 @@ PM 彙整時必須在「衝突決策記錄」中記錄品味否決的處理結�
 - .claude/references/parallel-dispatch-details.md - 詳細規則（5W1H 格式、分析任務並行、Agent Teams 場景表、進度追蹤）
 - .claude/skills/bulk-evaluate/SKILL.md - 批量評估工具（1:1 派發）
 - .claude/skills/parallel-evaluation/SKILL.md - 並行評估工具（多視角掃描）
-- .claude/rules/guides/task-splitting.md - 任務拆分指南
-- .claude/rules/core/decision-tree.md - 主線程決策樹（第負一層）
+- .claude/pm-rules/task-splitting.md - 任務拆分指南
+- .claude/pm-rules/decision-tree.md - 主線程決策樹（第負一層）
 - .claude/skills/agent-team/SKILL.md - Agent Teams 操作指南
 
 ---

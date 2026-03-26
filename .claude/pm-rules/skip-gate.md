@@ -266,7 +266,7 @@ Subagent 的可編輯路徑見 decision-tree.md「代理人可編輯路徑對照
 
 - .claude/agents/incident-responder.md - 代理人定義
 - .claude/rules/flows/incident-response.md - 事件回應流程
-- .claude/rules/core/decision-tree.md - 主線程決策樹
+- .claude/pm-rules/decision-tree.md - 主線程決策樹
 - .claude/hooks/command-entrance-gate-hook.py - 命令入口驗證閘門實作
 - .claude/hooks/external-query-guide-hook.py - 外部查詢工作流指導實作
 - .claude/agents/oregano-data-miner.md - 外部資源研究代理人

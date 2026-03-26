@@ -1,7 +1,7 @@
 # Ticket 生命週期流程
 
 > 操作指南：.claude/skills/ticket/SKILL.md
-> AskUserQuestion 規則：.claude/rules/core/askuserquestion-rules.md
+> AskUserQuestion 規則：.claude/pm-rules/askuserquestion-rules.md
 
 ---
 
@@ -147,7 +147,7 @@ acceptance-gate-hook 事後驗證（最後防線）
 | 無新增 error-pattern | 跳過 #17，正常完成 |
 
 > 執行時序詳細說明和死鎖防護：.claude/references/ticket-lifecycle-phases.md（完成階段錯誤學習驗證章節）
-> 場景定義：.claude/rules/core/askuserquestion-rules.md（場景 #17）
+> 場景定義：.claude/pm-rules/askuserquestion-rules.md（場景 #17）
 
 ---
 
@@ -155,7 +155,7 @@ acceptance-gate-hook 事後驗證（最後防線）
 
 - .claude/references/ticket-lifecycle-phases.md - 各階段詳細規則
 - .claude/skills/ticket/references/ticket-lifecycle-details.md - 格式和 Hook 技術細節
-- .claude/rules/core/decision-tree.md - 主線程決策樹
+- .claude/pm-rules/decision-tree.md - 主線程決策樹
 - .claude/rules/flows/incident-response.md - 事件回應流程
 
 ---
