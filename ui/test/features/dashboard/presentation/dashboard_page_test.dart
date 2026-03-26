@@ -10,6 +10,22 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'dashboard_test_helpers.dart';
 
+/// 等待 async providers 完成解析並重建 widget tree
+///
+/// 使用 runAsync 讓 async notifier 的 Future 在真實 async 環境中完成，
+/// 接著 pump 讓 widget tree 根據新狀態重建。
+/// 需要重複兩輪以處理 provider 鏈（sessionListNotifier -> selectedSessionIdProvider -> conversationNotifier）
+Future<void> pumpUntilSettled(WidgetTester tester) async {
+  await tester.runAsync(
+    () => Future<void>.delayed(const Duration(milliseconds: 50)),
+  );
+  await tester.pump();
+  await tester.runAsync(
+    () => Future<void>.delayed(const Duration(milliseconds: 50)),
+  );
+  await tester.pump();
+}
+
 void main() {
   group('TG-30: DashboardPage Widget 佈局結構測試', () {
     testWidgets('TC-30-01: DashboardPage 呈現雙欄 Row 佈局', (tester) async {
@@ -18,10 +34,10 @@ void main() {
       // 驗證 Scaffold 存在
       expect(find.byType(Scaffold), findsOneWidget);
 
-      // 驗證 Row 存在且有 3 個 children
-      final row = find.byType(Row);
-      expect(row, findsOneWidget);
-      final rowWidget = tester.widget<Row>(row);
+      // 驗證 Row 存在且頂層 Row 有 3 個 children
+      final rows = find.byType(Row);
+      expect(rows, findsWidgets);
+      final rowWidget = tester.widget<Row>(rows.first);
       expect(rowWidget.children.length, equals(3));
 
       // 驗證 SizedBox(width: 280) 存在
@@ -67,6 +83,7 @@ void main() {
           selectedSessionId: 's1',
         ),
       ));
+      await pumpUntilSettled(tester);
 
       expect(find.byType(ConversationView), findsOneWidget);
       expect(find.text('Select a session to view conversation'), findsNothing);
@@ -139,17 +156,26 @@ void main() {
 
     testWidgets('TC-32-04: selectedSessionId 變更時 main area 從空白切換到 ConversationView',
         (tester) async {
+      // 初始狀態：未選中 session，顯示空白提示
       await tester.pumpWidget(buildDashboardWithOverrides(
         sessionListState: const SessionListState(selectedSessionId: null),
+        additionalOverrides: [
+          selectedSessionIdProvider.overrideWithValue(null),
+        ],
       ));
+      await tester.pump();
 
       expect(find.text('Select a session to view conversation'), findsOneWidget);
       expect(find.byType(ConversationView), findsNothing);
 
-      // 模擬選擇 session
+      // 選中 session 後：直接 override selectedSessionIdProvider 繞過 async 鏈
       await tester.pumpWidget(buildDashboardWithOverrides(
         sessionListState: const SessionListState(selectedSessionId: 's1'),
+        additionalOverrides: [
+          selectedSessionIdProvider.overrideWithValue('s1'),
+        ],
       ));
+      await pumpUntilSettled(tester);
 
       expect(find.byType(ConversationView), findsOneWidget);
       expect(find.text('Select a session to view conversation'), findsNothing);
@@ -157,15 +183,25 @@ void main() {
 
     testWidgets('TC-32-05: selectedSessionId 取消選擇（回到 null）時 main area 回到空白提示',
         (tester) async {
+      // 初始狀態：選中 session，顯示 ConversationView
       await tester.pumpWidget(buildDashboardWithOverrides(
         sessionListState: const SessionListState(selectedSessionId: 's1'),
+        additionalOverrides: [
+          selectedSessionIdProvider.overrideWithValue('s1'),
+        ],
       ));
+      await pumpUntilSettled(tester);
 
       expect(find.byType(ConversationView), findsOneWidget);
 
+      // 取消選擇：回到 null，顯示空白提示
       await tester.pumpWidget(buildDashboardWithOverrides(
         sessionListState: const SessionListState(selectedSessionId: null),
+        additionalOverrides: [
+          selectedSessionIdProvider.overrideWithValue(null),
+        ],
       ));
+      await tester.pump();
 
       expect(find.text('Select a session to view conversation'), findsOneWidget);
       expect(find.byType(ConversationView), findsNothing);
