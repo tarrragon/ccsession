@@ -1,7 +1,13 @@
 package main
 
 import (
+	"context"
 	"errors"
+	"io"
+	"log/slog"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -152,5 +158,298 @@ func TestCompareVersions_FullFeaturesThreshold(t *testing.T) {
 	result := CompareVersions("2.1.69", MinVersionFullFeatures)
 	if result != 0 {
 		t.Errorf("expected 0, got %d", result)
+	}
+}
+
+// Test group 3: DetectClaudeVersion (TC-15 to TC-28)
+
+// mockCommandRunner is a test double for CommandRunner
+type mockCommandRunner struct {
+	output []byte
+	err    error
+}
+
+func (m *mockCommandRunner) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
+	return m.output, m.err
+}
+
+// TC-15: Full mode - version 2.1.69 → HTTPHooksEnabled=true, FullFeaturesAvailable=true
+func TestDetectClaudeVersion_FullMode(t *testing.T) {
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	runner := &mockCommandRunner{output: []byte("Claude Code 2.1.69\n")}
+
+	config := DetectClaudeVersion(logger, runner)
+
+	if config.DetectedVersion != "2.1.69" {
+		t.Errorf("expected DetectedVersion 2.1.69, got %s", config.DetectedVersion)
+	}
+	if !config.HTTPHooksEnabled {
+		t.Errorf("expected HTTPHooksEnabled=true, got false")
+	}
+	if !config.FullFeaturesAvailable {
+		t.Errorf("expected FullFeaturesAvailable=true, got false")
+	}
+}
+
+// TC-16: Basic mode - version 2.1.63 → HTTPHooksEnabled=true, FullFeaturesAvailable=false
+func TestDetectClaudeVersion_BasicMode(t *testing.T) {
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	runner := &mockCommandRunner{output: []byte("Claude Code 2.1.63\n")}
+
+	config := DetectClaudeVersion(logger, runner)
+
+	if config.DetectedVersion != "2.1.63" {
+		t.Errorf("expected DetectedVersion 2.1.63, got %s", config.DetectedVersion)
+	}
+	if !config.HTTPHooksEnabled {
+		t.Errorf("expected HTTPHooksEnabled=true, got false")
+	}
+	if config.FullFeaturesAvailable {
+		t.Errorf("expected FullFeaturesAvailable=false, got true")
+	}
+}
+
+// TC-17: Degraded mode - version 2.1.62 → HTTPHooksEnabled=false, FullFeaturesAvailable=false
+func TestDetectClaudeVersion_DegradedMode(t *testing.T) {
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	runner := &mockCommandRunner{output: []byte("Claude Code 2.1.62\n")}
+
+	config := DetectClaudeVersion(logger, runner)
+
+	if config.DetectedVersion != "2.1.62" {
+		t.Errorf("expected DetectedVersion 2.1.62, got %s", config.DetectedVersion)
+	}
+	if config.HTTPHooksEnabled {
+		t.Errorf("expected HTTPHooksEnabled=false, got true")
+	}
+	if config.FullFeaturesAvailable {
+		t.Errorf("expected FullFeaturesAvailable=false, got true")
+	}
+}
+
+// TC-18: Basic mode upper boundary - version 2.1.68 → HTTPHooksEnabled=true, FullFeaturesAvailable=false
+func TestDetectClaudeVersion_BasicModeUpperBoundary(t *testing.T) {
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	runner := &mockCommandRunner{output: []byte("Claude Code 2.1.68\n")}
+
+	config := DetectClaudeVersion(logger, runner)
+
+	if config.DetectedVersion != "2.1.68" {
+		t.Errorf("expected DetectedVersion 2.1.68, got %s", config.DetectedVersion)
+	}
+	if !config.HTTPHooksEnabled {
+		t.Errorf("expected HTTPHooksEnabled=true, got false")
+	}
+	if config.FullFeaturesAvailable {
+		t.Errorf("expected FullFeaturesAvailable=false, got true")
+	}
+}
+
+// TC-19: Command not found → safe degradation with all false
+func TestDetectClaudeVersion_CommandNotFound(t *testing.T) {
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	runner := &mockCommandRunner{err: ErrVersionCmdNotFound}
+
+	config := DetectClaudeVersion(logger, runner)
+
+	if config.DetectedVersion != "" {
+		t.Errorf("expected DetectedVersion empty, got %s", config.DetectedVersion)
+	}
+	if config.HTTPHooksEnabled {
+		t.Errorf("expected HTTPHooksEnabled=false, got true")
+	}
+	if config.FullFeaturesAvailable {
+		t.Errorf("expected FullFeaturesAvailable=false, got true")
+	}
+}
+
+// TC-20: Execution failed (non-zero exit) → safe degradation
+func TestDetectClaudeVersion_ExecutionFailed(t *testing.T) {
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	runner := &mockCommandRunner{err: ErrVersionCmdFailed}
+
+	config := DetectClaudeVersion(logger, runner)
+
+	if config.DetectedVersion != "" {
+		t.Errorf("expected DetectedVersion empty, got %s", config.DetectedVersion)
+	}
+	if config.HTTPHooksEnabled {
+		t.Errorf("expected HTTPHooksEnabled=false, got true")
+	}
+	if config.FullFeaturesAvailable {
+		t.Errorf("expected FullFeaturesAvailable=false, got true")
+	}
+}
+
+// TC-21: Output cannot be parsed → safe degradation
+func TestDetectClaudeVersion_OutputUnparseable(t *testing.T) {
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	runner := &mockCommandRunner{output: []byte("unknown format\n")}
+
+	config := DetectClaudeVersion(logger, runner)
+
+	if config.DetectedVersion != "" {
+		t.Errorf("expected DetectedVersion empty, got %s", config.DetectedVersion)
+	}
+	if config.HTTPHooksEnabled {
+		t.Errorf("expected HTTPHooksEnabled=false, got true")
+	}
+	if config.FullFeaturesAvailable {
+		t.Errorf("expected FullFeaturesAvailable=false, got true")
+	}
+}
+
+// TC-22: Timeout → safe degradation
+func TestDetectClaudeVersion_Timeout(t *testing.T) {
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+
+	// Create a runner that simulates timeout by returning context.DeadlineExceeded
+	runner := &mockCommandRunner{err: context.DeadlineExceeded}
+	config := DetectClaudeVersion(logger, runner)
+
+	if config.DetectedVersion != "" {
+		t.Errorf("expected DetectedVersion empty, got %s", config.DetectedVersion)
+	}
+	if config.HTTPHooksEnabled {
+		t.Errorf("expected HTTPHooksEnabled=false, got true")
+	}
+	if config.FullFeaturesAvailable {
+		t.Errorf("expected FullFeaturesAvailable=false, got true")
+	}
+}
+
+// TC-23: High version 3.0.0 → HTTPHooksEnabled=true, FullFeaturesAvailable=true
+func TestDetectClaudeVersion_HighVersion(t *testing.T) {
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	runner := &mockCommandRunner{output: []byte("Claude Code 3.0.0\n")}
+
+	config := DetectClaudeVersion(logger, runner)
+
+	if config.DetectedVersion != "3.0.0" {
+		t.Errorf("expected DetectedVersion 3.0.0, got %s", config.DetectedVersion)
+	}
+	if !config.HTTPHooksEnabled {
+		t.Errorf("expected HTTPHooksEnabled=true, got false")
+	}
+	if !config.FullFeaturesAvailable {
+		t.Errorf("expected FullFeaturesAvailable=true, got false")
+	}
+}
+
+// TC-24: Empty output → safe degradation
+func TestDetectClaudeVersion_EmptyOutput(t *testing.T) {
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	runner := &mockCommandRunner{output: []byte("")}
+
+	config := DetectClaudeVersion(logger, runner)
+
+	if config.DetectedVersion != "" {
+		t.Errorf("expected DetectedVersion empty, got %s", config.DetectedVersion)
+	}
+	if config.HTTPHooksEnabled {
+		t.Errorf("expected HTTPHooksEnabled=false, got true")
+	}
+	if config.FullFeaturesAvailable {
+		t.Errorf("expected FullFeaturesAvailable=false, got true")
+	}
+}
+
+// TC-25: DetectedVersion records correct version
+func TestDetectClaudeVersion_DetectedVersionAccuracy(t *testing.T) {
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	runner := &mockCommandRunner{output: []byte("Claude Code 2.1.69\n")}
+
+	config := DetectClaudeVersion(logger, runner)
+
+	if config.DetectedVersion != "2.1.69" {
+		t.Errorf("expected DetectedVersion 2.1.69, got %s", config.DetectedVersion)
+	}
+}
+
+// TC-26: DetectedVersion is empty string on failure
+func TestDetectClaudeVersion_DetectedVersionEmpty(t *testing.T) {
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	runner := &mockCommandRunner{err: ErrVersionCmdFailed}
+
+	config := DetectClaudeVersion(logger, runner)
+
+	if config.DetectedVersion != "" {
+		t.Errorf("expected DetectedVersion empty, got %s", config.DetectedVersion)
+	}
+}
+
+// TC-27: Version 2.1.63 exactly at threshold (>= logic verification)
+func TestDetectClaudeVersion_ExactHTTPHooksThreshold(t *testing.T) {
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	runner := &mockCommandRunner{output: []byte("Claude Code 2.1.63\n")}
+
+	config := DetectClaudeVersion(logger, runner)
+
+	if !config.HTTPHooksEnabled {
+		t.Errorf("expected HTTPHooksEnabled=true at exact threshold 2.1.63, got false")
+	}
+}
+
+// TC-28: Version 2.1.69 exactly at threshold (>= logic verification)
+func TestDetectClaudeVersion_ExactFullFeaturesThreshold(t *testing.T) {
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	runner := &mockCommandRunner{output: []byte("Claude Code 2.1.69\n")}
+
+	config := DetectClaudeVersion(logger, runner)
+
+	if !config.FullFeaturesAvailable {
+		t.Errorf("expected FullFeaturesAvailable=true at exact threshold 2.1.69, got false")
+	}
+}
+
+// Test group 4: DisabledHooksHandler (TC-29 to TC-31)
+
+// TC-29: POST /hooks/agent-event returns HTTP 501 and JSON body
+func TestDisabledHooksHandler_ReturnsHTTP501(t *testing.T) {
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	handler := newDisabledHooksHandler(logger)
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("POST", "/hooks/agent-event", nil)
+
+	handler(w, r)
+
+	if w.Code != http.StatusNotImplemented {
+		t.Errorf("expected HTTP 501, got %d", w.Code)
+	}
+}
+
+// TC-30: Response has correct Content-Type
+func TestDisabledHooksHandler_ContentType(t *testing.T) {
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	handler := newDisabledHooksHandler(logger)
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("POST", "/hooks/agent-event", nil)
+
+	handler(w, r)
+
+	ct := w.Header().Get("Content-Type")
+	if ct != "application/json" {
+		t.Errorf("expected Content-Type application/json, got %s", ct)
+	}
+}
+
+// TC-31: Response body contains error message
+func TestDisabledHooksHandler_ErrorMessage(t *testing.T) {
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	handler := newDisabledHooksHandler(logger)
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("POST", "/hooks/agent-event", nil)
+
+	handler(w, r)
+
+	body := w.Body.String()
+	if !strings.Contains(body, "HTTP Hooks not available") {
+		t.Errorf("expected error message in body, got: %s", body)
+	}
+	if !strings.Contains(body, "v2.1.63") {
+		t.Errorf("expected v2.1.63 version requirement in body, got: %s", body)
 	}
 }
