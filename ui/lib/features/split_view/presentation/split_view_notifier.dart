@@ -88,6 +88,7 @@ class SplitViewNotifier extends _$SplitViewNotifier {
   void closePanel(int panelIndex) {
     final current = state.valueOrNull;
     if (current == null || current.panels.length <= 1) return;
+    if (panelIndex < 0 || panelIndex >= current.panels.length) return;
 
     final remaining = _adjustPanelsAfterClose(current.panels, panelIndex);
     final newMode = _determineLayoutAfterClose(remaining.length);
@@ -95,13 +96,28 @@ class SplitViewNotifier extends _$SplitViewNotifier {
     final newActiveIndex =
         panelIndex == current.activePanelIndex ? 0 : min(current.activePanelIndex, newPanels.length - 1);
 
+    final newMaximizedIndex = _adjustMaximizedIndexAfterClose(
+      current.maximizedPanelIndex,
+      panelIndex,
+    );
+
     final newState = SplitViewState(
       layoutMode: newMode,
       panels: newPanels,
       activePanelIndex: newActiveIndex,
+      maximizedPanelIndex: newMaximizedIndex,
     );
     state = AsyncData(newState);
     _storage.save(newState);
+  }
+
+  /// 需求：UC-004 關閉面板後調整 maximizedPanelIndex
+  /// 約束：關閉最大化面板則清除，關閉前方面板則遞減
+  int? _adjustMaximizedIndexAfterClose(int? maximizedIndex, int closedIndex) {
+    if (maximizedIndex == null) return null;
+    if (maximizedIndex == closedIndex) return null;
+    if (maximizedIndex > closedIndex) return maximizedIndex - 1;
+    return maximizedIndex;
   }
 
   /// 需求：UC-004 關閉面板後決定新佈局模式
@@ -132,7 +148,9 @@ class SplitViewNotifier extends _$SplitViewNotifier {
   /// 約束：回傳 null 表示無效，呼叫端應提前返回
   SplitViewState? _validStateForPanel(int panelIndex) {
     final current = state.valueOrNull;
-    if (current == null || panelIndex >= current.panels.length) return null;
+    if (current == null || panelIndex < 0 || panelIndex >= current.panels.length) {
+      return null;
+    }
     return current;
   }
 

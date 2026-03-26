@@ -412,6 +412,71 @@ void main() {
       expect(getState().panels.length, 1);
     });
 
+    // A-N34
+    test('closePanel: negative panelIndex is no-op', () async {
+      await initWithState(const SplitViewState(
+        layoutMode: LayoutMode.splitHorizontal,
+        panels: [
+          PanelState(panelIndex: 0, sessionId: 'A'),
+          PanelState(panelIndex: 1, sessionId: 'B'),
+        ],
+      ));
+      getNotifier().closePanel(-1);
+      expect(getState().panels.length, 2);
+      expect(fakeStorage.saveCallCount, 0);
+    });
+
+    // A-N35
+    test('closePanel: out-of-range panelIndex is no-op', () async {
+      await initWithState(const SplitViewState(
+        layoutMode: LayoutMode.splitHorizontal,
+        panels: [
+          PanelState(panelIndex: 0, sessionId: 'A'),
+          PanelState(panelIndex: 1, sessionId: 'B'),
+        ],
+      ));
+      getNotifier().closePanel(5);
+      expect(getState().panels.length, 2);
+      expect(fakeStorage.saveCallCount, 0);
+    });
+
+    // A-N36
+    test('closePanel: closing maximized panel clears maximizedPanelIndex',
+        () async {
+      await initWithState(const SplitViewState(
+        layoutMode: LayoutMode.grid2x2,
+        panels: [
+          PanelState(panelIndex: 0, sessionId: 'A'),
+          PanelState(panelIndex: 1, sessionId: 'B'),
+          PanelState(panelIndex: 2, sessionId: 'C'),
+          PanelState(panelIndex: 3, sessionId: 'D'),
+        ],
+      ));
+      getNotifier().maximizePanel(1);
+      expect(getState().maximizedPanelIndex, 1);
+      getNotifier().closePanel(1);
+      expect(getState().maximizedPanelIndex, isNull);
+    });
+
+    // A-N37
+    test(
+        'closePanel: closing panel before maximized decrements '
+        'maximizedPanelIndex', () async {
+      await initWithState(const SplitViewState(
+        layoutMode: LayoutMode.grid2x2,
+        panels: [
+          PanelState(panelIndex: 0, sessionId: 'A'),
+          PanelState(panelIndex: 1, sessionId: 'B'),
+          PanelState(panelIndex: 2, sessionId: 'C'),
+          PanelState(panelIndex: 3, sessionId: 'D'),
+        ],
+      ));
+      getNotifier().maximizePanel(2);
+      expect(getState().maximizedPanelIndex, 2);
+      getNotifier().closePanel(0);
+      expect(getState().maximizedPanelIndex, 1);
+    });
+
     // --- setActivePanel ---
 
     // A-N40
