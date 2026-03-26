@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:ccsession/core/constants/search_constants.dart';
 import 'package:ccsession/core/models/session_info.dart';
+import 'package:ccsession/features/session_list/presentation/session_group_utils.dart';
 import 'package:ccsession/features/session_list/presentation/session_list_notifier.dart';
 import 'package:ccsession/features/session_list/presentation/session_list_search_state.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
@@ -70,7 +71,7 @@ class SessionListSearchNotifier extends _$SessionListSearchNotifier {
     final trimmedQuery = state.query.trim();
 
     if (trimmedQuery.isEmpty) {
-      return _groupByStatus(sessions);
+      return groupSessionsByStatus(sessions);
     }
 
     final normalizedQuery = trimmedQuery.toLowerCase();
@@ -78,7 +79,7 @@ class SessionListSearchNotifier extends _$SessionListSearchNotifier {
       (session) => _matchesQuery(session, normalizedQuery),
     ).toList();
 
-    return _groupByStatus(filtered);
+    return groupSessionsByStatus(filtered);
   }
 
   /// 需求：檢查 session 是否匹配查詢字串（任一欄位匹配即可）
@@ -94,20 +95,4 @@ class SessionListSearchNotifier extends _$SessionListSearchNotifier {
     );
   }
 
-  /// 需求：按狀態分組並排序
-  /// 約束：與 SessionListNotifier.groupedSessions 邏輯一致
-  /// 技術債：Phase 4 可提取為共用工具函式
-  Map<SessionStatus, List<SessionInfo>> _groupByStatus(
-    List<SessionInfo> sessions,
-  ) {
-    final result = <SessionStatus, List<SessionInfo>>{};
-    for (final status in SessionStatus.values) {
-      final group = sessions.where((s) => s.status == status).toList()
-        ..sort((a, b) => b.lastEventAt.compareTo(a.lastEventAt));
-      if (group.isNotEmpty) {
-        result[status] = group;
-      }
-    }
-    return result;
-  }
 }

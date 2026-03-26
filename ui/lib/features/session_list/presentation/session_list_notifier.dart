@@ -5,6 +5,7 @@ import 'package:equatable/equatable.dart';
 import 'package:flutter/foundation.dart';
 import 'package:ccsession/core/models/session_info.dart';
 import 'package:ccsession/core/websocket/websocket_provider.dart';
+import 'package:ccsession/features/session_list/presentation/session_group_utils.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 part 'session_list_notifier.g.dart';
@@ -125,18 +126,7 @@ class SessionListNotifier extends _$SessionListNotifier {
   Map<SessionStatus, List<SessionInfo>> get groupedSessions {
     final currentState = state.valueOrNull;
     if (currentState == null) return {};
-
-    final result = <SessionStatus, List<SessionInfo>>{};
-    for (final status in SessionStatus.values) {
-      final group = currentState.sessions
-          .where((s) => s.status == status)
-          .toList()
-        ..sort((a, b) => b.lastEventAt.compareTo(a.lastEventAt));
-      if (group.isNotEmpty) {
-        result[status] = group;
-      }
-    }
-    return result;
+    return groupSessionsByStatus(currentState.sessions);
   }
 }
 
