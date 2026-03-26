@@ -139,12 +139,28 @@ func (d *EventDispatcher) dispatchAfterUpdate(sessionID string, timestamp time.T
 }
 
 // processSessionEvent 處理來自 JSONL 的 SessionEvent。
+//
+// 去重鍵構建：
+//   - 優先使用 session 的 AgentID（若 session 已存在）
+//   - 若 session 不存在，使用 SessionID 作為臨時識別符
+//   - 目標：確保 JSONL 和 HTTP Hook 事件使用相同的語義去重
 func (d *EventDispatcher) processSessionEvent(event SessionEvent) {
 	logger := slog.Default()
 
-	// 構建去重鍵（用 MessageID 作為 AgentID）
+	// 從 registry 讀取 session 的 AgentID（若存在）
+	agentID := ""
+	if session, ok := d.registry.Get(event.SessionID); ok && session != nil {
+		agentID = session.AgentID
+	}
+
+	// 若 session 不存在或 AgentID 未設置，使用 SessionID 作為臨時識別符
+	// 確保不同事件源的去重鍵語義一致
+	if agentID == "" {
+		agentID = event.SessionID
+	}
+
 	key := deduplicationKey{
-		AgentID:   event.MessageID,
+		AgentID:   agentID,
 		EventType: event.Type,
 		WindowKey: event.Timestamp.Truncate(DedupWindowDuration),
 	}
@@ -155,7 +171,8 @@ func (d *EventDispatcher) processSessionEvent(event SessionEvent) {
 		logger.Debug(LogEventDeduplicated,
 			"layer", "event_dispatcher",
 			"sessionID", event.SessionID,
-			"reason", "HTTP event already processed")
+			"reason", "HTTP event already processed",
+			"agentID", agentID)
 		return
 	}
 	d.dedupTable[key] = EventSourceJSONL
@@ -168,10 +185,16 @@ func (d *EventDispatcher) processSessionEvent(event SessionEvent) {
 	logger.Info(LogJSONLEventProcessed,
 		"layer", "event_dispatcher",
 		"sessionID", event.SessionID,
+		"agentID", agentID,
 		"eventType", event.Type)
 }
 
 // processHookEvent 處理來自 HTTP Hook 的 HookEvent。
+//
+// 去重鍵構建：
+//   - 優先使用 event.AgentID
+//   - 若 AgentID 為空，使用 SessionID 作為臨時識別符
+//   - 目標：確保去重鍵語義與 JSONL 事件一致
 func (d *EventDispatcher) processHookEvent(event HookEvent) {
 	logger := slog.Default()
 
@@ -188,8 +211,14 @@ func (d *EventDispatcher) processHookEvent(event HookEvent) {
 		}
 	}
 
+	// 若 AgentID 為空，使用 SessionID 作為臨時識別符
+	agentID := event.AgentID
+	if agentID == "" {
+		agentID = event.SessionID
+	}
+
 	key := deduplicationKey{
-		AgentID:   event.AgentID,
+		AgentID:   agentID,
 		EventType: event.Type,
 		WindowKey: timestamp.Truncate(DedupWindowDuration),
 	}
