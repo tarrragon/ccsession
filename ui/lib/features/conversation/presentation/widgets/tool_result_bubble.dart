@@ -1,3 +1,4 @@
+import 'package:ccsession/core/constants/conversation_constants.dart';
 import 'package:ccsession/core/models/session_event.dart';
 import 'package:flutter/material.dart';
 
@@ -11,7 +12,7 @@ class ToolResultBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isError = event.content.isError;
-    final borderColor = isError ? Colors.red : Theme.of(context).colorScheme.outline;
+    final borderColor = isError ? ConversationConstants.errorColor : Theme.of(context).colorScheme.outline;
 
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
@@ -24,7 +25,7 @@ class ToolResultBubble extends StatelessWidget {
           isError ? 'Error' : 'Result',
           style: TextStyle(
             fontFamily: 'monospace',
-            color: isError ? Colors.red : null,
+            color: isError ? ConversationConstants.errorColor : null,
           ),
         ),
         children: [
