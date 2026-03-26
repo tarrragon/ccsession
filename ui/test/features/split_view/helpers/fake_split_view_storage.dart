@@ -1,5 +1,5 @@
 import 'package:ccsession/features/split_view/data/split_view_storage.dart';
-import 'package:ccsession/features/split_view/presentation/split_view_state.dart';
+import 'package:ccsession/features/split_view/domain/split_view_state.dart';
 
 /// 需求：UC-004 測試替身，記憶體實作 SplitViewStorage
 class FakeSplitViewStorage implements SplitViewStorage {

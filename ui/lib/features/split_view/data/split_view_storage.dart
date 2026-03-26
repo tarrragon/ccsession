@@ -2,7 +2,7 @@ import 'dart:convert';
 
 import 'package:ccsession/features/split_view/domain/layout_mode.dart';
 import 'package:ccsession/features/split_view/domain/panel_state.dart';
-import 'package:ccsession/features/split_view/presentation/split_view_state.dart';
+import 'package:ccsession/features/split_view/domain/split_view_state.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 

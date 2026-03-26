@@ -6,7 +6,7 @@ import 'package:ccsession/core/websocket/websocket_service.dart';
 import 'package:ccsession/features/conversation/presentation/conversation_notifier.dart';
 import 'package:ccsession/features/session_list/presentation/session_list_notifier.dart';
 import 'package:ccsession/features/split_view/data/split_view_storage.dart';
-import 'package:ccsession/features/split_view/presentation/split_view_state.dart';
+import 'package:ccsession/features/split_view/domain/split_view_state.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mocktail/mocktail.dart';

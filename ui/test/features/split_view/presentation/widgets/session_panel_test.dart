@@ -1,7 +1,7 @@
 import 'package:ccsession/features/conversation/presentation/conversation_view.dart';
 import 'package:ccsession/features/split_view/domain/layout_mode.dart';
 import 'package:ccsession/features/split_view/domain/panel_state.dart';
-import 'package:ccsession/features/split_view/presentation/split_view_state.dart';
+import 'package:ccsession/features/split_view/domain/split_view_state.dart';
 import 'package:ccsession/features/split_view/presentation/widgets/panel_header.dart';
 import 'package:ccsession/features/split_view/presentation/widgets/session_panel.dart';
 import 'package:flutter/material.dart';

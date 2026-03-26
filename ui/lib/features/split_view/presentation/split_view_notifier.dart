@@ -3,7 +3,7 @@ import 'dart:math';
 import 'package:ccsession/features/split_view/data/split_view_storage.dart';
 import 'package:ccsession/features/split_view/domain/layout_mode.dart';
 import 'package:ccsession/features/split_view/domain/panel_state.dart';
-import 'package:ccsession/features/split_view/presentation/split_view_state.dart';
+import 'package:ccsession/features/split_view/domain/split_view_state.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 part 'split_view_notifier.g.dart';
