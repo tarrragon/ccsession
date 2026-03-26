@@ -1,9 +1,15 @@
 package main
 
 import (
+	"context"
+	"encoding/json"
+	"log/slog"
+	"net/http"
+	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // ParseClaudeVersion extracts the semantic version from claude --version output.
@@ -75,4 +81,104 @@ func parseVersionComponents(version string) *[3]int {
 	}
 
 	return result
+}
+
+// CommandRunner abstracts external command execution for testing purposes.
+type CommandRunner interface {
+	Run(ctx context.Context, name string, args ...string) (output []byte, err error)
+}
+
+// defaultCommandRunner executes actual external commands.
+type defaultCommandRunner struct{}
+
+// Run executes an external command with the given context and arguments.
+func (r *defaultCommandRunner) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
+	cmd := exec.CommandContext(ctx, name, args...)
+	return cmd.CombinedOutput()
+}
+
+// DetectClaudeVersion detects the Claude Code version by executing claude --version.
+// It does not return errors; all failure scenarios result in safe degradation with logs.
+// Version thresholds:
+//   - < v2.1.63 → HTTPHooksEnabled=false, FullFeaturesAvailable=false
+//   - [v2.1.63, v2.1.69) → HTTPHooksEnabled=true, FullFeaturesAvailable=false
+//   - >= v2.1.69 → HTTPHooksEnabled=true, FullFeaturesAvailable=true
+func DetectClaudeVersion(logger *slog.Logger, runner CommandRunner) VersionConfig {
+	// Create context with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(VersionCmdTimeoutSecs)*time.Second)
+	defer cancel()
+
+	// Execute claude --version
+	output, err := runner.Run(ctx, ClaudeCLICommand, ClaudeCLIVersionFlag)
+
+	// Handle execution failures with safe degradation
+	if err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			logger.Warn(LogVersionCmdTimeout, "layer", "version_detect")
+			return VersionConfig{}
+		}
+		logger.Warn(LogVersionCmdFailed, "layer", "version_detect", "error", err)
+		return VersionConfig{}
+	}
+
+	// Parse version string
+	version, err := ParseClaudeVersion(string(output))
+	if err != nil {
+		logger.Warn(LogVersionParseFailed, "layer", "version_detect", "output", string(output))
+		return VersionConfig{}
+	}
+
+	// Determine feature flags based on version comparison
+	config := VersionConfig{
+		DetectedVersion: version,
+	}
+
+	// Check if HTTP hooks are enabled (>= v2.1.63)
+	if CompareVersions(version, MinVersionHTTPHooks) >= 0 {
+		config.HTTPHooksEnabled = true
+
+		// Check if full features are available (>= v2.1.69)
+		if CompareVersions(version, MinVersionFullFeatures) >= 0 {
+			config.FullFeaturesAvailable = true
+			logger.Info(LogVersionDetected,
+				"layer", "version_detect",
+				"version", version,
+				"http_hooks", true,
+				"full_features", true)
+		} else {
+			logger.Info(LogVersionDetected,
+				"layer", "version_detect",
+				"version", version,
+				"http_hooks", true,
+				"full_features", false)
+			logger.Warn(LogFullFeaturesPartial,
+				"layer", "version_detect",
+				"version", version)
+		}
+	} else {
+		logger.Warn(LogHTTPHooksDisabled,
+			"layer", "version_detect",
+			"version", version,
+			"min_version", MinVersionHTTPHooks)
+	}
+
+	return config
+}
+
+// newDisabledHooksHandler returns an HTTP 501 handler for when HTTP Hooks are disabled.
+func newDisabledHooksHandler(logger *slog.Logger) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		logger.Info(LogHTTPHooksNotAvailable,
+			"layer", "version_detect",
+			"method", r.Method,
+			"path", r.URL.Path)
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotImplemented)
+
+		response := map[string]string{
+			"error": "HTTP Hooks not available: requires Claude Code v2.1.63+",
+		}
+		json.NewEncoder(w).Encode(response)
+	}
 }
