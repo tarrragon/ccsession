@@ -13,3 +13,8 @@ const (
 	LogVersionCmdTimeout     = "claude --version timed out, falling back to JSONL-only mode"
 	LogHTTPHooksNotAvailable = "HTTP Hooks request received but feature is disabled"
 )
+
+// Error response messages
+const (
+	ErrHTTPHooksNotAvailable = "HTTP Hooks not available: requires Claude Code v%s+"
+)

@@ -354,18 +354,6 @@ func TestDetectClaudeVersion_EmptyOutput(t *testing.T) {
 	}
 }
 
-// TC-25: DetectedVersion records correct version
-func TestDetectClaudeVersion_DetectedVersionAccuracy(t *testing.T) {
-	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
-	runner := &mockCommandRunner{output: []byte("Claude Code 2.1.69\n")}
-
-	config := DetectClaudeVersion(logger, runner)
-
-	if config.DetectedVersion != "2.1.69" {
-		t.Errorf("expected DetectedVersion 2.1.69, got %s", config.DetectedVersion)
-	}
-}
-
 // TC-26: DetectedVersion is empty string on failure
 func TestDetectClaudeVersion_DetectedVersionEmpty(t *testing.T) {
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))

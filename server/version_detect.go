@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os/exec"
@@ -31,14 +33,15 @@ func ParseClaudeVersion(output string) (string, error) {
 
 // CompareVersions compares two semantic version strings.
 // Returns: -1 if a < b, 0 if a == b, 1 if a > b.
-// Format errors result in safe degradation (returns 0).
+// Format errors result in conservative degradation: return -1 (treat as version too low)
 func CompareVersions(a, b string) int {
 	aParts := parseVersionComponents(a)
 	bParts := parseVersionComponents(b)
 
-	// Safe degradation: if either version is unparseable, return equal
+	// Conservative degradation: if either version is unparseable, return -1
+	// This ensures HTTP Hooks are disabled when version detection is uncertain
 	if aParts == nil || bParts == nil {
-		return 0
+		return -1
 	}
 
 	// Compare major, minor, patch in order
@@ -113,7 +116,9 @@ func DetectClaudeVersion(logger *slog.Logger, runner CommandRunner) VersionConfi
 
 	// Handle execution failures with safe degradation
 	if err != nil {
-		if ctx.Err() == context.DeadlineExceeded {
+		// Check for timeout: ctx.Err() OR errors.Is(err, DeadlineExceeded)
+		// Both checks needed because exec.CommandContext may wrap timeout as ExitError
+		if ctx.Err() == context.DeadlineExceeded || errors.Is(err, context.DeadlineExceeded) {
 			logger.Warn(LogVersionCmdTimeout, "layer", "version_detect")
 			return VersionConfig{}
 		}
@@ -177,8 +182,10 @@ func newDisabledHooksHandler(logger *slog.Logger) http.HandlerFunc {
 		w.WriteHeader(http.StatusNotImplemented)
 
 		response := map[string]string{
-			"error": "HTTP Hooks not available: requires Claude Code v2.1.63+",
+			"error": fmt.Sprintf(ErrHTTPHooksNotAvailable, MinVersionHTTPHooks),
 		}
-		json.NewEncoder(w).Encode(response)
+		if err := json.NewEncoder(w).Encode(response); err != nil {
+			logger.Warn("failed to encode HTTP Hooks disabled response", "layer", "version_detect", "error", err)
+		}
 	}
 }

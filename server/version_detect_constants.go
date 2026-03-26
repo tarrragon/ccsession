@@ -23,7 +23,8 @@ type VersionConfig struct {
 	FullFeaturesAvailable bool
 }
 
-// Sentinel errors for version detection
+// Sentinel errors for version detection (test use only)
+// Production code should check concrete error types returned by exec.CommandContext
 var (
 	ErrVersionParseFailure = errors.New("version: cannot parse version from output")
 	ErrVersionCmdFailed    = errors.New("version: claude command failed")
