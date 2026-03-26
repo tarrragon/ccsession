@@ -59,7 +59,7 @@ Claude Code 的所有對話紀錄以 JSONL 格式即時寫入 `~/.claude/` 目�
 
 ### 通用規範
 
-以下規範由 `.claude/rules/` 自動載入，適用於所有語言。核心入口：決策樹（`core/decision-tree.md`）、品質標準（`core/implementation-quality.md`）、TDD 流程（`flows/tdd-flow.md`）、Ticket 生命週期（`flows/ticket-lifecycle.md`）、事件回應（`flows/incident-response.md`）。
+以下規範由 `.claude/rules/` 自動載入（7 檔），適用於所有語言。通用品質基線（`quality-common.md`）、流程品質基線（`quality-baseline.md`）、認知負擔（`cognitive-load.md`）、語言約束（`language-constraints.md`）。PM 流程規則在 `.claude/pm-rules/`，語言專屬規則在 `.claude/references/`。
 
 ---
 
