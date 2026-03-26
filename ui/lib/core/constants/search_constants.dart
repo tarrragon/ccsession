@@ -16,4 +16,7 @@ abstract final class SearchConstants {
 
   /// 當前聚焦匹配高亮背景色
   static const Color currentHighlightColor = Color.fromRGBO(255, 152, 0, 0.6);
+
+  /// Session 列表篩選 hint 文字
+  static const String sessionFilterHint = 'Filter sessions...';
 }

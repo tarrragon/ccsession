@@ -1,6 +1,8 @@
 import 'package:ccsession/core/models/session_info.dart';
 import 'package:ccsession/features/session_list/presentation/session_list_notifier.dart';
+import 'package:ccsession/features/session_list/presentation/session_list_search_notifier.dart';
 import 'package:ccsession/features/session_list/presentation/widgets/session_group_header.dart';
+import 'package:ccsession/features/session_list/presentation/widgets/session_list_search_bar.dart';
 import 'package:ccsession/features/session_list/presentation/widgets/session_list_tile.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -33,17 +35,25 @@ Widget _buildError(Object error) {
 
 Widget _buildData(BuildContext context, WidgetRef ref, SessionListState state) {
   final notifier = ref.read(sessionListNotifierProvider.notifier);
-  final grouped = notifier.groupedSessions;
+  final searchNotifier = ref.read(sessionListSearchNotifierProvider.notifier);
+  final grouped = searchNotifier.filteredGroupedSessions;
 
   if (grouped.isEmpty) {
     // TODO: i18n — 遷移至 ARB
     return const Center(child: Text('No sessions'));
   }
 
-  return _SessionGroupListView(
-    grouped: grouped,
-    selectedSessionId: state.selectedSessionId,
-    onSelectSession: notifier.selectSession,
+  return Column(
+    children: [
+      const SessionListSearchBar(),
+      Expanded(
+        child: _SessionGroupListView(
+          grouped: grouped,
+          selectedSessionId: state.selectedSessionId,
+          onSelectSession: notifier.selectSession,
+        ),
+      ),
+    ],
   );
 }
 
