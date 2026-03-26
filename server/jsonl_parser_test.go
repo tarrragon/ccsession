@@ -291,6 +291,43 @@ func TestParseLineAssistantToolResultInContent(t *testing.T) {
 	assertEqualBool(t, "Content.IsError", evt.Content.IsError, true)
 }
 
+func TestParseLineNonConversationTypes(t *testing.T) {
+	// Non-conversation JSONL line types should be silently skipped (nil, nil).
+	cases := []struct {
+		name string
+		line string
+	}{
+		{
+			name: "progress",
+			line: `{"type":"progress","data":{"percentage":50}}`,
+		},
+		{
+			name: "system",
+			line: `{"type":"system","content":"session started"}`,
+		},
+		{
+			name: "file-history-snapshot",
+			line: `{"type":"file-history-snapshot","snapshot":{"files":[]}}`,
+		},
+		{
+			name: "queue-operation",
+			line: `{"type":"queue-operation","operation":"enqueue"}`,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			events, err := ParseLine([]byte(tc.line), "sess-1", "/project")
+			if err != nil {
+				t.Fatalf("unexpected error for type %s: %v", tc.name, err)
+			}
+			if events != nil {
+				t.Fatalf("expected nil events for type %s, got %d", tc.name, len(events))
+			}
+		})
+	}
+}
+
 // --- Test helpers ---
 
 func assertEqual(t *testing.T, field, got, want string) {

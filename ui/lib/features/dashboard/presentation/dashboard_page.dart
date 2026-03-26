@@ -1,3 +1,4 @@
+import 'package:ccsession/features/conversation/presentation/conversation_notifier.dart';
 import 'package:ccsession/features/conversation/presentation/conversation_view.dart';
 import 'package:ccsession/features/dashboard/presentation/dashboard_constants.dart';
 import 'package:ccsession/features/dashboard/presentation/widgets/connection_status_bar.dart';
@@ -31,6 +32,9 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
               panelIndex: activePanelIndex,
               sessionId: next,
             );
+        ref
+            .read(conversationNotifierProvider(activePanelIndex).notifier)
+            .loadSession(next);
       }
     });
 

@@ -11,6 +11,7 @@ part 'websocket_provider.g.dart';
 WebSocketService webSocketService(WebSocketServiceRef ref) {
   final service = WebSocketServiceImpl();
   ref.onDispose(service.dispose);
+  service.connect();
   return service;
 }
 
