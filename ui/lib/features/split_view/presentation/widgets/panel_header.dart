@@ -1,4 +1,4 @@
-import 'package:ccsession/features/session_list/presentation/session_list_notifier.dart';
+import 'package:ccsession/features/split_view/presentation/session_name_provider.dart';
 import 'package:ccsession/features/split_view/presentation/split_view_notifier.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -20,7 +20,7 @@ class PanelHeader extends ConsumerWidget {
 
     final panel = splitState.panels[panelIndex];
     final isMaximized = splitState.maximizedPanelIndex == panelIndex;
-    final sessionName = _resolveSessionName(ref, panel.sessionId);
+    final sessionName = ref.watch(sessionNameProvider(sessionId: panel.sessionId));
     final notifier = ref.read(splitViewNotifierProvider.notifier);
 
     return GestureDetector(
@@ -68,17 +68,4 @@ class PanelHeader extends ConsumerWidget {
     }
   }
 
-  /// 需求：UC-004 從 session 列表中解析 session 名稱
-  String _resolveSessionName(WidgetRef ref, String? sessionId) {
-    if (sessionId == null) return '';
-    final sessionListState =
-        ref.watch(sessionListNotifierProvider).valueOrNull;
-    if (sessionListState == null) return sessionId;
-    final session = sessionListState.sessions.where(
-      (s) => s.id == sessionId,
-    );
-    if (session.isEmpty) return sessionId;
-    final name = session.first.agentName;
-    return name.isNotEmpty ? name : sessionId;
-  }
 }
