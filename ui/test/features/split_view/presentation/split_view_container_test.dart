@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:ccsession/features/split_view/domain/layout_mode.dart';
 import 'package:ccsession/features/split_view/domain/panel_state.dart';
 import 'package:ccsession/features/split_view/presentation/split_view_container.dart';
@@ -19,7 +20,9 @@ void main() {
           layoutMode: LayoutMode.single,
           panels: [PanelState(panelIndex: 0)],
         ),
-        child: const SplitViewContainer(),
+        child: SplitViewContainer(
+          contentBuilder: (index) => Text('Panel-$index'),
+        ),
         panelCount: 1,
       ));
       await tester.pumpAndSettle();
@@ -36,7 +39,9 @@ void main() {
           layoutMode: LayoutMode.splitHorizontal,
           panels: [PanelState(panelIndex: 0), PanelState(panelIndex: 1)],
         ),
-        child: const SplitViewContainer(),
+        child: SplitViewContainer(
+          contentBuilder: (index) => Text('Panel-$index'),
+        ),
       ));
       await tester.pumpAndSettle();
 
@@ -52,7 +57,9 @@ void main() {
           layoutMode: LayoutMode.splitVertical,
           panels: [PanelState(panelIndex: 0), PanelState(panelIndex: 1)],
         ),
-        child: const SplitViewContainer(),
+        child: SplitViewContainer(
+          contentBuilder: (index) => Text('Panel-$index'),
+        ),
       ));
       await tester.pumpAndSettle();
 
@@ -72,7 +79,9 @@ void main() {
             PanelState(panelIndex: 3),
           ],
         ),
-        child: const SplitViewContainer(),
+        child: SplitViewContainer(
+          contentBuilder: (index) => Text('Panel-$index'),
+        ),
         panelCount: 4,
       ));
       await tester.pumpAndSettle();
@@ -88,7 +97,9 @@ void main() {
           layoutMode: LayoutMode.splitHorizontal,
           panels: [PanelState(panelIndex: 0), PanelState(panelIndex: 1)],
         ),
-        child: const SplitViewContainer(),
+        child: SplitViewContainer(
+          contentBuilder: (index) => Text('Panel-$index'),
+        ),
       ));
       await tester.pumpAndSettle();
       expect(find.byType(SessionPanel), findsNWidgets(2));

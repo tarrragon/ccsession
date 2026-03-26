@@ -1,3 +1,4 @@
+import 'package:ccsession/features/conversation/presentation/conversation_view.dart';
 import 'package:ccsession/features/dashboard/presentation/dashboard_constants.dart';
 import 'package:ccsession/features/dashboard/presentation/widgets/connection_status_bar.dart';
 import 'package:ccsession/features/session_list/presentation/session_list_notifier.dart';
@@ -46,7 +47,12 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
             ),
           ),
           const VerticalDivider(width: DashboardConstants.dividerWidth),
-          const Expanded(child: SplitViewContainer()),
+          Expanded(
+            child: SplitViewContainer(
+              contentBuilder: (panelIndex) =>
+                  ConversationView(panelIndex: panelIndex),
+            ),
+          ),
         ],
       ),
     );

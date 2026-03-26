@@ -9,7 +9,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 /// 需求：UC-004 根據 layoutMode 切換面板佈局
 /// 約束：ConsumerStatefulWidget，flex 比例為本地 State（不持久化）
 class SplitViewContainer extends ConsumerStatefulWidget {
-  const SplitViewContainer({super.key});
+  const SplitViewContainer({required this.contentBuilder, super.key});
+
+  /// 需求：UC-004 面板內容建構器，由上層注入
+  final PanelContentBuilder contentBuilder;
 
   @override
   ConsumerState<SplitViewContainer> createState() =>
@@ -34,12 +37,15 @@ class _SplitViewContainerState extends ConsumerState<SplitViewContainer> {
 
   Widget _buildLayout(SplitViewState state) {
     if (state.maximizedPanelIndex != null) {
-      return SessionPanel(panelIndex: state.maximizedPanelIndex!);
+      return SessionPanel(
+        panelIndex: state.maximizedPanelIndex!,
+        contentBuilder: widget.contentBuilder,
+      );
     }
 
     switch (state.layoutMode) {
       case LayoutMode.single:
-        return const SessionPanel(panelIndex: 0);
+        return SessionPanel(panelIndex: 0, contentBuilder: widget.contentBuilder);
       case LayoutMode.splitHorizontal:
         return _buildSplitLayout(axis: Axis.horizontal);
       case LayoutMode.splitVertical:
@@ -59,12 +65,18 @@ class _SplitViewContainerState extends ConsumerState<SplitViewContainer> {
     final secondFlex = _getFlex(secondKey);
 
     final children = [
-      Expanded(flex: firstFlex, child: const SessionPanel(panelIndex: 0)),
+      Expanded(
+        flex: firstFlex,
+        child: SessionPanel(panelIndex: 0, contentBuilder: widget.contentBuilder),
+      ),
       ResizableDivider(
         axis: axis,
         onDrag: (delta) => _handleDrag(firstKey, secondKey, delta),
       ),
-      Expanded(flex: secondFlex, child: const SessionPanel(panelIndex: 1)),
+      Expanded(
+        flex: secondFlex,
+        child: SessionPanel(panelIndex: 1, contentBuilder: widget.contentBuilder),
+      ),
     ];
 
     return isHorizontal ? Row(children: children) : Column(children: children);
@@ -111,7 +123,10 @@ class _SplitViewContainerState extends ConsumerState<SplitViewContainer> {
       children: [
         Expanded(
           flex: _getFlex(leftKey),
-          child: SessionPanel(panelIndex: leftPanelIndex),
+          child: SessionPanel(
+            panelIndex: leftPanelIndex,
+            contentBuilder: widget.contentBuilder,
+          ),
         ),
         ResizableDivider(
           axis: Axis.horizontal,
@@ -119,7 +134,10 @@ class _SplitViewContainerState extends ConsumerState<SplitViewContainer> {
         ),
         Expanded(
           flex: _getFlex(rightKey),
-          child: SessionPanel(panelIndex: rightPanelIndex),
+          child: SessionPanel(
+            panelIndex: rightPanelIndex,
+            contentBuilder: widget.contentBuilder,
+          ),
         ),
       ],
     );
