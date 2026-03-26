@@ -3,36 +3,77 @@ import 'dart:async';
 import 'package:ccsession/core/models/server_message.dart';
 import 'package:ccsession/core/models/session_event.dart';
 import 'package:ccsession/core/websocket/websocket_provider.dart';
+import 'package:equatable/equatable.dart';
 import 'package:flutter/foundation.dart';
-import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
-part 'conversation_notifier.freezed.dart';
 part 'conversation_notifier.g.dart';
 
+/// Sentinel 值，用於 copyWith 中區分「未傳入」和「明確傳入 null」
+const _sentinel = Object();
+
 /// 需求：Session 對話的完整 UI 狀態
-/// 約束：不可變（freezed），包含事件列表和捲動控制狀態
-@freezed
-abstract class ConversationState with _$ConversationState {
-  const factory ConversationState({
+/// 約束：不可變（Equatable），包含事件列表和捲動控制狀態
+class ConversationState extends Equatable {
+  const ConversationState({
     /// 當前載入的 session ID
-    String? sessionId,
+    this.sessionId,
 
     /// 對話事件列表（按 timestamp 升序）
-    @Default([]) List<SessionEvent> events,
+    this.events = const [],
 
     /// 是否正在載入歷史事件
-    @Default(false) bool isLoadingHistory,
+    this.isLoadingHistory = false,
 
     /// 是否還有更早的歷史事件可載入
-    @Default(false) bool hasMore,
+    this.hasMore = false,
 
     /// 是否處於自動捲動模式（使用者未手動上捲）
-    @Default(true) bool isAutoScrollEnabled,
+    this.isAutoScrollEnabled = true,
 
     /// 錯誤訊息（載入失敗時）
-    String? errorMessage,
-  }) = _ConversationState;
+    this.errorMessage,
+  });
+
+  final String? sessionId;
+  final List<SessionEvent> events;
+  final bool isLoadingHistory;
+  final bool hasMore;
+  final bool isAutoScrollEnabled;
+  final String? errorMessage;
+
+  /// 約束：sessionId 和 errorMessage 為 nullable，使用 sentinel 區分
+  /// 「未傳入」（保留原值）和「明確傳入 null」（設為 null）
+  ConversationState copyWith({
+    Object? sessionId = _sentinel,
+    List<SessionEvent>? events,
+    bool? isLoadingHistory,
+    bool? hasMore,
+    bool? isAutoScrollEnabled,
+    Object? errorMessage = _sentinel,
+  }) {
+    return ConversationState(
+      sessionId:
+          sessionId == _sentinel ? this.sessionId : sessionId as String?,
+      events: events ?? this.events,
+      isLoadingHistory: isLoadingHistory ?? this.isLoadingHistory,
+      hasMore: hasMore ?? this.hasMore,
+      isAutoScrollEnabled: isAutoScrollEnabled ?? this.isAutoScrollEnabled,
+      errorMessage: errorMessage == _sentinel
+          ? this.errorMessage
+          : errorMessage as String?,
+    );
+  }
+
+  @override
+  List<Object?> get props => [
+        sessionId,
+        events,
+        isLoadingHistory,
+        hasMore,
+        isAutoScrollEnabled,
+        errorMessage,
+      ];
 }
 
 /// 需求：管理 session 對話狀態，消費 WebSocket 訊息

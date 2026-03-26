@@ -1,26 +1,40 @@
 import 'dart:async';
 
 import 'package:ccsession/core/models/server_message.dart';
+import 'package:equatable/equatable.dart';
 import 'package:flutter/foundation.dart';
 import 'package:ccsession/core/models/session_info.dart';
 import 'package:ccsession/core/websocket/websocket_provider.dart';
-import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
-part 'session_list_notifier.freezed.dart';
 part 'session_list_notifier.g.dart';
 
 /// 需求：Session List Sidebar 的完整 UI 狀態
-/// 約束：不可變（freezed），包含列表和選擇狀態
-@freezed
-abstract class SessionListState with _$SessionListState {
-  const factory SessionListState({
+/// 約束：不可變（Equatable），包含列表和選擇狀態
+class SessionListState extends Equatable {
+  const SessionListState({
     /// 完整 session 列表（來自 WebSocket session_list 訊息）
-    @Default([]) List<SessionInfo> sessions,
+    this.sessions = const [],
 
     /// 當前選中的 session ID（null 表示未選擇）
+    this.selectedSessionId,
+  });
+
+  final List<SessionInfo> sessions;
+  final String? selectedSessionId;
+
+  SessionListState copyWith({
+    List<SessionInfo>? sessions,
     String? selectedSessionId,
-  }) = _SessionListState;
+  }) {
+    return SessionListState(
+      sessions: sessions ?? this.sessions,
+      selectedSessionId: selectedSessionId ?? this.selectedSessionId,
+    );
+  }
+
+  @override
+  List<Object?> get props => [sessions, selectedSessionId];
 }
 
 /// 需求：管理 session 列表狀態，消費 WebSocket 訊息
