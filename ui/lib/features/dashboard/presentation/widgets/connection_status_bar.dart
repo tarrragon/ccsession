@@ -1,3 +1,4 @@
+import 'package:ccsession/core/constants/conversation_constants.dart';
 import 'package:ccsession/core/models/connection_state.dart';
 import 'package:ccsession/core/websocket/websocket_provider.dart';
 import 'package:ccsession/features/dashboard/presentation/dashboard_constants.dart';
@@ -45,7 +46,7 @@ class ConnectionStatusBar extends ConsumerWidget {
       WsConnectionState.connected => Colors.green,
       WsConnectionState.connecting => Colors.amber,
       WsConnectionState.reconnecting => Colors.amber,
-      WsConnectionState.disconnected => Colors.red,
+      WsConnectionState.disconnected => ConversationConstants.errorColor,
     };
   }
 

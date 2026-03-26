@@ -1,3 +1,4 @@
+import 'package:ccsession/core/constants/conversation_constants.dart';
 import 'package:ccsession/core/constants/search_constants.dart';
 import 'package:ccsession/core/models/session_event.dart';
 import 'package:ccsession/features/conversation/presentation/widgets/search_highlight_utils.dart';
@@ -21,7 +22,7 @@ class ThinkingBubble extends StatelessWidget {
     final theme = Theme.of(context);
 
     return Container(
-      margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+      margin: ConversationConstants.bubbleMargin,
       decoration: BoxDecoration(
         border: Border.all(color: theme.colorScheme.outline.withValues(alpha: 0.5)),
         borderRadius: BorderRadius.circular(8),
@@ -36,7 +37,7 @@ class ThinkingBubble extends StatelessWidget {
         ),
         children: [
           Padding(
-            padding: const EdgeInsets.all(12),
+            padding: ConversationConstants.bubbleContentPadding,
             child: _buildThinkingContent(),
           ),
         ],

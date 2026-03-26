@@ -1,5 +1,6 @@
-import 'package:ccsession/core/models/session_event.dart';
+import 'package:ccsession/core/constants/conversation_constants.dart';
 import 'package:ccsession/core/constants/search_constants.dart';
+import 'package:ccsession/core/models/session_event.dart';
 import 'package:ccsession/features/conversation/presentation/widgets/search_highlight_utils.dart';
 import 'package:flutter/material.dart';
 
@@ -23,7 +24,7 @@ class ToolUseBubble extends StatelessWidget {
     final toolInput = event.content.toolInput;
 
     return Container(
-      margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+      margin: ConversationConstants.bubbleMargin,
       decoration: BoxDecoration(
         border: Border.all(color: theme.colorScheme.outline),
         borderRadius: BorderRadius.circular(8),
@@ -33,7 +34,7 @@ class ToolUseBubble extends StatelessWidget {
         children: [
           if (toolInput != null)
             Padding(
-              padding: const EdgeInsets.all(12),
+              padding: ConversationConstants.bubbleContentPadding,
               child: Text(toolInput.toString()),
             ),
         ],
@@ -44,9 +45,9 @@ class ToolUseBubble extends StatelessWidget {
   Widget _buildToolNameTitle(String toolName, ThemeData theme) {
     final ranges = filterRangesByField(highlightRanges, SearchConstants.fieldToolName);
     if (ranges == null || ranges.isEmpty) {
-      return Text(toolName, style: const TextStyle(fontFamily: 'monospace'));
+      return Text(toolName, style: ConversationConstants.monospaceStyle);
     }
-    const baseStyle = TextStyle(fontFamily: 'monospace');
+    const baseStyle = ConversationConstants.monospaceStyle;
     return RichText(
       text: TextSpan(
         children: buildHighlightedSpans(toolName, ranges, baseStyle),

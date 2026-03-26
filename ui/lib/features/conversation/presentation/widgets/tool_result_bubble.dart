@@ -24,7 +24,7 @@ class ToolResultBubble extends StatelessWidget {
         isError ? ConversationConstants.errorColor : Theme.of(context).colorScheme.outline;
 
     return Container(
-      margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+      margin: ConversationConstants.bubbleMargin,
       decoration: BoxDecoration(
         border: Border.all(color: borderColor),
         borderRadius: BorderRadius.circular(8),
@@ -32,14 +32,13 @@ class ToolResultBubble extends StatelessWidget {
       child: ExpansionTile(
         title: Text(
           isError ? 'Error' : 'Result',
-          style: TextStyle(
-            fontFamily: 'monospace',
+          style: ConversationConstants.monospaceStyle.copyWith(
             color: isError ? ConversationConstants.errorColor : null,
           ),
         ),
         children: [
           Padding(
-            padding: const EdgeInsets.all(12),
+            padding: ConversationConstants.bubbleContentPadding,
             child: _buildOutputContent(),
           ),
         ],
@@ -52,10 +51,10 @@ class ToolResultBubble extends StatelessWidget {
     if (ranges == null || ranges.isEmpty) {
       return Text(
         event.content.output,
-        style: const TextStyle(fontFamily: 'monospace'),
+        style: ConversationConstants.monospaceStyle,
       );
     }
-    const baseStyle = TextStyle(fontFamily: 'monospace');
+    const baseStyle = ConversationConstants.monospaceStyle;
     return RichText(
       text: TextSpan(
         children: buildHighlightedSpans(event.content.output, ranges, baseStyle),

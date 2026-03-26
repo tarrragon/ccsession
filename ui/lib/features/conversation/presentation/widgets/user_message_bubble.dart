@@ -1,5 +1,6 @@
-import 'package:ccsession/core/models/session_event.dart';
+import 'package:ccsession/core/constants/conversation_constants.dart';
 import 'package:ccsession/core/constants/search_constants.dart';
+import 'package:ccsession/core/models/session_event.dart';
 import 'package:ccsession/features/conversation/presentation/widgets/search_highlight_utils.dart';
 import 'package:flutter/material.dart';
 
@@ -22,8 +23,8 @@ class UserMessageBubble extends StatelessWidget {
     return Align(
       alignment: Alignment.centerRight,
       child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-        padding: const EdgeInsets.all(12),
+        margin: ConversationConstants.bubbleMargin,
+        padding: ConversationConstants.bubbleContentPadding,
         decoration: BoxDecoration(
           color: theme.colorScheme.primary.withValues(alpha: 0.15),
           borderRadius: BorderRadius.circular(12),
