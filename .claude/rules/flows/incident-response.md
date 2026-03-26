@@ -21,6 +21,7 @@ Skip-gate 防護機制的核心流程。
 | 編譯錯誤 | "compile error", "編譯錯誤", "build failed" |
 | 執行時錯誤 | "runtime error", "exception", "crash" |
 | 用戶回報問題 | "bug", "問題", "不正常", "出錯" |
+| 代理人環境問題 | "prompt too long", "context", "token limit" |
 
 ---
 
@@ -36,6 +37,7 @@ Skip-gate 防護機制的核心流程。
 | 執行時錯誤 | 環境問題 | system-engineer |
 | 執行時錯誤 | 資料問題 | data-administrator |
 | 執行時錯誤 | 程式錯誤 | parsley-flutter-developer |
+| 代理人環境 | context 耗盡（prompt too long） | PM 重新拆分子任務（縮小範圍後重新派發） |
 | 效能問題 | - | ginger-performance-tuner |
 | 安全問題 | - | security-reviewer |
 
@@ -123,5 +125,5 @@ CLI 或內部工具報錯時，**禁止假設歸因**，必須依序：查語法
 
 ---
 
-**Last Updated**: 2026-03-11
-**Version**: 3.4.0 - 操作指引提取至 references/incident-response-details.md（W35-001.7）
+**Last Updated**: 2026-03-26
+**Version**: 3.5.0 - 派發對應表新增 context 耗盡子分類和代理人環境問題觸發條件（0.2.0-W5-011）
