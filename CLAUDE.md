@@ -57,9 +57,16 @@ Claude Code 的所有對話紀錄以 JSONL 格式即時寫入 `~/.claude/` 目�
 | Flutter/Dart（前端） | [FLUTTER.md](./.claude/project-templates/FLUTTER.md) |
 | Go（後端） | 待建立 |
 
-### 通用規範
+### 規則載入機制
 
-以下規範由 `.claude/rules/` 自動載入（7 檔），適用於所有語言。通用品質基線（`quality-common.md`）、流程品質基線（`quality-baseline.md`）、認知負擔（`cognitive-load.md`）、語言約束（`language-constraints.md`）。PM 流程規則在 `.claude/pm-rules/`，語言專屬規則在 `.claude/references/`。
+> **Claude Code 平台行為**：啟動時自動載入 `CLAUDE.md` + `.claude/rules/**/*.md`。其他目錄（`pm-rules/`、`references/`、`agents/` 等）**不會**自動載入，必須由代理人主動 Read。
+
+| 目錄 | 載入方式 | 內容 | 對象 |
+|------|---------|------|------|
+| `.claude/rules/` | 自動載入（平台行為） | 通用品質規則（7 檔） | 所有角色 |
+| `.claude/pm-rules/` | PM 按需讀取 | 流程調度、決策樹、TDD 流程 | PM 主線程 |
+| `.claude/references/` | 代理人按需讀取 | 語言品質規則、工具規範 | 對應代理人 |
+| `.claude/agents/` | 派發時讀取 | 代理人定義 | PM 派發 |
 
 ---
 

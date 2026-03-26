@@ -2,8 +2,10 @@
 
 本目錄包含專案的**通用規則**（所有角色自動載入）。只放「不管你是誰都必須知道」的規則。
 
+> **平台機制**：Claude Code 啟動時自動載入 `CLAUDE.md` + `.claude/rules/**/*.md`，這是平台硬編碼行為。其他 `.claude/` 子目錄（pm-rules/、references/、agents/ 等）不會自動載入，必須由代理人主動 Read。
+>
 > **設計原則**：自動載入 = always-built-in。語言專屬、流程調度、工具規範不屬於這裡。
-> **PM 規則**：`.claude/pm-rules/`（按需載入）
+> **PM 規則**：`.claude/pm-rules/`（PM 按需讀取）
 > **語言規則**：`.claude/references/quality-{lang}.md`（代理人按需讀取）
 
 ---
