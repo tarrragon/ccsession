@@ -172,11 +172,17 @@ ticket create --version 0.31.0 --wave 4 --action "實作" --target "XXX"
 **常用範例**：
 
 ```bash
-# 建立根任務
-ticket create --version 0.2.0 --wave 2 --action "實作" --target "HTTP Handler" --type IMP
+# 建立根任務（必須提供 decision-tree 三參數）
+ticket create --version 0.2.0 --wave 2 --action "實作" --target "HTTP Handler" --type IMP \
+  --decision-tree-entry "第五層:TDD" \
+  --decision-tree-decision "Phase 3b 完成後建立重構 Ticket" \
+  --decision-tree-rationale "quality-baseline-rule-5"
 
-# 建立子任務（--parent 自動產生子序號，不需指定 --seq）
+# 建立子任務（--parent 自動產生子序號，可省略 decision-tree 參數）
 ticket create --parent "0.2.0-W2-001" --action "實作" --target "事件融合層"
+
+# DOC 類型（可省略 decision-tree 參數）
+ticket create --version 0.2.0 --wave 2 --action "撰寫" --target "工作日誌" --type DOC
 
 # 多值參數格式
 #   --acceptance：多次指定或用 | 分隔
