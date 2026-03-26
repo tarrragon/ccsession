@@ -55,6 +55,45 @@ void main() {
       );
     });
 
+    // TC-SEARCH-68
+    test('overlapping ranges：後者被跳過，不產生錯誤', () {
+      final spans = buildHighlightedSpans(
+        'Hello world',
+        [
+          (start: 0, end: 7, isCurrent: false, field: 'text'),
+          (start: 5, end: 11, isCurrent: false, field: 'text'),
+        ],
+        baseStyle,
+      );
+
+      // 第一個 range [0,7) 正常高亮，第二個 [5,11) 與之重疊應被跳過
+      // 剩餘 text[7:] = "orld" 以 baseStyle 呈現
+      expect(spans, hasLength(2));
+      expect(spans[0].text, 'Hello w');
+      expect(
+        spans[0].style?.backgroundColor,
+        SearchConstants.highlightColor,
+      );
+      expect(spans[1].text, 'orld');
+      expect(spans[1].style, baseStyle);
+    });
+
+    // TC-SEARCH-69
+    test('完全包含的 range 被跳過', () {
+      final spans = buildHighlightedSpans(
+        'abcdefghij',
+        [
+          (start: 0, end: 8, isCurrent: false, field: 'text'),
+          (start: 2, end: 5, isCurrent: true, field: 'text'),
+        ],
+        baseStyle,
+      );
+
+      // [0,8) 高亮，[2,5) 完全被包含 → 跳過
+      expect(spans, hasLength(2));
+      expect(spans[0].text, 'abcdefgh');
+      expect(spans[1].text, 'ij');
+    });
     // TC-SEARCH-63
     test('多重高亮：普通 + 當前聚焦', () {
       final spans = buildHighlightedSpans(
