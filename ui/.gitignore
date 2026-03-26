@@ -1,0 +1,3 @@
+# Generated files (build_runner / freezed / json_serializable)
+*.freezed.dart
+*.g.dart

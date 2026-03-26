@@ -1,6 +1,8 @@
 package main
 
 import (
+	"errors"
+	"sort"
 	"sync"
 	"time"
 )
@@ -11,8 +13,12 @@ import (
 // 並發安全：使用 sync.RWMutex 保護所有欄位存取。
 //   - 讀取操作（Get, List）使用 RLock
 //   - 寫入操作（Upsert, UpdateStatus）使用 Lock
+// errSessionNotFound is returned when a session is not found in the registry.
+var errSessionNotFound = errors.New("session not found")
+
 type SessionRegistry struct {
 	sessions map[string]*SessionInfo
+	history  map[string][]*SessionEvent
 	mu       sync.RWMutex
 	now      func() time.Time // 時間提供者，便於測試注入
 }
@@ -25,6 +31,7 @@ func NewSessionRegistry(timeProvider func() time.Time) *SessionRegistry {
 	}
 	return &SessionRegistry{
 		sessions: make(map[string]*SessionInfo),
+		history:  make(map[string][]*SessionEvent),
 		now:      timeProvider,
 	}
 }
@@ -83,8 +90,6 @@ func (r *SessionRegistry) UpsertFromSessionEvent(event SessionEvent) {
 		// 否則重新計算狀態
 		session.Status = r.computeStatus(session, now)
 	}
-
-	r.sessions[event.SessionID] = session
 }
 
 // UpsertFromHookEvent 依據 HTTP Hook 事件更新 SessionInfo。
@@ -168,10 +173,6 @@ func (r *SessionRegistry) UpsertFromHookEvent(event HookEvent) {
 		// 未知 Hook 事件類型，忽略
 		return
 	}
-
-	if exists {
-		r.sessions[event.SessionID] = session
-	}
 }
 
 // Get 查詢單一 session，若不存在返回 nil。
@@ -240,6 +241,11 @@ func (r *SessionRegistry) computeStatus(session *SessionInfo, now time.Time) Ses
 		return SessionStatusActive // 預設狀態
 	}
 
+	// completed 是終態，不可被時間計算覆蓋
+	if session.Status == SessionStatusCompleted {
+		return SessionStatusCompleted
+	}
+
 	elapsed := now.Sub(session.LastEventAt)
 
 	switch {
@@ -257,13 +263,71 @@ func truncateString(s string, maxLen int) string {
 	if len(s) <= maxLen {
 		return s
 	}
-	// 簡單截斷（不考慮 UTF-8 字符邊界）
-	// 若需完整 UTF-8 支援，可使用 []rune 轉換
+	// 使用 []rune 截斷，確保 UTF-8 字元邊界安全。
+	// 先做 byte 長度快速路徑避免不必要的 rune 轉換。
 	runes := []rune(s)
 	if len(runes) <= maxLen {
 		return s
 	}
 	return string(runes[:maxLen])
+}
+
+// AppendEvent appends a SessionEvent to the history for the given session.
+func (r *SessionRegistry) AppendEvent(sessionID string, event SessionEvent) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	copied := event
+	r.history[sessionID] = append(r.history[sessionID], &copied)
+}
+
+// GetHistory returns paginated history events for the given session.
+// Events are returned in ascending timestamp order.
+// If before is zero, all events are considered (latest limit events).
+// Returns errSessionNotFound if the session does not exist.
+func (r *SessionRegistry) GetHistory(sessionID string, limit int, before time.Time) ([]*SessionEvent, bool, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	if _, exists := r.sessions[sessionID]; !exists {
+		return nil, false, errSessionNotFound
+	}
+
+	events := r.history[sessionID]
+	if len(events) == 0 {
+		return []*SessionEvent{}, false, nil
+	}
+
+	// Filter by before if non-zero
+	filtered := events
+	if !before.IsZero() {
+		filtered = make([]*SessionEvent, 0)
+		for _, e := range events {
+			if e.Timestamp.Before(before) {
+				filtered = append(filtered, e)
+			}
+		}
+	}
+
+	// Sort by timestamp ascending
+	sort.Slice(filtered, func(i, j int) bool {
+		return filtered[i].Timestamp.Before(filtered[j].Timestamp)
+	})
+
+	hasMore := len(filtered) > limit
+	if len(filtered) > limit {
+		// Return the latest `limit` events
+		filtered = filtered[len(filtered)-limit:]
+	}
+
+	// Deep copy
+	result := make([]*SessionEvent, len(filtered))
+	for i, e := range filtered {
+		copied := *e
+		result[i] = &copied
+	}
+
+	return result, hasMore, nil
 }
 
 // copySessionInfo 返回 SessionInfo 的深度複製。
