@@ -76,22 +76,10 @@ func NewHooksHandler(eventCh chan<- HookEvent) http.HandlerFunc {
 	}
 }
 
-// isKnownEventType checks if the event type is recognized in v0.2
+// isKnownEventType checks if the event type is recognized in v0.2.
+// 使用集中定義的 KnownHookEventTypes，新增事件類型只需在 hooks_constants.go 中添加。
 func isKnownEventType(eventType string) bool {
-	knownTypes := []string{
-		HookEventSubagentStart,
-		HookEventSubagentStop,
-		HookEventTaskCompleted,
-		HookEventTeammateIdle,
-	}
-
-	for _, knownType := range knownTypes {
-		if eventType == knownType {
-			return true
-		}
-	}
-
-	return false
+	return KnownHookEventTypes[eventType]
 }
 
 // writeErrorResponse writes a JSON error response
