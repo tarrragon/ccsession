@@ -39,26 +39,16 @@ class ToolResultBubble extends StatelessWidget {
         children: [
           Padding(
             padding: ConversationConstants.bubbleContentPadding,
-            child: _buildOutputContent(),
+            child: buildHighlightableText(
+              text: event.content.output,
+              field: SearchConstants.fieldOutput,
+              baseStyle: ConversationConstants.monospaceStyle,
+              highlightRanges: highlightRanges,
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildOutputContent() {
-    final ranges = filterRangesByField(highlightRanges, SearchConstants.fieldOutput);
-    if (ranges == null || ranges.isEmpty) {
-      return Text(
-        event.content.output,
-        style: ConversationConstants.monospaceStyle,
-      );
-    }
-    const baseStyle = ConversationConstants.monospaceStyle;
-    return RichText(
-      text: TextSpan(
-        children: buildHighlightedSpans(event.content.output, ranges, baseStyle),
-      ),
-    );
-  }
 }

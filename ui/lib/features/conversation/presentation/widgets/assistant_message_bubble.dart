@@ -29,22 +29,11 @@ class AssistantMessageBubble extends StatelessWidget {
           color: theme.colorScheme.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(12),
         ),
-        child: _buildTextContent(theme),
-      ),
-    );
-  }
-
-  Widget _buildTextContent(ThemeData theme) {
-    final ranges = filterRangesByField(highlightRanges, SearchConstants.fieldText);
-    if (ranges == null || ranges.isEmpty) {
-      return Text(event.content.text);
-    }
-    return RichText(
-      text: TextSpan(
-        children: buildHighlightedSpans(
-          event.content.text,
-          ranges,
-          theme.textTheme.bodyMedium ?? const TextStyle(),
+        child: buildHighlightableText(
+          text: event.content.text,
+          field: SearchConstants.fieldText,
+          baseStyle: theme.textTheme.bodyMedium ?? const TextStyle(),
+          highlightRanges: highlightRanges,
         ),
       ),
     );

@@ -30,7 +30,12 @@ class ToolUseBubble extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
       ),
       child: ExpansionTile(
-        title: _buildToolNameTitle(toolName, theme),
+        title: buildHighlightableText(
+          text: toolName,
+          field: SearchConstants.fieldToolName,
+          baseStyle: ConversationConstants.monospaceStyle,
+          highlightRanges: highlightRanges,
+        ),
         children: [
           if (toolInput != null)
             Padding(
@@ -42,16 +47,4 @@ class ToolUseBubble extends StatelessWidget {
     );
   }
 
-  Widget _buildToolNameTitle(String toolName, ThemeData theme) {
-    final ranges = filterRangesByField(highlightRanges, SearchConstants.fieldToolName);
-    if (ranges == null || ranges.isEmpty) {
-      return Text(toolName, style: ConversationConstants.monospaceStyle);
-    }
-    const baseStyle = ConversationConstants.monospaceStyle;
-    return RichText(
-      text: TextSpan(
-        children: buildHighlightedSpans(toolName, ranges, baseStyle),
-      ),
-    );
-  }
 }

@@ -55,3 +55,22 @@ List<TextSpan> buildHighlightedSpans(
 
   return spans;
 }
+
+/// 需求：統一 Bubble 高亮文字建構邏輯（0.2.0-W3-026 DRY）
+/// 約束：filterRangesByField + null check + Text/RichText 分支為共用模式
+Widget buildHighlightableText({
+  required String text,
+  required String field,
+  required TextStyle baseStyle,
+  List<HighlightRange>? highlightRanges,
+}) {
+  final ranges = filterRangesByField(highlightRanges, field);
+  if (ranges == null || ranges.isEmpty) {
+    return Text(text, style: baseStyle);
+  }
+  return RichText(
+    text: TextSpan(
+      children: buildHighlightedSpans(text, ranges, baseStyle),
+    ),
+  );
+}
