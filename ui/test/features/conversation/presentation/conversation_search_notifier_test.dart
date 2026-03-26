@@ -52,13 +52,13 @@ void main() {
     });
 
     Future<void> initNotifier() async {
-      container.listen(conversationNotifierProvider, (_, __) {});
-      container.listen(conversationSearchNotifierProvider, (_, __) {});
+      container.listen(conversationNotifierProvider(0), (_, __) {});
+      container.listen(conversationSearchNotifierProvider(0), (_, __) {});
       await _pump();
     }
 
     Future<void> loadEventsIntoSession(List<dynamic> events) async {
-      container.read(conversationNotifierProvider.notifier).loadSession('session-1');
+      container.read(conversationNotifierProvider(0).notifier).loadSession('session-1');
       await _pump();
       final sessionEvents = events.map((e) {
         if (e is String) return createUserEvent(e, sessionId: 'session-1');
@@ -72,12 +72,12 @@ void main() {
     }
 
     ConversationSearchState getSearchState() {
-      return container.read(conversationSearchNotifierProvider);
+      return container.read(conversationSearchNotifierProvider(0));
     }
 
     Future<void> updateQueryAndWait(String query) async {
       container
-          .read(conversationSearchNotifierProvider.notifier)
+          .read(conversationSearchNotifierProvider(0).notifier)
           .updateQuery(query);
       // Wait for debounce (300ms) + margin
       await Future<void>.delayed(const Duration(milliseconds: 350));
@@ -90,7 +90,7 @@ void main() {
       // 前置驗證
       expect(getSearchState().isSearchVisible, isFalse);
 
-      container.read(conversationSearchNotifierProvider.notifier).openSearch();
+      container.read(conversationSearchNotifierProvider(0).notifier).openSearch();
 
       expect(getSearchState().isSearchVisible, isTrue);
       expect(getSearchState().query, isEmpty);
@@ -106,14 +106,14 @@ void main() {
         createAssistantEvent('no error here', sessionId: 'session-1'),
       ]);
 
-      container.read(conversationSearchNotifierProvider.notifier).openSearch();
+      container.read(conversationSearchNotifierProvider(0).notifier).openSearch();
       await updateQueryAndWait('error');
 
       // 前置驗證
       expect(getSearchState().isSearchVisible, isTrue);
       expect(getSearchState().matches, isNotEmpty);
 
-      container.read(conversationSearchNotifierProvider.notifier).closeSearch();
+      container.read(conversationSearchNotifierProvider(0).notifier).closeSearch();
 
       expect(getSearchState().isSearchVisible, isFalse);
       expect(getSearchState().query, isEmpty);
@@ -130,7 +130,7 @@ void main() {
         createUserEvent('ok', sessionId: 'session-1'),
       ]);
 
-      container.read(conversationSearchNotifierProvider.notifier).openSearch();
+      container.read(conversationSearchNotifierProvider(0).notifier).openSearch();
       await updateQueryAndWait('error');
 
       final state = getSearchState();
@@ -149,7 +149,7 @@ void main() {
         createUserEvent('error', sessionId: 'session-1'),
       ]);
 
-      container.read(conversationSearchNotifierProvider.notifier).openSearch();
+      container.read(conversationSearchNotifierProvider(0).notifier).openSearch();
       await updateQueryAndWait('error');
 
       expect(getSearchState().matches.length, equals(3));
@@ -163,7 +163,7 @@ void main() {
         createAssistantEvent('world', sessionId: 'session-1'),
       ]);
 
-      container.read(conversationSearchNotifierProvider.notifier).openSearch();
+      container.read(conversationSearchNotifierProvider(0).notifier).openSearch();
       await updateQueryAndWait('xyz');
 
       final state = getSearchState();
@@ -179,7 +179,7 @@ void main() {
         createUserEvent('hello error', sessionId: 'session-1'),
       ]);
 
-      container.read(conversationSearchNotifierProvider.notifier).openSearch();
+      container.read(conversationSearchNotifierProvider(0).notifier).openSearch();
       await updateQueryAndWait('error');
 
       // 前置驗證
@@ -202,13 +202,13 @@ void main() {
         );
         addTearDown(localContainer.dispose);
 
-        localContainer.listen(conversationNotifierProvider, (_, __) {});
-        localContainer.listen(conversationSearchNotifierProvider, (_, __) {});
+        localContainer.listen(conversationNotifierProvider(0), (_, __) {});
+        localContainer.listen(conversationSearchNotifierProvider(0), (_, __) {});
         async.elapse(const Duration(milliseconds: 50));
 
         // Load events
         localContainer
-            .read(conversationNotifierProvider.notifier)
+            .read(conversationNotifierProvider(0).notifier)
             .loadSession('session-1');
         async.elapse(const Duration(milliseconds: 50));
 
@@ -219,24 +219,24 @@ void main() {
         async.elapse(const Duration(milliseconds: 50));
 
         localContainer
-            .read(conversationSearchNotifierProvider.notifier)
+            .read(conversationSearchNotifierProvider(0).notifier)
             .openSearch();
 
         // Rapid calls < 300ms apart
         localContainer
-            .read(conversationSearchNotifierProvider.notifier)
+            .read(conversationSearchNotifierProvider(0).notifier)
             .updateQuery('e');
         async.elapse(const Duration(milliseconds: 100));
         localContainer
-            .read(conversationSearchNotifierProvider.notifier)
+            .read(conversationSearchNotifierProvider(0).notifier)
             .updateQuery('er');
         async.elapse(const Duration(milliseconds: 100));
         localContainer
-            .read(conversationSearchNotifierProvider.notifier)
+            .read(conversationSearchNotifierProvider(0).notifier)
             .updateQuery('err');
         async.elapse(const Duration(milliseconds: 400));
 
-        final state = localContainer.read(conversationSearchNotifierProvider);
+        final state = localContainer.read(conversationSearchNotifierProvider(0));
         // "err" matches in "error err e" at positions 0 and 6
         expect(state.query, equals('err'));
         expect(state.matches.length, equals(2));
@@ -250,7 +250,7 @@ void main() {
         createUserEvent('error in error handling', sessionId: 'session-1'),
       ]);
 
-      container.read(conversationSearchNotifierProvider.notifier).openSearch();
+      container.read(conversationSearchNotifierProvider(0).notifier).openSearch();
       await updateQueryAndWait('error');
 
       final state = getSearchState();
@@ -268,7 +268,7 @@ void main() {
         createToolUseEvent('Read', sessionId: 'session-1'),
       ]);
 
-      container.read(conversationSearchNotifierProvider.notifier).openSearch();
+      container.read(conversationSearchNotifierProvider(0).notifier).openSearch();
       await updateQueryAndWait('Read');
 
       final state = getSearchState();
@@ -286,7 +286,7 @@ void main() {
         ),
       ]);
 
-      container.read(conversationSearchNotifierProvider.notifier).openSearch();
+      container.read(conversationSearchNotifierProvider(0).notifier).openSearch();
       await updateQueryAndWait('main.dart');
 
       final state = getSearchState();
@@ -301,14 +301,14 @@ void main() {
         createUserEvent('a a a a a', sessionId: 'session-1'),
       ]);
 
-      container.read(conversationSearchNotifierProvider.notifier).openSearch();
+      container.read(conversationSearchNotifierProvider(0).notifier).openSearch();
       await updateQueryAndWait('a');
 
       // 前置驗證
       expect(getSearchState().currentMatchIndex, equals(0));
       expect(getSearchState().matches.length, equals(5));
 
-      container.read(conversationSearchNotifierProvider.notifier).nextMatch();
+      container.read(conversationSearchNotifierProvider(0).notifier).nextMatch();
 
       expect(getSearchState().currentMatchIndex, equals(1));
     });
@@ -320,18 +320,18 @@ void main() {
         createUserEvent('a a a a a', sessionId: 'session-1'),
       ]);
 
-      container.read(conversationSearchNotifierProvider.notifier).openSearch();
+      container.read(conversationSearchNotifierProvider(0).notifier).openSearch();
       await updateQueryAndWait('a');
 
       // Navigate to last
       for (var i = 0; i < 4; i++) {
-        container.read(conversationSearchNotifierProvider.notifier).nextMatch();
+        container.read(conversationSearchNotifierProvider(0).notifier).nextMatch();
       }
 
       // 前置驗證
       expect(getSearchState().currentMatchIndex, equals(4));
 
-      container.read(conversationSearchNotifierProvider.notifier).nextMatch();
+      container.read(conversationSearchNotifierProvider(0).notifier).nextMatch();
 
       expect(getSearchState().currentMatchIndex, equals(0));
     });
@@ -344,14 +344,14 @@ void main() {
         createUserEvent('a', sessionId: 'session-1'),
       ]);
 
-      container.read(conversationSearchNotifierProvider.notifier).openSearch();
+      container.read(conversationSearchNotifierProvider(0).notifier).openSearch();
       await updateQueryAndWait('a');
 
       // 前置驗證
       expect(getSearchState().currentMatchIndex, equals(0));
 
       container
-          .read(conversationSearchNotifierProvider.notifier)
+          .read(conversationSearchNotifierProvider(0).notifier)
           .previousMatch();
 
       expect(
@@ -368,16 +368,16 @@ void main() {
         createUserEvent('a', sessionId: 'session-1'),
       ]);
 
-      container.read(conversationSearchNotifierProvider.notifier).openSearch();
+      container.read(conversationSearchNotifierProvider(0).notifier).openSearch();
       await updateQueryAndWait('a');
 
       // Navigate to index 2
-      container.read(conversationSearchNotifierProvider.notifier).nextMatch();
-      container.read(conversationSearchNotifierProvider.notifier).nextMatch();
+      container.read(conversationSearchNotifierProvider(0).notifier).nextMatch();
+      container.read(conversationSearchNotifierProvider(0).notifier).nextMatch();
       expect(getSearchState().currentMatchIndex, equals(2));
 
       container
-          .read(conversationSearchNotifierProvider.notifier)
+          .read(conversationSearchNotifierProvider(0).notifier)
           .previousMatch();
 
       expect(getSearchState().currentMatchIndex, equals(1));
@@ -388,17 +388,17 @@ void main() {
         () async {
       await initNotifier();
 
-      container.read(conversationSearchNotifierProvider.notifier).openSearch();
+      container.read(conversationSearchNotifierProvider(0).notifier).openSearch();
 
       // 前置驗證
       expect(getSearchState().matches, isEmpty);
       expect(getSearchState().currentMatchIndex, equals(-1));
 
-      container.read(conversationSearchNotifierProvider.notifier).nextMatch();
+      container.read(conversationSearchNotifierProvider(0).notifier).nextMatch();
       expect(getSearchState().currentMatchIndex, equals(-1));
 
       container
-          .read(conversationSearchNotifierProvider.notifier)
+          .read(conversationSearchNotifierProvider(0).notifier)
           .previousMatch();
       expect(getSearchState().currentMatchIndex, equals(-1));
     });
@@ -411,7 +411,7 @@ void main() {
         createAssistantEvent('test two', sessionId: 'session-1'),
       ]);
 
-      container.read(conversationSearchNotifierProvider.notifier).openSearch();
+      container.read(conversationSearchNotifierProvider(0).notifier).openSearch();
       await updateQueryAndWait('test');
 
       // 前置驗證
@@ -434,7 +434,7 @@ void main() {
         createUserEvent('hello', sessionId: 'session-1'),
       ]);
 
-      container.read(conversationSearchNotifierProvider.notifier).openSearch();
+      container.read(conversationSearchNotifierProvider(0).notifier).openSearch();
       await updateQueryAndWait('hello');
 
       // 前置驗證
@@ -442,7 +442,7 @@ void main() {
       expect(getSearchState().matches, isNotEmpty);
 
       // Simulate session switch by leaving session (clears events)
-      container.read(conversationNotifierProvider.notifier).leaveSession();
+      container.read(conversationNotifierProvider(0).notifier).leaveSession();
       await _pump();
 
       expect(getSearchState().isSearchVisible, isFalse);
@@ -504,7 +504,7 @@ void main() {
         createUserEvent('a', sessionId: 'session-1'),
       ]);
 
-      container.read(conversationSearchNotifierProvider.notifier).openSearch();
+      container.read(conversationSearchNotifierProvider(0).notifier).openSearch();
       await updateQueryAndWait('a');
 
       expect(getSearchState().matches.length, equals(2));

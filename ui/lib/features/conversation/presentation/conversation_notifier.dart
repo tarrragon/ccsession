@@ -88,7 +88,7 @@ class ConversationNotifier extends _$ConversationNotifier {
 
   /// 需求：初始建構，訂閱 WebSocket messageStream
   @override
-  Future<ConversationState> build() async {
+  Future<ConversationState> build(int panelIndex) async {
     final service = ref.read(webSocketServiceProvider);
 
     _subscription?.cancel();

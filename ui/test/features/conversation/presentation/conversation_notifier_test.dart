@@ -46,7 +46,7 @@ void main() {
     });
 
     Future<void> initNotifier() async {
-      container.listen(conversationNotifierProvider, (_, __) {});
+      container.listen(conversationNotifierProvider(0), (_, __) {});
       await _pump();
     }
 
@@ -57,7 +57,7 @@ void main() {
 
     ConversationState getState() {
       return container
-          .read(conversationNotifierProvider)
+          .read(conversationNotifierProvider(0))
           .requireValue;
     }
 
@@ -66,7 +66,7 @@ void main() {
       await initNotifier();
       expect(getState().events, isEmpty);
 
-      container.read(conversationNotifierProvider.notifier).loadSession('session-1');
+      container.read(conversationNotifierProvider(0).notifier).loadSession('session-1');
       await _pump();
       expect(getState().isLoadingHistory, isTrue);
 
@@ -90,7 +90,7 @@ void main() {
     test('handles empty session history', () async {
       await initNotifier();
 
-      container.read(conversationNotifierProvider.notifier).loadSession('empty-session');
+      container.read(conversationNotifierProvider(0).notifier).loadSession('empty-session');
       await sendMessage(
         createSessionHistoryMessage('empty-session', []),
       );
@@ -106,7 +106,7 @@ void main() {
     test('sets hasMore when more history available', () async {
       await initNotifier();
 
-      container.read(conversationNotifierProvider.notifier).loadSession('session-1');
+      container.read(conversationNotifierProvider(0).notifier).loadSession('session-1');
       final events = List.generate(
         100,
         (i) => createUserEvent('msg $i', sessionId: 'session-1'),
@@ -124,7 +124,7 @@ void main() {
     test('prepends older events on loadMoreHistory', () async {
       await initNotifier();
 
-      container.read(conversationNotifierProvider.notifier).loadSession('session-1');
+      container.read(conversationNotifierProvider(0).notifier).loadSession('session-1');
       final initialEvents = [
         createUserEvent('msg-3', sessionId: 'session-1'),
         createUserEvent('msg-4', sessionId: 'session-1'),
@@ -136,7 +136,7 @@ void main() {
       expect(getState().events.length, 3);
       expect(getState().hasMore, isTrue);
 
-      container.read(conversationNotifierProvider.notifier).loadMoreHistory();
+      container.read(conversationNotifierProvider(0).notifier).loadMoreHistory();
       await _pump();
 
       final olderEvents = [
@@ -158,7 +158,7 @@ void main() {
     test('ignores loadMoreHistory when hasMore is false', () async {
       await initNotifier();
 
-      container.read(conversationNotifierProvider.notifier).loadSession('session-1');
+      container.read(conversationNotifierProvider(0).notifier).loadSession('session-1');
       await sendMessage(
         createSessionHistoryMessage('session-1', [createUserEvent('a', sessionId: 'session-1')]),
       );
@@ -169,7 +169,7 @@ void main() {
       when(() => mockService.messageStream)
           .thenAnswer((_) => messageController.stream);
 
-      container.read(conversationNotifierProvider.notifier).loadMoreHistory();
+      container.read(conversationNotifierProvider(0).notifier).loadMoreHistory();
       await _pump();
 
       verifyNever(() => mockService.requestSessionHistory(
@@ -183,14 +183,14 @@ void main() {
     test('ignores loadMoreHistory when already loading', () async {
       await initNotifier();
 
-      container.read(conversationNotifierProvider.notifier).loadSession('session-1');
+      container.read(conversationNotifierProvider(0).notifier).loadSession('session-1');
       final events = [createUserEvent('a', sessionId: 'session-1')];
       await sendMessage(
         createSessionHistoryMessage('session-1', events, hasMore: true),
       );
 
       // First loadMore
-      container.read(conversationNotifierProvider.notifier).loadMoreHistory();
+      container.read(conversationNotifierProvider(0).notifier).loadMoreHistory();
       await _pump();
       expect(getState().isLoadingHistory, isTrue);
 
@@ -199,7 +199,7 @@ void main() {
           .thenAnswer((_) => messageController.stream);
 
       // Second loadMore while still loading - should be ignored
-      container.read(conversationNotifierProvider.notifier).loadMoreHistory();
+      container.read(conversationNotifierProvider(0).notifier).loadMoreHistory();
       await _pump();
 
       verifyNever(() => mockService.requestSessionHistory(
@@ -213,7 +213,7 @@ void main() {
     test('appends matching session events', () async {
       await initNotifier();
 
-      container.read(conversationNotifierProvider.notifier).loadSession('session-1');
+      container.read(conversationNotifierProvider(0).notifier).loadSession('session-1');
       final events = [
         createUserEvent('hello', sessionId: 'session-1'),
         createAssistantEvent('hi', sessionId: 'session-1'),
@@ -236,7 +236,7 @@ void main() {
     test('ignores events from other sessions', () async {
       await initNotifier();
 
-      container.read(conversationNotifierProvider.notifier).loadSession('session-1');
+      container.read(conversationNotifierProvider(0).notifier).loadSession('session-1');
       final events = [
         createUserEvent('hello', sessionId: 'session-1'),
         createAssistantEvent('hi', sessionId: 'session-1'),
@@ -256,7 +256,7 @@ void main() {
     test('handles malformed session_event gracefully', () async {
       await initNotifier();
 
-      container.read(conversationNotifierProvider.notifier).loadSession('session-1');
+      container.read(conversationNotifierProvider(0).notifier).loadSession('session-1');
       final events = [
         createUserEvent('hello', sessionId: 'session-1'),
         createAssistantEvent('hi', sessionId: 'session-1'),
@@ -283,7 +283,7 @@ void main() {
     test('cleans up and reloads on session switch', () async {
       await initNotifier();
 
-      container.read(conversationNotifierProvider.notifier).loadSession('session-A');
+      container.read(conversationNotifierProvider(0).notifier).loadSession('session-A');
       final eventsA = [
         createUserEvent('a1', sessionId: 'session-A'),
         createAssistantEvent('a2', sessionId: 'session-A'),
@@ -294,7 +294,7 @@ void main() {
       );
       expect(getState().sessionId, 'session-A');
 
-      container.read(conversationNotifierProvider.notifier).loadSession('session-B');
+      container.read(conversationNotifierProvider(0).notifier).loadSession('session-B');
       verify(() => mockService.unsubscribeSession('session-A')).called(1);
 
       // Events should be cleared before new history arrives
@@ -316,14 +316,14 @@ void main() {
     test('ignores events from previous session after switch', () async {
       await initNotifier();
 
-      container.read(conversationNotifierProvider.notifier).loadSession('session-A');
+      container.read(conversationNotifierProvider(0).notifier).loadSession('session-A');
       await sendMessage(
         createSessionHistoryMessage('session-A', [
           createUserEvent('a', sessionId: 'session-A'),
         ]),
       );
 
-      container.read(conversationNotifierProvider.notifier).loadSession('session-B');
+      container.read(conversationNotifierProvider(0).notifier).loadSession('session-B');
       await sendMessage(
         createSessionHistoryMessage('session-B', [
           createUserEvent('b', sessionId: 'session-B'),
@@ -343,7 +343,7 @@ void main() {
     test('unsubscribes and clears state on leaveSession', () async {
       await initNotifier();
 
-      container.read(conversationNotifierProvider.notifier).loadSession('session-1');
+      container.read(conversationNotifierProvider(0).notifier).loadSession('session-1');
       await sendMessage(
         createSessionHistoryMessage('session-1', [
           createUserEvent('hello', sessionId: 'session-1'),
@@ -351,7 +351,7 @@ void main() {
       );
       expect(getState().sessionId, 'session-1');
 
-      container.read(conversationNotifierProvider.notifier).leaveSession();
+      container.read(conversationNotifierProvider(0).notifier).leaveSession();
       await _pump();
 
       verify(() => mockService.unsubscribeSession('session-1')).called(1);
@@ -364,11 +364,11 @@ void main() {
       await initNotifier();
       expect(getState().isAutoScrollEnabled, isTrue);
 
-      container.read(conversationNotifierProvider.notifier).setAutoScroll(false);
+      container.read(conversationNotifierProvider(0).notifier).setAutoScroll(false);
       await _pump();
       expect(getState().isAutoScrollEnabled, isFalse);
 
-      container.read(conversationNotifierProvider.notifier).setAutoScroll(true);
+      container.read(conversationNotifierProvider(0).notifier).setAutoScroll(true);
       await _pump();
       expect(getState().isAutoScrollEnabled, isTrue);
     });
@@ -377,7 +377,7 @@ void main() {
     test('sends correct requests on loadSession', () async {
       await initNotifier();
 
-      container.read(conversationNotifierProvider.notifier).loadSession('session-1');
+      container.read(conversationNotifierProvider(0).notifier).loadSession('session-1');
       await _pump();
 
       verify(() => mockService.requestSessionHistory('session-1')).called(1);
@@ -388,7 +388,7 @@ void main() {
     test('sets errorMessage on error response', () async {
       await initNotifier();
 
-      container.read(conversationNotifierProvider.notifier).loadSession('bad-session');
+      container.read(conversationNotifierProvider(0).notifier).loadSession('bad-session');
       await sendMessage(createErrorMessage('SESSION_NOT_FOUND'));
 
       final state = getState();

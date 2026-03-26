@@ -22,8 +22,8 @@ class ConversationSearchNotifier extends _$ConversationSearchNotifier {
   ConversationSearchState _currentSearch = const ConversationSearchState();
 
   @override
-  ConversationSearchState build() {
-    final asyncConversation = ref.watch(conversationNotifierProvider);
+  ConversationSearchState build(int panelIndex) {
+    final asyncConversation = ref.watch(conversationNotifierProvider(panelIndex));
     final conversationState = asyncConversation.valueOrNull;
 
     ref.onDispose(() {
@@ -113,7 +113,7 @@ class ConversationSearchNotifier extends _$ConversationSearchNotifier {
     }
 
     final conversationState =
-        ref.read(conversationNotifierProvider).valueOrNull;
+        ref.read(conversationNotifierProvider(panelIndex)).valueOrNull;
     final events = conversationState?.events ?? [];
     final allMatches = _collectMatches(events, _currentSearch.query);
 

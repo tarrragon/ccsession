@@ -8,7 +8,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 /// 約束：包含 TextField、匹配計數、上/下導航按鈕、關閉按鈕
 /// 維護：Enter=nextMatch, Shift+Enter=previousMatch, Escape=closeSearch
 class ConversationSearchBar extends ConsumerStatefulWidget {
-  const ConversationSearchBar({super.key});
+  const ConversationSearchBar({required this.panelIndex, super.key});
+
+  /// 需求：UC-004 面板索引，用於 family provider 區分
+  final int panelIndex;
 
   @override
   ConsumerState<ConversationSearchBar> createState() =>
@@ -31,7 +34,7 @@ class _ConversationSearchBarState
 
   @override
   Widget build(BuildContext context) {
-    final searchState = ref.watch(conversationSearchNotifierProvider);
+    final searchState = ref.watch(conversationSearchNotifierProvider(widget.panelIndex));
 
     if (!searchState.isSearchVisible) {
       return const SizedBox.shrink();
@@ -123,19 +126,19 @@ class _ConversationSearchBarState
   }
 
   void _onQueryChanged(String query) {
-    ref.read(conversationSearchNotifierProvider.notifier).updateQuery(query);
+    ref.read(conversationSearchNotifierProvider(widget.panelIndex).notifier).updateQuery(query);
   }
 
   void _onNextMatch() {
-    ref.read(conversationSearchNotifierProvider.notifier).nextMatch();
+    ref.read(conversationSearchNotifierProvider(widget.panelIndex).notifier).nextMatch();
   }
 
   void _onPreviousMatch() {
-    ref.read(conversationSearchNotifierProvider.notifier).previousMatch();
+    ref.read(conversationSearchNotifierProvider(widget.panelIndex).notifier).previousMatch();
   }
 
   void _onCloseSearch() {
     _controller.clear();
-    ref.read(conversationSearchNotifierProvider.notifier).closeSearch();
+    ref.read(conversationSearchNotifierProvider(widget.panelIndex).notifier).closeSearch();
   }
 }

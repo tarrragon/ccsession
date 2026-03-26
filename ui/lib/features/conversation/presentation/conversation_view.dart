@@ -12,15 +12,18 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 /// 約束：ConsumerWidget，整合搜尋列和鍵盤快捷鍵（0.2.0-W2-005.2）
 /// 維護：空狀態/錯誤提示文字待 l10n 後遷移至 ARB
 class ConversationView extends ConsumerWidget {
-  const ConversationView({super.key});
+  const ConversationView({required this.panelIndex, super.key});
+
+  /// 需求：UC-004 面板索引，用於 family provider 區分
+  final int panelIndex;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final asyncState = ref.watch(conversationNotifierProvider);
+    final asyncState = ref.watch(conversationNotifierProvider(panelIndex));
     return asyncState.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (error, _) => _buildErrorState(error.toString()),
-      data: (state) => _buildContentWithSearch(context, ref, state),
+      data: (state) => _buildContentWithSearch(context, ref, state, panelIndex),
     );
   }
 }
@@ -29,34 +32,36 @@ Widget _buildContentWithSearch(
   BuildContext context,
   WidgetRef ref,
   ConversationState state,
+  int panelIndex,
 ) {
   return CallbackShortcuts(
     bindings: <ShortcutActivator, VoidCallback>{
       const SingleActivator(LogicalKeyboardKey.keyF, control: true): () =>
-          _openSearch(ref),
+          _openSearch(ref, panelIndex),
       const SingleActivator(LogicalKeyboardKey.keyF, meta: true): () =>
-          _openSearch(ref),
+          _openSearch(ref, panelIndex),
     },
     child: Focus(
       autofocus: true,
       child: Column(
         children: [
-          const ConversationSearchBar(),
-          Expanded(child: _buildContent(context, ref, state)),
+          ConversationSearchBar(panelIndex: panelIndex),
+          Expanded(child: _buildContent(context, ref, state, panelIndex)),
         ],
       ),
     ),
   );
 }
 
-void _openSearch(WidgetRef ref) {
-  ref.read(conversationSearchNotifierProvider.notifier).openSearch();
+void _openSearch(WidgetRef ref, int panelIndex) {
+  ref.read(conversationSearchNotifierProvider(panelIndex).notifier).openSearch();
 }
 
 Widget _buildContent(
   BuildContext context,
   WidgetRef ref,
   ConversationState state,
+  int panelIndex,
 ) {
   if (state.isLoadingHistory && state.events.isEmpty) {
     return const Center(child: CircularProgressIndicator());
@@ -70,7 +75,7 @@ Widget _buildContent(
     return _buildEmptyState();
   }
 
-  return _buildMessageListWithFab(ref, state);
+  return _buildMessageListWithFab(ref, state, panelIndex);
 }
 
 Widget _buildEmptyState() {
@@ -89,10 +94,14 @@ Widget _buildErrorState(String message) {
   );
 }
 
-Widget _buildMessageListWithFab(WidgetRef ref, ConversationState state) {
+Widget _buildMessageListWithFab(
+  WidgetRef ref,
+  ConversationState state,
+  int panelIndex,
+) {
   return Stack(
     children: [
-      _buildMessageList(ref, state),
+      _buildMessageList(ref, state, panelIndex),
       if (!state.isAutoScrollEnabled)
         Positioned(
           right: 16,
@@ -100,7 +109,9 @@ Widget _buildMessageListWithFab(WidgetRef ref, ConversationState state) {
           child: FloatingActionButton.small(
             key: const Key('conversation_jump_to_latest'),
             onPressed: () {
-              ref.read(conversationNotifierProvider.notifier).setAutoScroll(true);
+              ref
+                  .read(conversationNotifierProvider(panelIndex).notifier)
+                  .setAutoScroll(true);
             },
             child: const Icon(Icons.arrow_downward),
           ),
@@ -109,16 +120,16 @@ Widget _buildMessageListWithFab(WidgetRef ref, ConversationState state) {
   );
 }
 
-Widget _buildMessageList(WidgetRef ref, ConversationState state) {
+Widget _buildMessageList(WidgetRef ref, ConversationState state, int panelIndex) {
   final hasLoadMore = state.hasMore;
   final itemCount = state.events.length + (hasLoadMore ? 1 : 0);
-  final searchState = ref.watch(conversationSearchNotifierProvider);
+  final searchState = ref.watch(conversationSearchNotifierProvider(panelIndex));
 
   return ListView.builder(
     itemCount: itemCount,
     itemBuilder: (context, index) {
       if (hasLoadMore && index == 0) {
-        return _buildLoadMoreButton(ref);
+        return _buildLoadMoreButton(ref, panelIndex);
       }
       final eventIndex = hasLoadMore ? index - 1 : index;
       final event = state.events[eventIndex];
@@ -158,13 +169,15 @@ List<HighlightRange>? _computeHighlightRanges(
       .toList();
 }
 
-Widget _buildLoadMoreButton(WidgetRef ref) {
+Widget _buildLoadMoreButton(WidgetRef ref, int panelIndex) {
   // TODO: i18n — 遷移至 ARB
   return Center(
     child: TextButton(
       key: const Key('conversation_load_more_button'),
       onPressed: () {
-        ref.read(conversationNotifierProvider.notifier).loadMoreHistory();
+        ref
+            .read(conversationNotifierProvider(panelIndex).notifier)
+            .loadMoreHistory();
       },
       child: const Text('Load earlier messages'),
     ),

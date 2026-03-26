@@ -5,9 +5,11 @@ import 'package:ccsession/core/websocket/websocket_provider.dart';
 import 'package:ccsession/features/conversation/presentation/conversation_notifier.dart';
 import 'package:ccsession/features/dashboard/presentation/dashboard_page.dart';
 import 'package:ccsession/features/session_list/presentation/session_list_notifier.dart';
+import 'package:ccsession/features/split_view/data/split_view_storage.dart';
+
+import '../../../features/split_view/helpers/fake_split_view_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:riverpod/riverpod.dart';
 
 /// Fake WebSocketService 用於測試
 class FakeWebSocketService implements WebSocketService {
@@ -75,7 +77,7 @@ class FakeConversationNotifier extends ConversationNotifier {
   final List<String> loadSessionCalls = [];
 
   @override
-  Future<ConversationState> build() async => _initialState;
+  Future<ConversationState> build(int panelIndex) async => _initialState;
 
   @override
   Future<void> loadSession(String sessionId) async {
@@ -118,10 +120,11 @@ Widget buildDashboardWithOverrides({
   return ProviderScope(
     overrides: [
       webSocketServiceProvider.overrideWithValue(FakeWebSocketService()),
+      splitViewStorageProvider.overrideWithValue(FakeSplitViewStorage()),
       sessionListNotifierProvider.overrideWith(
         () => FakeSessionListNotifier(mockSessionListState),
       ),
-      conversationNotifierProvider.overrideWith(
+      conversationNotifierProvider(0).overrideWith(
         () => FakeConversationNotifier(mockConversationState),
       ),
       connectionStateProvider.overrideWith(

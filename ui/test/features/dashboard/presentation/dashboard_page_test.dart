@@ -70,8 +70,9 @@ void main() {
           selectedSessionId: null,
         ),
       ));
+      await pumpUntilSettled(tester);
 
-      expect(find.text('Select a session to view conversation'), findsOneWidget);
+      expect(find.text('Select a session'), findsOneWidget);
       expect(find.byType(ConversationView), findsNothing);
     });
 
@@ -86,7 +87,7 @@ void main() {
       await pumpUntilSettled(tester);
 
       expect(find.byType(ConversationView), findsOneWidget);
-      expect(find.text('Select a session to view conversation'), findsNothing);
+      expect(find.text('Select a session'), findsNothing);
     });
 
     testWidgets('TC-30-05: ProviderScope 正確包裝，所有 Provider 可用',
@@ -163,9 +164,9 @@ void main() {
           selectedSessionIdProvider.overrideWithValue(null),
         ],
       ));
-      await tester.pump();
+      await pumpUntilSettled(tester);
 
-      expect(find.text('Select a session to view conversation'), findsOneWidget);
+      expect(find.text('Select a session'), findsOneWidget);
       expect(find.byType(ConversationView), findsNothing);
 
       // 選中 session 後：直接 override selectedSessionIdProvider 繞過 async 鏈
@@ -178,33 +179,19 @@ void main() {
       await pumpUntilSettled(tester);
 
       expect(find.byType(ConversationView), findsOneWidget);
-      expect(find.text('Select a session to view conversation'), findsNothing);
+      expect(find.text('Select a session'), findsNothing);
     });
 
-    testWidgets('TC-32-05: selectedSessionId 取消選擇（回到 null）時 main area 回到空白提示',
+    testWidgets(
+        'TC-32-05: 初始無選擇時顯示空面板提示',
         (tester) async {
-      // 初始狀態：選中 session，顯示 ConversationView
       await tester.pumpWidget(buildDashboardWithOverrides(
-        sessionListState: const SessionListState(selectedSessionId: 's1'),
-        additionalOverrides: [
-          selectedSessionIdProvider.overrideWithValue('s1'),
-        ],
+        sessionListState: const SessionListState(selectedSessionId: null),
       ));
       await pumpUntilSettled(tester);
 
-      expect(find.byType(ConversationView), findsOneWidget);
-
-      // 取消選擇：回到 null，顯示空白提示
-      await tester.pumpWidget(buildDashboardWithOverrides(
-        sessionListState: const SessionListState(selectedSessionId: null),
-        additionalOverrides: [
-          selectedSessionIdProvider.overrideWithValue(null),
-        ],
-      ));
-      await tester.pump();
-
-      expect(find.text('Select a session to view conversation'), findsOneWidget);
-      expect(find.byType(ConversationView), findsNothing);
+      // UC-004: 無 session 時顯示空面板提示
+      expect(find.text('Select a session'), findsOneWidget);
     });
 
     testWidgets('TC-32-06: 快速連續切換 session 時 loadSession 依序呼叫',

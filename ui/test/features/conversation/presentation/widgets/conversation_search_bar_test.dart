@@ -24,7 +24,7 @@ class FakeConversationSearchNotifier
   FakeConversationSearchNotifier(this._state);
 
   @override
-  ConversationSearchState build() => _state;
+  ConversationSearchState build(int panelIndex) => _state;
 
   @override
   void openSearch() {
@@ -81,13 +81,13 @@ void main() {
       return ProviderScope(
         overrides: [
           webSocketServiceProvider.overrideWithValue(mockService),
-          conversationSearchNotifierProvider.overrideWith(
+          conversationSearchNotifierProvider(0).overrideWith(
             () => fakeNotifier,
           ),
         ],
         child: const MaterialApp(
           home: Scaffold(
-            body: ConversationSearchBar(),
+            body: ConversationSearchBar(panelIndex: 0),
           ),
         ),
       );

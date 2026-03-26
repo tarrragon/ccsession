@@ -14,12 +14,12 @@ import '../helpers/test_conversation_factory.dart';
 Widget _buildWidget(ConversationState state) {
   return ProviderScope(
     overrides: [
-      conversationNotifierProvider.overrideWith(
+      conversationNotifierProvider(0).overrideWith(
         () => _FakeConversationNotifier(state),
       ),
     ],
     child: const MaterialApp(
-      home: Scaffold(body: ConversationView()),
+      home: Scaffold(body: ConversationView(panelIndex: 0)),
     ),
   );
 }
@@ -32,7 +32,7 @@ class _FakeConversationNotifier extends ConversationNotifier {
   bool loadMoreHistoryCalled = false;
 
   @override
-  Future<ConversationState> build() async => _fixedState;
+  Future<ConversationState> build(int panelIndex) async => _fixedState;
 
   @override
   void loadMoreHistory() {
