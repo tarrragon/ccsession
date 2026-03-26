@@ -34,6 +34,9 @@ List<TextSpan> buildHighlightedSpans(
   var cursor = 0;
 
   for (final range in sortedRanges) {
+    // 防禦：overlapping range 跳過（0.2.0-W3-028）
+    if (range.start < cursor) continue;
+
     if (cursor < range.start) {
       spans.add(TextSpan(text: text.substring(cursor, range.start), style: baseStyle));
     }
