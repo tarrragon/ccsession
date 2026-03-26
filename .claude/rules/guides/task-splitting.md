@@ -26,7 +26,9 @@
 | 4. 按 TDD 階段 | 完整功能開發 | 嚴格序列 Phase 1→4 |
 | 5. 批量修正 | Review/Audit 跨多檔案 | 拆分單元是**檔案**不是問題 |
 | 6. 檔案所有權 | 2+ ticket 預期並行 | 同 Wave 每檔最多一個 ticket 寫入 |
-| 7. 按測試群組 | Phase 3b 實作拆分 | 拆分單位是 **Phase 2 GWT scenario group**，非模組 |
+| 7. 按測試群組（SRP 導向） | Phase 3b 實作拆分 | 以 **SRP 功能職責** 為首要判斷，以 **Phase 2 GWT scenario group** 為拆分單位 |
+
+> **策略 7 核心原則**：拆分判斷的首要標準是「功能職責是否單一」（SRP），而非 context 預算或代理人能否處理。每個子任務應聚焦單一功能面，代理人只需讀取對應的 API 簽名 + 測試案例。測試群組間有依賴時，透過序列派發解決，不以依賴為由合併。
 
 > 各策略詳細說明和範例：.claude/references/task-splitting-strategies.md
 
@@ -105,5 +107,5 @@
 
 ---
 
-**Last Updated**: 2026-03-11
-**Version**: 4.1.0 - 新增拆分後組織方式指引（子任務 vs 獨立 Ticket 判斷，W36-003）
+**Last Updated**: 2026-03-26
+**Version**: 4.2.0 - 策略 7 從 context 預算導向改為 SRP 功能職責導向（0.2.0-W3-020）
