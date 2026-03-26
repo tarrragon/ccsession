@@ -26,6 +26,7 @@
 | 4. 按 TDD 階段 | 完整功能開發 | 嚴格序列 Phase 1→4 |
 | 5. 批量修正 | Review/Audit 跨多檔案 | 拆分單元是**檔案**不是問題 |
 | 6. 檔案所有權 | 2+ ticket 預期並行 | 同 Wave 每檔最多一個 ticket 寫入 |
+| 7. 按測試群組 | Phase 3b 實作拆分 | 拆分單位是 **Phase 2 GWT scenario group**，非模組 |
 
 > 各策略詳細說明和範例：.claude/references/task-splitting-strategies.md
 
@@ -76,6 +77,7 @@
                                     → 混合操作 → 策略 3
                                     → 新功能 → 策略 4
                                     → 批量修正 → 策略 5
+                                    → Phase 3b 實作 → 策略 7
                                     ↓
                               [強制] 檔案所有權驗證（策略 6）
                                     → 無衝突 → 建立 Ticket
