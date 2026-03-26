@@ -2,14 +2,7 @@
 
 本文件為所有語言共用的程式碼品質基線。
 
-> **語言專屬規則**（代理人按需讀取，不自動載入）：
-
-| 語言 | 規則檔位置 | 適用代理人 |
-|------|-----------|-----------|
-| Dart/Flutter | .claude/references/quality-dart.md | parsley-flutter-developer |
-| Go | .claude/references/quality-go.md | fennel-go-developer |
-| Python | .claude/references/quality-python.md | thyme-python-developer, basil-hook-architect |
-
+> **語言專屬規則**位於 `.claude/references/quality-{lang}.md`，代理人按需讀取，不自動載入。
 > 流程品質基線見 quality-baseline.md。重構代理人以本文件為評估基線。
 
 ---

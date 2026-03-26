@@ -52,8 +52,9 @@ Claude Code 的所有對話紀錄以 JSONL 格式即時寫入 `~/.claude/` 目�
 
 | 語言 | 規範位置 |
 |------|---------|
-| Flutter/Dart（前端） | [FLUTTER.md](./.claude/project-templates/FLUTTER.md) |
-| Go（後端） | 待建立 |
+| Flutter/Dart（前端） | `.claude/references/quality-dart.md` |
+| Go（後端） | `.claude/references/quality-go.md` |
+| Python（Hook/Skill） | `.claude/references/quality-python.md` |
 
 ---
 

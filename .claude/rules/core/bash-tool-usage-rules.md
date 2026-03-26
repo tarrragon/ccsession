@@ -133,7 +133,7 @@ Bash 工具輸出：
 - .claude/references/quality-python.md - Python 執行規則（類似規範）
 - .claude/error-patterns/implementation/IMP-008-bash-working-directory-pollution.md
 - .claude/error-patterns/implementation/IMP-009-taskoutput-confusion.md
-- CLAUDE.md - 專案開發規範（含 Flutter 測試執行規範）
+- CLAUDE.md - 專案開發規範（含語言特定的測試執行指令）
 
 ---
 
