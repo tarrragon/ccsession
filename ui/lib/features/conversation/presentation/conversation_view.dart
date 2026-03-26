@@ -1,10 +1,15 @@
 import 'package:ccsession/features/conversation/presentation/conversation_notifier.dart';
+import 'package:ccsession/features/conversation/presentation/conversation_search_notifier.dart';
+import 'package:ccsession/features/conversation/presentation/conversation_search_state.dart';
+import 'package:ccsession/features/conversation/presentation/widgets/conversation_search_bar.dart';
 import 'package:ccsession/features/conversation/presentation/widgets/message_bubble_factory.dart';
+import 'package:ccsession/features/conversation/presentation/widgets/search_highlight_utils.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// 需求：Session 對話內容 View（Phase 1 3.2）
-/// 約束：ConsumerWidget，從 conversationNotifierProvider 讀取狀態
+/// 約束：ConsumerWidget，整合搜尋列和鍵盤快捷鍵（0.2.0-W2-005.2）
 /// 維護：空狀態/錯誤提示文字待 l10n 後遷移至 ARB
 class ConversationView extends ConsumerWidget {
   const ConversationView({super.key});
@@ -15,9 +20,37 @@ class ConversationView extends ConsumerWidget {
     return asyncState.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (error, _) => _buildErrorState(error.toString()),
-      data: (state) => _buildContent(context, ref, state),
+      data: (state) => _buildContentWithSearch(context, ref, state),
     );
   }
+}
+
+Widget _buildContentWithSearch(
+  BuildContext context,
+  WidgetRef ref,
+  ConversationState state,
+) {
+  return CallbackShortcuts(
+    bindings: <ShortcutActivator, VoidCallback>{
+      const SingleActivator(LogicalKeyboardKey.keyF, control: true): () =>
+          _openSearch(ref),
+      const SingleActivator(LogicalKeyboardKey.keyF, meta: true): () =>
+          _openSearch(ref),
+    },
+    child: Focus(
+      autofocus: true,
+      child: Column(
+        children: [
+          const ConversationSearchBar(),
+          Expanded(child: _buildContent(context, ref, state)),
+        ],
+      ),
+    ),
+  );
+}
+
+void _openSearch(WidgetRef ref) {
+  ref.read(conversationSearchNotifierProvider.notifier).openSearch();
 }
 
 Widget _buildContent(
@@ -79,6 +112,7 @@ Widget _buildMessageListWithFab(WidgetRef ref, ConversationState state) {
 Widget _buildMessageList(WidgetRef ref, ConversationState state) {
   final hasLoadMore = state.hasMore;
   final itemCount = state.events.length + (hasLoadMore ? 1 : 0);
+  final searchState = ref.watch(conversationSearchNotifierProvider);
 
   return ListView.builder(
     itemCount: itemCount,
@@ -87,9 +121,40 @@ Widget _buildMessageList(WidgetRef ref, ConversationState state) {
         return _buildLoadMoreButton(ref);
       }
       final eventIndex = hasLoadMore ? index - 1 : index;
-      return MessageBubbleFactory.build(state.events[eventIndex]);
+      final event = state.events[eventIndex];
+      final highlightRanges = _computeHighlightRanges(
+        searchState,
+        eventIndex,
+      );
+      return MessageBubbleFactory.build(event, highlightRanges: highlightRanges);
     },
   );
+}
+
+/// 需求：計算特定 event 的高亮範圍（Phase 3a 4.8）
+/// 約束：篩選該 event 的匹配，標記 currentMatch 為 isCurrent
+List<HighlightRange>? _computeHighlightRanges(
+  ConversationSearchState searchState,
+  int eventIndex,
+) {
+  if (!searchState.isSearchVisible || searchState.matches.isEmpty) {
+    return null;
+  }
+
+  final matchesForEvent = searchState.matches
+      .where((match) => match.eventIndex == eventIndex)
+      .toList();
+
+  if (matchesForEvent.isEmpty) return null;
+
+  final currentMatch = searchState.currentMatch;
+  return matchesForEvent
+      .map((match) => (
+            start: match.startOffset,
+            end: match.endOffset,
+            isCurrent: match == currentMatch,
+          ))
+      .toList();
 }
 
 Widget _buildLoadMoreButton(WidgetRef ref) {
