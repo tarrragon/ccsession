@@ -1,1 +1,13 @@
+# Go build artifacts
 ccsession-monitor
+bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Go test artifacts
+*.test
+*.out
+*.prof

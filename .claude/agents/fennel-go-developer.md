@@ -432,6 +432,7 @@ grep -rn '"[A-Z]' server/ --include="*.go" | grep -v "_test.go" | grep -v "const
 5. **禁止直接 cd 進入 server/**：必須使用子 shell `(cd server && ...)`
 6. **禁止修改測試邏輯**：測試本身有問題升級 sage-test-architect
 7. **禁止跳過測試**：必須執行 `go test ./...` 確認 100% 通過
+8. **禁止遺留 build 產物**：`go build` 產生的二進位檔必須在測試後清理（`rm -f` 或使用 `go build -o /dev/null`），不可提交到版本控制
 
 ---
 
