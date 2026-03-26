@@ -6,27 +6,30 @@
 """
 Worktree 和分支檢查 Hook - PreToolUse Hook
 
-功能: 在 git push 或 git merge 前，自動掃描所有 worktree 和未合併分支。
-防護措施: 避免遺漏其他 session 在不同 worktree 或 feature branch 上的進度。
+功能: 在 git push/merge/cherry-pick 前，自動掃描所有 worktree 和未合併分支，
+      並在 merge/cherry-pick 前比對主倉庫 HEAD 是否指向預期的合併目標分支。
+防護措施: 避免遺漏其他 session 在不同 worktree 或 feature branch 上的進度，
+          以及避免合併到錯誤的分支。
 
-觸發時機: Bash 工具執行前，命令包含 "git push" 或 "git merge"
+觸發時機: Bash 工具執行前，命令包含 "git push"、"git merge" 或 "git cherry-pick"
 
 行為:
   1. 執行 git worktree list 掃描所有 worktree
   2. 對每個 worktree（排除主倉庫）執行 git status --short 檢查未提交變更
   3. 執行 git branch --no-merged main 檢查未合併分支
-  4. 有發現時：輸出 WARNING 到 stderr，列出所有未提交/未合併的詳情
-  5. 無發現時：靜默通過
-  6. 永遠 exit 0（不阻止操作，僅警告）
+  4. (merge/cherry-pick) 檢查主倉庫 HEAD 是否指向 main/master，不符時輸出 WARNING
+  5. 有發現時：輸出 WARNING 到 stderr，列出所有未提交/未合併的詳情
+  6. 無發現時：靜默通過
+  7. 永遠 exit 0（不阻止操作，僅警告）
 
 HOOK_METADATA (JSON):
 {
   "event_type": "PreToolUse",
   "matcher": "Bash",
   "timeout": 10000,
-  "description": "git push/merge 前檢查所有 worktree 和分支",
+  "description": "git push/merge/cherry-pick 前檢查 worktree、分支和目標分支",
   "dependencies": [],
-  "version": "1.0.0"
+  "version": "1.1.0"
 }
 """
 
@@ -63,6 +66,15 @@ BRANCH_PREFIX = "branch "
 
 # Git 命令超時（秒）
 GIT_COMMAND_TIMEOUT = 10
+
+# 預期的合併目標分支名稱
+EXPECTED_TARGET_BRANCHES = ("main", "master")
+
+# 目標分支比對警告訊息
+TARGET_BRANCH_WARNING_HEADER = "[WARNING] 主倉庫 HEAD 未指向預期的合併目標分支"
+TARGET_BRANCH_WARNING_CURRENT = "  當前分支: {current_branch}"
+TARGET_BRANCH_WARNING_EXPECTED = "  預期分支: main 或 master"
+TARGET_BRANCH_WARNING_SUGGESTION = "  建議執行: git checkout main"
 
 
 # ============================================================================
@@ -320,18 +332,59 @@ def extract_command(bash_command: str) -> str:
     return bash_command.strip().split()[0] if bash_command else ""
 
 
-def should_check_push_merge(bash_command: str) -> bool:
+def is_merge_or_cherry_pick(bash_command: str) -> bool:
     """
-    判斷是否應執行檢查
+    判斷命令是否為 git merge 或 git cherry-pick
 
     Args:
         bash_command: Bash 命令內容
 
     Returns:
-        是否應檢查
+        是否為 merge 或 cherry-pick 命令
     """
     cmd_lower = bash_command.lower()
-    return ("git push" in cmd_lower or "git merge" in cmd_lower)
+    return "git merge" in cmd_lower or "git cherry-pick" in cmd_lower
+
+
+def should_check_git_operation(bash_command: str) -> bool:
+    """
+    判斷是否應執行 worktree/分支檢查
+
+    Args:
+        bash_command: Bash 命令內容
+
+    Returns:
+        是否應檢查（push、merge 或 cherry-pick）
+    """
+    cmd_lower = bash_command.lower()
+    return ("git push" in cmd_lower or "git merge" in cmd_lower
+            or "git cherry-pick" in cmd_lower)
+
+
+def check_target_branch() -> Optional[str]:
+    """
+    檢查主倉庫 HEAD 是否指向預期的合併目標分支（main 或 master）
+
+    Returns:
+        不符時回傳警告訊息，符合時回傳 None
+    """
+    success, current_branch = run_git_command(["symbolic-ref", "--short", "HEAD"])
+    if not success:
+        # detached HEAD 或其他異常，不阻止
+        return None
+
+    if current_branch in EXPECTED_TARGET_BRANCHES:
+        return None
+
+    lines = [
+        TARGET_BRANCH_WARNING_HEADER,
+        "=" * 60,
+        TARGET_BRANCH_WARNING_CURRENT.format(current_branch=current_branch),
+        TARGET_BRANCH_WARNING_EXPECTED,
+        TARGET_BRANCH_WARNING_SUGGESTION,
+        "=" * 60,
+    ]
+    return "\n".join(lines)
 
 
 def main() -> int:
@@ -348,13 +401,20 @@ def main() -> int:
         return EXIT_SUCCESS
 
     # 判斷是否應執行檢查
-    if not should_check_push_merge(bash_command):
+    if not should_check_git_operation(bash_command):
         logger.debug(f"命令 '{bash_command}' 不需要 worktree 檢查，靜默通過")
         return EXIT_SUCCESS
 
-    logger.info(f"偵測到 push/merge 命令，執行 worktree 和分支檢查")
+    logger.info("偵測到 push/merge/cherry-pick 命令，執行 worktree 和分支檢查")
 
-    # 執行檢查
+    # 目標分支比對（僅 merge/cherry-pick，push 不需要）
+    if is_merge_or_cherry_pick(bash_command):
+        target_warning = check_target_branch()
+        if target_warning:
+            print(target_warning, file=sys.stderr)
+            logger.warning("主倉庫 HEAD 未指向預期的合併目標分支")
+
+    # 執行 worktree 和未合併分支檢查
     result = check_git_state()
 
     # 如果有發現，輸出警告
