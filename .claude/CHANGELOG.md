@@ -1,3 +1,190 @@
+## [1.4.0] - 2026-03-27
+
+### Summary
+refactor: 統一 Logger 靜態呼叫第二參數為物件格式; fix: 時間敏感測試、 ESLint toThrow 修復、 版本同步; docs: 新增 PC-029 並行代理人共用檔案衝突
+
+Changes: 1 refactor, 1 fix, 1 docs
+
+- refactor: 統一 Logger 靜態呼叫第二參數為物件格式
+- fix: 時間敏感測試、 ESLint toThrow 修復、 版本同步
+- docs: 新增 PC-029 並行代理人共用檔案衝突
+
+---
+
+## [1.3.0] - 2026-03-27
+
+### Summary
+feat: 新增 __pycache__ 到 .gitignore 必須規則檢查
+
+Changes: 1 feat
+
+- feat: 新增 __pycache__ 到 .gitignore 必須規則檢查
+
+---
+
+## [1.2.2] - 2026-03-27
+
+### Summary
+fix: 將 __pycache__ 加入 .gitignore 並從 git 追蹤移除; fix: 移除 FLUTTER.md pathspec 避免非 Flutter 專案執行失敗; chore: 同步遠端更新 — sync-push 增強與版本遞增至 1.2.1 (+1 more)
+
+Changes: 2 fix, 2 chore
+
+- fix: 將 __pycache__ 加入 .gitignore 並從 git 追蹤移除
+- fix: 移除 FLUTTER.md pathspec 避免非 Flutter 專案執行失敗
+- chore: 同步遠端更新 — sync-push 增強與版本遞增至 1.2.1
+- chore: 同步更新 .claude 配置至 並更新專案文件
+
+---
+
+## [1.2.1] - 2026-03-27
+
+### Summary
+fix: sync-push commit 訊息改用實際變更描述取代純計數統計
+
+Changes: 1 fix
+
+- fix: sync-push commit 訊息改用實際變更描述取代純計數統計
+
+---
+
+## [1.2.0] - 2026-03-27
+
+### Summary
+1 feat [minor bump suggested]
+
+---
+
+## [1.1.53] - 2026-03-27
+
+### Summary
+fix: 排除 handoff 暫時性交接資料夾
+
+---
+
+## [1.1.52] - 2026-03-27
+
+### Summary
+feat: Wave 5 重構完成 — Hook 配置更新、Ticket 文件同步
+
+---
+
+## [1.1.51] - 2026-03-26
+
+### Summary
+feat: 新增 Agent commit 驗證 Hook + Go build artifact 清理指引
+
+---
+
+## [1.1.50] - 2026-03-25
+
+### Summary
+feat(v0.1.2): Phase Contract 驗證 + Agent Registry + 檔案所有權 Hook + 82 Ticket 品質改善
+
+---
+
+## [1.1.49] - 2026-03-13
+
+### Summary
+release(v0.1.0): 同步 v0.1.0 版本發布配置 — 語言感知版本檢查、monorepo 警告降級
+
+---
+
+## [1.1.48] - 2026-03-13
+
+### Summary
+docs(0.1.0-W51-001): 標準化 complete 前主動勾選驗收條件流程
+
+---
+
+## [1.1.47] - 2026-03-12
+
+### Summary
+sync: W45-001 完成後同步 .claude 配置
+
+---
+
+## [1.1.46] - 2026-03-11
+
+### Summary
+sync: W34-W37 變更同步 — hook 重構、quality-common 分離、test_track_board 測試、error-pattern IMP-030
+
+---
+
+## [1.1.45] - 2026-03-10
+
+### Summary
+refactor: W28~W31 Hook DRY 重構 — hook_utils 共用函式、sentinel 統一、error-pattern 偵測修復
+
+---
+
+## [1.1.44] - 2026-03-09
+
+### Summary
+流程更新
+
+---
+
+## [1.1.43] - 2026-03-06
+
+### Summary
+docs: 新增 IMP-021 手動文字解析結構化格式錯誤模式
+
+---
+
+## [1.1.42] - 2026-03-06
+
+### Summary
+fix: 移除 handoff/archive/ 並加入 .gitignore
+
+---
+
+## [1.1.41] - 2026-03-06
+
+### Summary
+feat: 新增 CLI 失敗提醒 Hook (PC-005) + IMP-020 Hook 共存觸發碰撞模式
+
+---
+
+## [1.1.40] - 2026-03-06
+
+### Summary
+feat: prompt-submit-hook 否定詞過濾完整修復
+
+---
+
+
+## [1.1.39] - 2026-03-06
+
+### Summary
+fix: merge fix/prompt-submit-hook-negation - hook 否定語境誤觸發修正
+
+---
+
+
+## [1.1.38] - 2026-03-06
+
+### Summary
+fix: merge fix/prompt-submit-hook-status-syntax - 修正 hook 中的 --status 語法
+
+---
+
+
+## [1.1.37] - 2026-03-06
+
+### Summary
+fix: merge fix/ticket-list-multi-status - ticket --status 多值篩選
+
+---
+
+
+## [1.1.36] - 2026-03-06
+
+### Summary
+fix: merge fix/ticket-cross-version-warning - 跨版本任務遺漏防護
+
+---
+
+
 ## [1.1.35] - 2026-03-05
 
 ### Summary
