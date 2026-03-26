@@ -1,12 +1,19 @@
 import 'package:ccsession/core/models/session_event.dart';
+import 'package:ccsession/features/conversation/presentation/widgets/search_highlight_utils.dart';
 import 'package:flutter/material.dart';
 
 /// 需求：助手訊息 Bubble（Phase 1 3.3）
 /// 約束：靠左對齊，灰色系背景，顯示 event.content.text
+/// 維護：highlightRanges 由搜尋功能注入，無值時行為不變（0.2.0-W2-005）
 class AssistantMessageBubble extends StatelessWidget {
-  const AssistantMessageBubble({required this.event, super.key});
+  const AssistantMessageBubble({
+    required this.event,
+    this.highlightRanges,
+    super.key,
+  });
 
   final SessionEvent event;
+  final List<HighlightRange>? highlightRanges;
 
   @override
   Widget build(BuildContext context) {
@@ -20,7 +27,23 @@ class AssistantMessageBubble extends StatelessWidget {
           color: theme.colorScheme.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(12),
         ),
-        child: Text(event.content.text),
+        child: _buildTextContent(theme),
+      ),
+    );
+  }
+
+  Widget _buildTextContent(ThemeData theme) {
+    final ranges = highlightRanges;
+    if (ranges == null || ranges.isEmpty) {
+      return Text(event.content.text);
+    }
+    return RichText(
+      text: TextSpan(
+        children: buildHighlightedSpans(
+          event.content.text,
+          ranges,
+          theme.textTheme.bodyMedium ?? const TextStyle(),
+        ),
       ),
     );
   }
