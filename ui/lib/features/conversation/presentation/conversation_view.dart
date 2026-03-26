@@ -126,12 +126,13 @@ Widget _buildMessageList(WidgetRef ref, ConversationState state, int panelIndex)
   final searchState = ref.watch(conversationSearchNotifierProvider(panelIndex));
 
   return ListView.builder(
+    reverse: true,
     itemCount: itemCount,
     itemBuilder: (context, index) {
-      if (hasLoadMore && index == 0) {
+      if (hasLoadMore && index == itemCount - 1) {
         return _buildLoadMoreButton(ref, panelIndex);
       }
-      final eventIndex = hasLoadMore ? index - 1 : index;
+      final eventIndex = index;
       final event = state.events[eventIndex];
       final highlightRanges = _computeHighlightRanges(
         searchState,

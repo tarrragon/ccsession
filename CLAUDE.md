@@ -60,6 +60,29 @@ Claude Code 的所有對話紀錄以 JSONL 格式即時寫入 `~/.claude/` 目�
 
 ## 專案特定設定
 
+### 啟動應用
+
+```bash
+# 1. 啟動 Go Backend（監聽 localhost:8765）
+(cd server && go run .)
+
+# 2. 啟動 Flutter Frontend（另開終端）
+(cd ui && flutter run -d macos)    # macOS
+(cd ui && flutter run -d linux)    # Linux
+(cd ui && flutter run -d windows)  # Windows
+(cd ui && flutter run -d chrome)   # Web
+```
+
+> Backend 必須先啟動，Frontend 會自動連線 `ws://localhost:8765/ws`。
+
+### Smoke Test（版本發布前驗收）
+
+```bash
+./scripts/smoke-test.sh            # 完整驗收（編譯+測試+啟動）
+./scripts/smoke-test.sh --quick    # 快速檢查（編譯+啟動）
+./scripts/smoke-test.sh --skip-tests  # 跳過測試
+```
+
 ### 測試執行
 
 ```bash
@@ -85,5 +108,5 @@ Claude Code 的所有對話紀錄以 JSONL 格式即時寫入 `~/.claude/` 目�
 
 ---
 
-*最後更新: 2026-03-26*
-*版本: 2.0.0 - 通用框架規則移至 .claude/rules/README.md，本文件只保留專案特定資訊（0.2.0-W5-012.2）*
+*最後更新: 2026-03-27*
+*版本: 2.1.0 - 新增啟動應用和 Smoke Test 章節*

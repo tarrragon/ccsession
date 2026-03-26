@@ -22,6 +22,15 @@ const (
 	HintUnknownContent = "expected text, tool_use, thinking, or tool_result"
 )
 
+// conversationLineTypes defines top-level JSONL type values that contain
+// a message field worth parsing. Other types (progress, system, etc.)
+// are silently skipped.
+var conversationLineTypes = map[string]bool{
+	"human":       true,
+	"assistant":   true,
+	"tool_result": true,
+}
+
 // JSONL raw field keys
 const (
 	fieldUUID      = "uuid"
@@ -45,6 +54,11 @@ func ParseLine(line []byte, sessionID string, projectPath string) ([]SessionEven
 	var raw map[string]any
 	if err := json.Unmarshal(line, &raw); err != nil {
 		return nil, fmt.Errorf("invalid JSON: %w", err)
+	}
+
+	lineType, _ := raw[fieldType].(string)
+	if !conversationLineTypes[lineType] {
+		return nil, nil
 	}
 
 	messageID, _ := raw[fieldUUID].(string)
