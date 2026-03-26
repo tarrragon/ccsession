@@ -36,6 +36,17 @@ const (
 	LogUnknownAction      = "unknown client action"
 )
 
+// Main layer log messages
+const (
+	LogServerStarting       = "ccsession-monitor starting"
+	LogServerShutdownSignal = "shutdown signal received"
+	LogServerShutdownDone   = "server shutdown complete"
+	LogHooksRouteRegistered = "HTTP Hooks route registered"
+	LogHooksRouteDisabled   = "HTTP Hooks disabled, degraded handler registered"
+	LogFileWatcherStopped   = "file watcher stopped"
+	LogFileWatcherError     = "file watcher error"
+)
+
 // Shared utility messages
 const (
 	LogContextError = "context cancelled or cancelled with error"

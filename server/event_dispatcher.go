@@ -180,6 +180,7 @@ func (d *EventDispatcher) processSessionEvent(event SessionEvent) {
 
 	d.dispatchAfterUpdate(event.SessionID, d.now(), func() {
 		d.registry.UpsertFromSessionEvent(event)
+		d.registry.AppendEvent(event.SessionID, event)
 	})
 
 	logger.Info(LogJSONLEventProcessed,

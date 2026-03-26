@@ -19,3 +19,12 @@ const (
 	ProjectsDirName         = "projects"
 	JSONLExtension          = ".jsonl"
 )
+
+// Main server configuration
+const (
+	DefaultPort              = "8765"
+	DefaultClaudeHomeSubdir  = ".claude"
+	SessionEventChBufferSize = 256
+	HookEventChBufferSize    = 64
+	DispatchChBufferSize     = 256
+)
