@@ -137,7 +137,7 @@ List<ProcessedBook> processBooks(List<Book> books) {
 
 ### 5. 品質規範強制遵循
 
-> **統一品質標準**：所有品質規則定義在 @.claude/rules/core/implementation-quality.md
+> **統一品質標準**：所有品質規則定義在 @.claude/rules/core/quality-common.md
 >
 > parsley 必須遵循：第 1 節（通用規則）+ 第 2 節（Dart/Flutter 補充）+ 第 6.1 節 + 第 6.2 節
 
@@ -499,7 +499,7 @@ mcp__dart__dart_format
 錯誤：docs/work-logs/v0.1.0-execution-report.md
 ```
 
-> 命名後綴規範詳見：.claude/rules/core/ticket-id-conventions.md（第 2.1 節 TDD Phase 後綴）
+> 命名後綴規範詳見：.claude/references/ticket-id-conventions.md（第 2.1 節 TDD Phase 後綴）
 
 ### Step 5: 交接 Phase 4 重構代理人
 

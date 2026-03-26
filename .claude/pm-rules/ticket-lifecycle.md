@@ -156,7 +156,7 @@ acceptance-gate-hook 事後驗證（最後防線）
 - .claude/references/ticket-lifecycle-phases.md - 各階段詳細規則
 - .claude/skills/ticket/references/ticket-lifecycle-details.md - 格式和 Hook 技術細節
 - .claude/pm-rules/decision-tree.md - 主線程決策樹
-- .claude/rules/flows/incident-response.md - 事件回應流程
+- .claude/pm-rules/incident-response.md - 事件回應流程
 
 ---
 

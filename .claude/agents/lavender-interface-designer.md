@@ -215,7 +215,7 @@ Hook 系統自動處理基本的工作流程合規，你的職責專注於需要
 錯誤：docs/work-logs/v0.1.0-feature-design.md
 ```
 
-> 命名後綴規範詳見：.claude/rules/core/ticket-id-conventions.md（第 2.1 節 TDD Phase 後綴）
+> 命名後綴規範詳見：.claude/references/ticket-id-conventions.md（第 2.1 節 TDD Phase 後綴）
 
 ### TDD Phase 1 品質要求
 

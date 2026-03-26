@@ -220,7 +220,7 @@ Phase 1 中 lavender 如何使用 /spec 的完整流程，詳見 lavender 代理
 
 - .claude/skills/tdd/SKILL.md - TDD 流程工具（流程編排）
 - .claude/agents/lavender-interface-designer.md - Phase 1 設計代理人（/spec 的使用者）
-- .claude/rules/flows/tdd-flow.md - TDD 完整流程定義
+- .claude/pm-rules/tdd-flow.md - TDD 完整流程定義
 - references/spec-template-lite.md - Lite 模板（3 區段）
 - references/spec-template-full.md - Full 模板（6 區段）
 

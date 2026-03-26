@@ -168,7 +168,7 @@ You are an Acceptance Auditor - the mandatory verifier before any Ticket can be 
 ## 相關文件
 
 - .claude/references/acceptance-auditor-details.md - 各步驟詳細判定規則和報告格式範例
-- .claude/rules/flows/ticket-lifecycle.md - Ticket 生命週期
+- .claude/pm-rules/ticket-lifecycle.md - Ticket 生命週期
 - .claude/rules/core/quality-baseline.md - 品質基線
 
 ---

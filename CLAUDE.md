@@ -109,8 +109,8 @@ Ticket 建立後需通過 acceptance-auditor + system-analyst 並行審核（`cr
 
 錯誤發生時強制執行 `/pre-fix-eval` 並派發 incident-responder，禁止直接修復程式碼。
 
-> 完整生命週期、驗收流程、錯誤處理：`.claude/rules/flows/ticket-lifecycle.md`
-> 事件回應流程：`.claude/rules/flows/incident-response.md`
+> 完整生命週期、驗收流程、錯誤處理：`.claude/pm-rules/ticket-lifecycle.md`
+> 事件回應流程：`.claude/pm-rules/incident-response.md`
 
 ---
 
@@ -120,7 +120,7 @@ Ticket 建立後需通過 acceptance-auditor + system-analyst 並行審核（`cr
 
 **Hook 失敗可見性**：Hook 異常時必須同時寫入 stderr 和日誌檔，禁止靜默失敗（僅記錄到檔案而不通知用戶）。
 
-**Phase 4 豁免**：小型修改（<= 2 檔案）、DOC 類型、任務範圍單純時可簡化為單步驟（Phase 4b），詳見 `.claude/rules/flows/tdd-flow.md`。
+**Phase 4 豁免**：小型修改（<= 2 檔案）、DOC 類型、任務範圍單純時可簡化為單步驟（Phase 4b），詳見 `.claude/pm-rules/tdd-flow.md`。
 
 ### Skip-gate 防護機制
 
@@ -138,7 +138,7 @@ Ticket 建立後需通過 acceptance-auditor + system-analyst 並行審核（`cr
 
 新功能或架構變更時強制執行完整 TDD（Phase 0 SA 審查 → Phase 1 設計 → Phase 2 測試設計 → Phase 3a/3b 實作 → Phase 4a/4b/4c 重構）。Phase 3b 依語言派發不同代理人。
 
-小型修改、遷移任務等可豁免部分 Phase，詳見 `.claude/rules/flows/tdd-flow.md`。
+小型修改、遷移任務等可豁免部分 Phase，詳見 `.claude/pm-rules/tdd-flow.md`。
 
 ---
 

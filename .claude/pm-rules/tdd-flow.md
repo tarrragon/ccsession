@@ -217,7 +217,7 @@ PM 收到代理人回報後執行：
 | 需要跨階段修改 | 建立 Ticket → 完成當前階段後回到對應階段 |
 
 > 異常處理詳細流程和工作日誌模板：.claude/references/tdd-flow-details.md（異常處理章節）
-> 事件回應流程：.claude/rules/flows/incident-response.md
+> 事件回應流程：.claude/pm-rules/incident-response.md
 
 ---
 

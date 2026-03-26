@@ -104,7 +104,7 @@ pepper-test-implementer 在以下情況下**應該被觸發**：
 錯誤：docs/work-logs/v0.1.0-strategy.md
 ```
 
-> 命名後綴規範詳見：.claude/rules/core/ticket-id-conventions.md（第 2.1 節 TDD Phase 後綴）
+> 命名後綴規範詳見：.claude/references/ticket-id-conventions.md（第 2.1 節 TDD Phase 後綴）
 
 ---
 

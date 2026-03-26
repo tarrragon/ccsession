@@ -285,7 +285,7 @@ Skill 是預建的專用工具，優先於代理人派發。
 
 **Handoff 方向選擇（AskUserQuestion）**：當 handoff 有多個可能方向時，**必須**使用 AskUserQuestion 讓使用者選擇。
 
-> Ticket 生命週期：.claude/rules/flows/ticket-lifecycle.md
+> Ticket 生命週期：.claude/pm-rules/ticket-lifecycle.md
 > 並行派發規則：.claude/pm-rules/parallel-dispatch.md
 
 ---
@@ -303,7 +303,7 @@ Skill 是預建的專用工具，優先於代理人派發。
 | Phase 4b | cinnamon-refactor-owl（依 4a 報告執行） | Phase 4a 完成（或豁免時直接進入） |
 | Phase 4c | /parallel-evaluation A（多視角再審核） | Phase 4b 完成（標準流程） |
 
-> TDD 完整流程：.claude/rules/flows/tdd-flow.md
+> TDD 完整流程：.claude/pm-rules/tdd-flow.md
 
 > **Agent Registry 關係**（v0.1.2 規劃）：上方 TDD 階段代理人對應表是**決策規則**（本文件是決策引擎）。未來 Agent Registry（`.claude/agents/registry.yaml`）將作為**能力資料層**，提供機器可讀的代理人能力查詢和派發驗證，但不取代本文件的決策邏輯。架構分工：decision-tree（判斷需要什麼能力）→ registry（查詢誰有這個能力）→ Hook（驗證選定的 Agent 符合）。詳見：docs/work-logs/v0.1.1/tickets/0.1.1-W14-001-analysis.md（附錄：已確認設計決策）
 
@@ -323,8 +323,8 @@ Skill 是預建的專用工具，優先於代理人派發。
                                 → 建立 Ticket → 對應代理人修復
 ```
 
-> CLI 調查流程詳見：.claude/rules/flows/incident-response.md（CLI/工具失敗調查步驟）
-> 錯誤分類和派發對應表：.claude/rules/flows/incident-response.md
+> CLI 調查流程詳見：.claude/pm-rules/incident-response.md（CLI/工具失敗調查步驟）
+> 錯誤分類和派發對應表：.claude/pm-rules/incident-response.md
 
 ---
 
@@ -375,7 +375,7 @@ Step 4: ticket track complete <id>
 
 **下一步選擇（AskUserQuestion）**：有多個後續 Ticket 可選時，必須讓使用者選擇。
 
-> 驗收流程詳細規則：.claude/rules/flows/ticket-lifecycle.md（Complete 前主動勾選驗收條件章節）
+> 驗收流程詳細規則：.claude/pm-rules/ticket-lifecycle.md（Complete 前主動勾選驗收條件章節）
 
 ---
 
@@ -474,9 +474,9 @@ Level 5: TDD 階段代理人 + thyme-python-developer
 ## 相關文件
 
 - .claude/pm-rules/parallel-dispatch.md - 並行派發指南（場景表、安全檢查）
-- .claude/rules/flows/tdd-flow.md - TDD 流程
-- .claude/rules/flows/incident-response.md - 事件回應流程（錯誤分類表）
-- .claude/rules/flows/ticket-lifecycle.md - Ticket 生命週期（驗收流程）
+- .claude/pm-rules/tdd-flow.md - TDD 流程
+- .claude/pm-rules/incident-response.md - 事件回應流程（錯誤分類表）
+- .claude/pm-rules/ticket-lifecycle.md - Ticket 生命週期（驗收流程）
 - .claude/pm-rules/skip-gate.md - Skip-gate 防護
 - @.claude/pm-rules/askuserquestion-rules.md - AskUserQuestion 強制使用規則
 - .claude/references/decision-tree-checkpoint-details.md - 第八層 Checkpoint 詳細流程（情境 A/B/C/D、#11a/11b、Handoff 說明）

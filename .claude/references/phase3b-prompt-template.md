@@ -138,7 +138,7 @@ const MaxPageSize = 100
 
 ## 相關文件
 
-- .claude/rules/flows/tdd-flow.md - 3b 拆分評估（測試群組導向）
+- .claude/pm-rules/tdd-flow.md - 3b 拆分評估（測試群組導向）
 - .claude/rules/guides/task-splitting.md - 策略 7：按測試群組拆分
 - .claude/skills/spec/SKILL.md - /spec Skill（Phase 1 產出物品質工具）
 

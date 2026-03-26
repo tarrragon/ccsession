@@ -14,12 +14,20 @@
 
 ---
 
-## 2. 執行方式
+## 2. 執行方式（UV 優先，強制）
 
-- **必須**使用 UV 執行：`uv run pytest ...`、`uv run python script.py`
-- 禁止直接使用 `python3` 或 `pip`（除非 UV 不可用）
+> **核心原則**：所有 Python 執行優先使用 UV，確保版本一致性。
 
-> 詳細規則：.claude/rules/core/python-execution.md
+| 場景 | 正確做法 | 禁止做法 |
+|------|---------|---------|
+| 執行測試 | `uv run pytest ...` | `python3 -m pytest ...` |
+| 執行腳本 | `uv run python script.py` | `python3 script.py` |
+| 安裝套件 | `uv pip install ...` | `pip install ...` |
+| 執行模組 | `uv run python -m module` | `python3 -m module` |
+
+**Fallback 條件**（僅以下情況允許 `python3`）：UV 不可用、非專案目錄、系統級工具。使用時必須註明原因。
+
+**原因**：UV 根據 `pyproject.toml` 選擇正確 Python 版本，避免系統 Python 版本不匹配（如 3.9 不支援 PEP 604 `str | None`）。
 
 ---
 
@@ -116,9 +124,8 @@ Python 特有的處理方式：
 ## 相關文件
 
 - .claude/rules/core/quality-common.md - 通用品質基線
-- .claude/rules/core/python-execution.md - Python 執行規則
 
 ---
 
-**Last Updated**: 2026-03-08
-**Version**: 1.1.0 - 新增常數管理章節（parallel-evaluation 審核補充）
+**Last Updated**: 2026-03-26
+**Version**: 1.2.0 - 合併 python-execution.md 內容（0.2.0-W5-012.2 context 瘦身）

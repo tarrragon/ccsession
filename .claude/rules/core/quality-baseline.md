@@ -164,8 +164,8 @@
 ## 相關規則
 
 - .claude/pm-rules/skip-gate.md - Skip-gate 防護機制
-- .claude/rules/flows/tdd-flow.md - TDD 含 SA 前置審查流程
-- .claude/rules/flows/incident-response.md - 事件回應流程
+- .claude/pm-rules/tdd-flow.md - TDD 含 SA 前置審查流程
+- .claude/pm-rules/incident-response.md - 事件回應流程
 
 ---
 

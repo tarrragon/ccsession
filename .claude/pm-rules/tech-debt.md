@@ -138,7 +138,7 @@ original_version: {發現版本}
 
 - @.claude/agents/cinnamon-refactor-owl.md - Phase 4 代理人
 - @.claude/rules/core/quality-baseline.md - 品質基線
-- @.claude/rules/flows/ticket-lifecycle.md - Ticket 生命週期
+- @.claude/pm-rules/ticket-lifecycle.md - Ticket 生命週期
 
 ---
 

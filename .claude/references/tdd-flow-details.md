@@ -2,7 +2,7 @@
 
 本文件包含 TDD 流程的豁免規則詳細、各 Phase 描述、異常處理流程和工作日誌模板。
 
-> 精簡版（常駐載入）：.claude/rules/flows/tdd-flow.md
+> 精簡版（常駐載入）：.claude/pm-rules/tdd-flow.md
 
 ---
 
@@ -242,7 +242,7 @@ Phase 3b 測試失敗
 根據分析派發對應代理人
 ```
 
-> 詳細流程：.claude/rules/flows/incident-response.md
+> 詳細流程：.claude/pm-rules/incident-response.md
 
 ### 情況 2：SA 審查發現問題
 
@@ -275,7 +275,7 @@ Phase 3b 測試失敗
 
 ## 相關文件
 
-- .claude/rules/flows/tdd-flow.md - 精簡版（常駐）
+- .claude/pm-rules/tdd-flow.md - 精簡版（常駐）
 - .claude/rules/core/decision-tree.md - 主線程決策樹
 - .claude/rules/core/quality-baseline.md - 品質基線
 

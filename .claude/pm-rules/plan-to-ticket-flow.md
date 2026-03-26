@@ -96,8 +96,8 @@ Plan Mode 產出到 Atomic Ticket 的轉換流程。
 
 - .claude/references/plan-to-ticket-mapping-details.md - 映射規則、依賴分析、並行分組
 - .claude/references/plan-to-ticket-details.md - 驗證清單、報告格式
-- .claude/rules/flows/ticket-lifecycle.md - Ticket 生命週期
-- .claude/rules/flows/tdd-flow.md - TDD 流程
+- .claude/pm-rules/ticket-lifecycle.md - Ticket 生命週期
+- .claude/pm-rules/tdd-flow.md - TDD 流程
 - .claude/rules/core/cognitive-load.md - 認知負擔評估
 
 ---
