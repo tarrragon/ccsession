@@ -377,3 +377,144 @@ func TestEventDispatcher_StatusScan(t *testing.T) {
 		t.Error("expected status change event")
 	}
 }
+
+
+// TestEventDispatcher_Dedup_SemanticConsistency 驗證 JSONL 和 HTTP Hook 事件使用相同的去重鍵語義
+func TestEventDispatcher_Dedup_SemanticConsistency(t *testing.T) {
+	mockTime := time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)
+	timeProvider := func() time.Time { return mockTime }
+
+	registry := NewSessionRegistry(timeProvider)
+	sessionEvCh := make(chan SessionEvent, 10)
+	hookEvCh := make(chan HookEvent, 10)
+	outCh := make(chan DispatchedEvent, 10)
+
+	dispatcher := NewEventDispatcher(registry, sessionEvCh, hookEvCh, outCh, timeProvider)
+
+	// Scenario 1: HTTP SubagentStart 先到，建立 session 並設置 AgentID
+	httpStartEvent := HookEvent{
+		Type:      HookEventSubagentStart,
+		AgentID:   "agent-xyz",
+		AgentType: "rosemary",
+		SessionID: "sess-dedup-semantic-1",
+		Timestamp: mockTime.Format(time.RFC3339),
+	}
+	dispatcher.processHookEvent(httpStartEvent)
+	<-outCh // 消費事件
+
+	// Scenario 2: JSONL 事件後到，應該使用 registry 中的 AgentID (agent-xyz) 作為去重鍵
+	// 而不是 MessageID (msg-001)，確保與 HTTP 事件去重鍵一致
+	jsonlEvent := SessionEvent{
+		SessionID:    "sess-dedup-semantic-1",
+		ProjectPath:  "/path",
+		Type:         HookEventSubagentStart, // 相同的 type
+		Timestamp:    mockTime,
+		MessageID:    "msg-001", // 不同的 MessageID
+		ContentIndex: 0,
+		Content: EventContent{
+			Text: "assistant response",
+		},
+	}
+	dispatcher.processSessionEvent(jsonlEvent)
+
+	// 應該沒有新事件推送（JSONL 被去重，因為 AgentID 相同且在窗口內）
+	select {
+	case <-outCh:
+		t.Error("expected no event (JSONL should be deduplicated using AgentID, not MessageID)")
+	case <-time.After(100 * time.Millisecond):
+		// 預期：無事件（去重成功）
+	}
+}
+
+// TestEventDispatcher_Dedup_SessionNotExistsFallback 測試 session 不存在時的去重鍵回退行為
+// 此時 HTTP 和 JSONL 都應使用 SessionID 作為 agentID
+func TestEventDispatcher_Dedup_SessionNotExistsFallback(t *testing.T) {
+	mockTime := time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)
+	timeProvider := func() time.Time { return mockTime }
+
+	registry := NewSessionRegistry(timeProvider)
+	sessionEvCh := make(chan SessionEvent, 10)
+	hookEvCh := make(chan HookEvent, 10)
+	outCh := make(chan DispatchedEvent, 10)
+
+	dispatcher := NewEventDispatcher(registry, sessionEvCh, hookEvCh, outCh, timeProvider)
+
+	// 當 session 不存在時，HTTP 和 JSONL 都應使用 SessionID 作為 agentID
+	// 這確保了即使 AgentID 未設置，也能提供一致的去重鍵
+
+	// HTTP 事件先到，session 不存在，使用 SessionID 作為 agentID
+	httpEvent := HookEvent{
+		Type:      HookEventSubagentStart,
+		AgentID:   "", // AgentID 為空
+		AgentType: "parsley",
+		SessionID: "sess-fallback",
+		Timestamp: mockTime.Format(time.RFC3339),
+	}
+	dispatcher.processHookEvent(httpEvent)
+	<-outCh // 消費事件
+
+	// JSONL 事件後到，此時 session 仍未設置 AgentID（因為是空的）
+	// 兩個事件都應使用 SessionID 作為 agentID，因此應被去重
+	jsonlEvent := SessionEvent{
+		SessionID:    "sess-fallback",
+		ProjectPath:  "/path",
+		Type:         HookEventSubagentStart, // 相同的 type
+		Timestamp:    mockTime,
+		MessageID:    "msg-001",
+		ContentIndex: 0,
+		Content: EventContent{
+			Text: "response",
+		},
+	}
+	dispatcher.processSessionEvent(jsonlEvent)
+
+	// 應該沒有新事件推送（JSONL 被去重，兩者都用 SessionID 作為 agentID）
+	select {
+	case <-outCh:
+		t.Error("expected no event (should be deduplicated, both using SessionID as agentID)")
+	case <-time.After(100 * time.Millisecond):
+		// 預期：無事件（去重成功）
+	}
+}
+
+// TestEventDispatcher_Dedup_HTTPUsesAgentID 確認 HTTP Hook 事件使用 AgentID 去重（未改變）
+func TestEventDispatcher_Dedup_HTTPUsesAgentID(t *testing.T) {
+	mockTime := time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)
+	timeProvider := func() time.Time { return mockTime }
+
+	registry := NewSessionRegistry(timeProvider)
+	sessionEvCh := make(chan SessionEvent, 10)
+	hookEvCh := make(chan HookEvent, 10)
+	outCh := make(chan DispatchedEvent, 10)
+
+	dispatcher := NewEventDispatcher(registry, sessionEvCh, hookEvCh, outCh, timeProvider)
+
+	// 第一個 HTTP 事件
+	httpEvent1 := HookEvent{
+		Type:      HookEventSubagentStart,
+		AgentID:   "agent-abc",
+		AgentType: "parsley",
+		SessionID: "sess-http-dedup",
+		Timestamp: mockTime.Format(time.RFC3339),
+	}
+	dispatcher.processHookEvent(httpEvent1)
+	<-outCh // 消費事件
+
+	// 第二個相同 AgentID 的 HTTP 事件應被去重
+	httpEvent2 := HookEvent{
+		Type:      HookEventSubagentStart,
+		AgentID:   "agent-abc", // 相同 AgentID
+		AgentType: "parsley",
+		SessionID: "sess-http-dedup",
+		Timestamp: mockTime.Format(time.RFC3339),
+	}
+	dispatcher.processHookEvent(httpEvent2)
+
+	// 應該沒有新事件推送
+	select {
+	case <-outCh:
+		t.Error("expected no event (duplicate HTTP event should be deduplicated)")
+	case <-time.After(100 * time.Millisecond):
+		// 預期：無事件（去重成功）
+	}
+}
