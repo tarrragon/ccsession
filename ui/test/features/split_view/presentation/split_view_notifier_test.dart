@@ -388,6 +388,65 @@ void main() {
       expect(state.panels[1].sessionId, 'B');
     });
 
+    test('closePanel: grid2x2 active=3 close 0 preserves active panel',
+        () async {
+      await initWithState(const SplitViewState(
+        layoutMode: LayoutMode.grid2x2,
+        panels: [
+          PanelState(panelIndex: 0, sessionId: 'A'),
+          PanelState(panelIndex: 1, sessionId: 'B'),
+          PanelState(panelIndex: 2, sessionId: 'C'),
+          PanelState(panelIndex: 3, sessionId: 'D'),
+        ],
+      ));
+      getNotifier().setActivePanel(3);
+      getNotifier().closePanel(0);
+      final state = getState();
+      expect(state.layoutMode, LayoutMode.splitHorizontal);
+      expect(state.panels.length, 2);
+      final sessionIds = state.panels.map((p) => p.sessionId).toList();
+      expect(sessionIds, contains('D'));
+    });
+
+    test('closePanel: grid2x2 active=2 close 3 preserves active panel', () async {
+      await initWithState(const SplitViewState(
+        layoutMode: LayoutMode.grid2x2,
+        panels: [
+          PanelState(panelIndex: 0, sessionId: 'A'),
+          PanelState(panelIndex: 1, sessionId: 'B'),
+          PanelState(panelIndex: 2, sessionId: 'C'),
+          PanelState(panelIndex: 3, sessionId: 'D'),
+        ],
+      ));
+      getNotifier().setActivePanel(2);
+      getNotifier().closePanel(3);
+      final state = getState();
+      expect(state.layoutMode, LayoutMode.splitHorizontal);
+      expect(state.panels.length, 2);
+      expect(state.panels[0].sessionId, 'A');
+      expect(state.panels[1].sessionId, 'C');
+      expect(state.activePanelIndex, 1);
+    });
+
+    test('closePanel: grid2x2 active=0 close 1 keeps first 2', () async {
+      await initWithState(const SplitViewState(
+        layoutMode: LayoutMode.grid2x2,
+        panels: [
+          PanelState(panelIndex: 0, sessionId: 'A'),
+          PanelState(panelIndex: 1, sessionId: 'B'),
+          PanelState(panelIndex: 2, sessionId: 'C'),
+          PanelState(panelIndex: 3, sessionId: 'D'),
+        ],
+      ));
+      getNotifier().setActivePanel(0);
+      getNotifier().closePanel(1);
+      final state = getState();
+      expect(state.layoutMode, LayoutMode.splitHorizontal);
+      expect(state.panels.length, 2);
+      expect(state.panels[0].sessionId, 'A');
+      expect(state.panels[1].sessionId, 'C');
+    });
+
     // A-N33
     test('closePanel: clears maximizedPanelIndex', () async {
       await initWithState(const SplitViewState(

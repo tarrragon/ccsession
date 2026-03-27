@@ -94,7 +94,11 @@ class SplitViewNotifier extends _$SplitViewNotifier {
     if (current == null || current.panels.length <= 1) return;
     if (panelIndex < 0 || panelIndex >= current.panels.length) return;
 
-    final remaining = _adjustPanelsAfterClose(current.panels, panelIndex);
+    final remaining = _adjustPanelsAfterClose(
+      current.panels,
+      panelIndex,
+      current.activePanelIndex,
+    );
     final newMode = _determineLayoutAfterClose(remaining.length);
     final newPanels = _reindexPanels(remaining);
     final newActiveIndex = _adjustActiveIndexAfterClose(
@@ -141,13 +145,22 @@ class SplitViewNotifier extends _$SplitViewNotifier {
   }
 
   /// 需求：UC-004 關閉面板後調整面板列表
-  /// 約束：剩 3 面板時取前 2 個（grid2x2 降級場景 9）
+  /// 約束：剩 3 面板時降級為 2 個，優先保留 active panel
   List<PanelState> _adjustPanelsAfterClose(
     List<PanelState> panels,
     int closedIndex,
+    int activePanelIndex,
   ) {
     final remaining = panels.where((p) => p.panelIndex != closedIndex).toList();
-    return remaining.length > 2 ? remaining.take(2).toList() : remaining;
+    if (remaining.length <= 2) return remaining;
+
+    final activePanel = panels[activePanelIndex];
+    final activeInRemaining =
+        remaining.indexWhere((p) => p.panelIndex == activePanel.panelIndex);
+
+    if (activeInRemaining < 2) return remaining.take(2).toList();
+
+    return [remaining.first, remaining[activeInRemaining]];
   }
 
   /// 需求：UC-004 設定焦點面板
