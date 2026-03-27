@@ -37,10 +37,16 @@ abstract final class SearchConstants {
     vertical: barVerticalPadding,
   );
 
+  /// 搜尋輸入框內容水平內距
+  static const double inputContentHorizontalPadding = 8.0;
+
+  /// 搜尋輸入框內容垂直內距
+  static const double inputContentVerticalPadding = 8.0;
+
   /// 搜尋輸入框內容內距
   static const EdgeInsets inputContentPadding = EdgeInsets.symmetric(
-    horizontal: 8.0,
-    vertical: 8.0,
+    horizontal: inputContentHorizontalPadding,
+    vertical: inputContentVerticalPadding,
   );
 
   /// 搜尋列按鈕圖示大小
