@@ -489,6 +489,224 @@ func TestSessionRegistry_SummaryTruncation(t *testing.T) {
 	}
 }
 
+// TestSessionRegistry_SummaryOverwriteOnSecondUser 驗證第二個 user 事件覆蓋 Summary (A-1)
+func TestSessionRegistry_SummaryOverwriteOnSecondUser(t *testing.T) {
+	baseTime := time.Date(2026, 3, 27, 12, 0, 0, 0, time.UTC)
+	registry := NewSessionRegistry(func() time.Time { return baseTime })
+
+	registry.UpsertFromSessionEvent(SessionEvent{
+		SessionID: "overwrite-1",
+		Type:      EventTypeUser,
+		Timestamp: baseTime,
+		Content:   EventContent{Text: "First message"},
+	})
+
+	session, _ := registry.Get("overwrite-1")
+	if session.Summary != "First message" {
+		t.Errorf("expected Summary=%q, got %q", "First message", session.Summary)
+	}
+	if session.EventCount != 1 {
+		t.Errorf("expected EventCount=1, got %d", session.EventCount)
+	}
+
+	baseTime = baseTime.Add(time.Second)
+	registry.UpsertFromSessionEvent(SessionEvent{
+		SessionID: "overwrite-1",
+		Type:      EventTypeUser,
+		Timestamp: baseTime,
+		Content:   EventContent{Text: "Second message"},
+	})
+
+	session, _ = registry.Get("overwrite-1")
+	if session.Summary != "Second message" {
+		t.Errorf("expected Summary=%q, got %q", "Second message", session.Summary)
+	}
+	if session.EventCount != 2 {
+		t.Errorf("expected EventCount=2, got %d", session.EventCount)
+	}
+}
+
+// TestSessionRegistry_SummaryOverwriteMultipleUsers 驗證連續多次 user 事件覆蓋 (A-2)
+func TestSessionRegistry_SummaryOverwriteMultipleUsers(t *testing.T) {
+	baseTime := time.Date(2026, 3, 27, 12, 0, 0, 0, time.UTC)
+	registry := NewSessionRegistry(func() time.Time { return baseTime })
+
+	messages := []string{"msg-1", "msg-2", "msg-3"}
+	for _, msg := range messages {
+		baseTime = baseTime.Add(time.Second)
+		registry.UpsertFromSessionEvent(SessionEvent{
+			SessionID: "multi-1",
+			Type:      EventTypeUser,
+			Timestamp: baseTime,
+			Content:   EventContent{Text: msg},
+		})
+		session, _ := registry.Get("multi-1")
+		if session.Summary != msg {
+			t.Errorf("after sending %q, expected Summary=%q, got %q", msg, msg, session.Summary)
+		}
+	}
+
+	session, _ := registry.Get("multi-1")
+	if session.Summary != "msg-3" {
+		t.Errorf("expected final Summary=%q, got %q", "msg-3", session.Summary)
+	}
+}
+
+// TestSessionRegistry_AssistantDoesNotUpdateSummary 驗證 assistant 事件不更新 Summary (A-3)
+func TestSessionRegistry_AssistantDoesNotUpdateSummary(t *testing.T) {
+	baseTime := time.Date(2026, 3, 27, 12, 0, 0, 0, time.UTC)
+	registry := NewSessionRegistry(func() time.Time { return baseTime })
+
+	registry.UpsertFromSessionEvent(SessionEvent{
+		SessionID: "assist-1",
+		Type:      EventTypeUser,
+		Timestamp: baseTime,
+		Content:   EventContent{Text: "使用者提問"},
+	})
+
+	session, _ := registry.Get("assist-1")
+	if session.Summary != "使用者提問" {
+		t.Errorf("expected Summary=%q, got %q", "使用者提問", session.Summary)
+	}
+
+	baseTime = baseTime.Add(time.Second)
+	registry.UpsertFromSessionEvent(SessionEvent{
+		SessionID: "assist-1",
+		Type:      EventTypeAssistant,
+		Timestamp: baseTime,
+		Content:   EventContent{Text: "AI 回覆"},
+	})
+
+	session, _ = registry.Get("assist-1")
+	if session.Summary != "使用者提問" {
+		t.Errorf("expected Summary unchanged=%q, got %q", "使用者提問", session.Summary)
+	}
+}
+
+// TestSessionRegistry_SummaryTracksOnlyUserInMixedEvents 驗證交錯事件只追蹤 user (A-4)
+func TestSessionRegistry_SummaryTracksOnlyUserInMixedEvents(t *testing.T) {
+	baseTime := time.Date(2026, 3, 27, 12, 0, 0, 0, time.UTC)
+	registry := NewSessionRegistry(func() time.Time { return baseTime })
+
+	events := []struct {
+		eventType string
+		text      string
+	}{
+		{EventTypeUser, "Q1"},
+		{EventTypeAssistant, "A1"},
+		{EventTypeUser, "Q2"},
+		{EventTypeAssistant, "A2"},
+	}
+
+	for _, e := range events {
+		baseTime = baseTime.Add(time.Second)
+		registry.UpsertFromSessionEvent(SessionEvent{
+			SessionID: "mixed-1",
+			Type:      e.eventType,
+			Timestamp: baseTime,
+			Content:   EventContent{Text: e.text},
+		})
+	}
+
+	session, _ := registry.Get("mixed-1")
+	if session.Summary != "Q2" {
+		t.Errorf("expected Summary=%q, got %q", "Q2", session.Summary)
+	}
+}
+
+// TestSessionRegistry_EmptyUserTextOverwritesSummary 驗證空 Content.Text 覆蓋 Summary (A-5)
+func TestSessionRegistry_EmptyUserTextOverwritesSummary(t *testing.T) {
+	baseTime := time.Date(2026, 3, 27, 12, 0, 0, 0, time.UTC)
+	registry := NewSessionRegistry(func() time.Time { return baseTime })
+
+	registry.UpsertFromSessionEvent(SessionEvent{
+		SessionID: "empty-1",
+		Type:      EventTypeUser,
+		Timestamp: baseTime,
+		Content:   EventContent{Text: "有內容的訊息"},
+	})
+
+	baseTime = baseTime.Add(time.Second)
+	registry.UpsertFromSessionEvent(SessionEvent{
+		SessionID: "empty-1",
+		Type:      EventTypeUser,
+		Timestamp: baseTime,
+		Content:   EventContent{Text: ""},
+	})
+
+	session, _ := registry.Get("empty-1")
+	if session.Summary != "" {
+		t.Errorf("expected empty Summary, got %q", session.Summary)
+	}
+}
+
+// TestSessionRegistry_LongSummaryTruncated 驗證長 Summary 截斷 (A-6)
+func TestSessionRegistry_LongSummaryTruncated(t *testing.T) {
+	baseTime := time.Date(2026, 3, 27, 12, 0, 0, 0, time.UTC)
+	registry := NewSessionRegistry(func() time.Time { return baseTime })
+
+	// 建立超過 MaxSummaryLength 的文本
+	longText := ""
+	for i := 0; i < MaxSummaryLength+20; i++ {
+		longText += "a"
+	}
+
+	registry.UpsertFromSessionEvent(SessionEvent{
+		SessionID: "long-1",
+		Type:      EventTypeUser,
+		Timestamp: baseTime,
+		Content:   EventContent{Text: longText},
+	})
+
+	session, _ := registry.Get("long-1")
+	if len([]rune(session.Summary)) > MaxSummaryLength {
+		t.Errorf("expected Summary rune length <= %d, got %d", MaxSummaryLength, len([]rune(session.Summary)))
+	}
+}
+
+// TestSessionRegistry_SecondUserLongTextAlsoTruncated 驗證第二次 user 長文本也截斷 (A-7)
+func TestSessionRegistry_SecondUserLongTextAlsoTruncated(t *testing.T) {
+	baseTime := time.Date(2026, 3, 27, 12, 0, 0, 0, time.UTC)
+	registry := NewSessionRegistry(func() time.Time { return baseTime })
+
+	registry.UpsertFromSessionEvent(SessionEvent{
+		SessionID: "long2-1",
+		Type:      EventTypeUser,
+		Timestamp: baseTime,
+		Content:   EventContent{Text: "Short first"},
+	})
+
+	session, _ := registry.Get("long2-1")
+	if session.Summary != "Short first" {
+		t.Errorf("expected Summary=%q, got %q", "Short first", session.Summary)
+	}
+
+	// 第二次 user 事件送長文本
+	longText := ""
+	for i := 0; i < MaxSummaryLength+30; i++ {
+		longText += "b"
+	}
+
+	baseTime = baseTime.Add(time.Second)
+	registry.UpsertFromSessionEvent(SessionEvent{
+		SessionID: "long2-1",
+		Type:      EventTypeUser,
+		Timestamp: baseTime,
+		Content:   EventContent{Text: longText},
+	})
+
+	session, _ = registry.Get("long2-1")
+	summaryRunes := []rune(session.Summary)
+	if len(summaryRunes) > MaxSummaryLength {
+		t.Errorf("expected Summary rune length <= %d, got %d", MaxSummaryLength, len(summaryRunes))
+	}
+	// 確認是新長文本的前 MaxSummaryLength 字元
+	expectedPrefix := string([]rune(longText)[:MaxSummaryLength])
+	if session.Summary != expectedPrefix {
+		t.Errorf("expected Summary to be first %d chars of long text, got %q", MaxSummaryLength, session.Summary)
+	}
+}
+
 // TestScanAndUpdateStatus_DoesNotRevertCompleted 驗證 completed 是終態，
 // ScanAndUpdateStatus 的時間計算不可將其覆蓋回 active。
 func TestScanAndUpdateStatus_DoesNotRevertCompleted(t *testing.T) {

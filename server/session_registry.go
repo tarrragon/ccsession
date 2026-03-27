@@ -47,7 +47,7 @@ func NewSessionRegistry(timeProvider func() time.Time) *SessionRegistry {
 //   - 若 type == "session_completed" → 強制設定 Status 為 completed
 //   - 其他類型 → 重新計算 Status（呼叫 computeStatus，傳入當前時間）
 //   - 若為首個 user 訊息（FirstUserMessageAt 未設定且 Type == "user"）→ 填入時戳
-//   - 若 EventCount == 0 且 Type == "user" → 填入 Summary（截斷至 MaxSummaryLength）
+//   - 每次 user 事件都覆蓋 Summary（截斷至 MaxSummaryLength）
 func (r *SessionRegistry) UpsertFromSessionEvent(event SessionEvent) {
 	if event.SessionID == "" {
 		return // 忽略空 SessionID
@@ -81,8 +81,8 @@ func (r *SessionRegistry) UpsertFromSessionEvent(event SessionEvent) {
 		session.FirstUserMessageAt = now
 	}
 
-	// 若為首個 user 訊息，提取 Summary
-	if session.EventCount == 1 && event.Type == EventTypeUser {
+	// 每次 user 事件覆蓋 Summary 為最新內容
+	if event.Type == EventTypeUser {
 		session.Summary = truncateString(event.Content.Text, MaxSummaryLength)
 	}
 

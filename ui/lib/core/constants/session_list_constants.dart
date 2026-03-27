@@ -15,6 +15,9 @@ abstract final class SessionListConstants {
   /// session ID fallback 截取長度
   static const sessionIdFallbackLength = 8;
 
+  /// Agent session 標題前綴
+  static const agentTitlePrefix = '[Agent]';
+
   /// 狀態指示燈尺寸（直徑，邏輯像素）
   static const statusIndicatorSize = 10.0;
 
