@@ -49,24 +49,24 @@ List<SessionListItem> flattenGroups(
 ) {
   final items = <SessionListItem>[];
   for (final entry in grouped.entries) {
-    _buildGroupItems(entry.key, entry.value, uiState, items);
+    items.addAll(_buildGroupItems(entry.key, entry.value, uiState));
   }
   return items;
 }
 
 /// 需求：展平單一分組為 Header + Tiles + Pagination 項目
-/// 約束：摺疊時只加 Header；展開時加分頁裁切後的 Tiles
-void _buildGroupItems(
+/// 約束：摺疊時只回傳 Header；展開時回傳分頁裁切後的 Tiles
+List<SessionListItem> _buildGroupItems(
   SessionStatus status,
   List<SessionInfo> sessions,
   SessionGroupUiState uiState,
-  List<SessionListItem> items,
 ) {
+  final items = <SessionListItem>[];
   final count = sessions.length;
   final isExpanded = uiState.expandedGroups[status] ?? true;
   items.add(HeaderItem(status: status, count: count, isExpanded: isExpanded));
 
-  if (!isExpanded) return;
+  if (!isExpanded) return items;
 
   final pageSize = SessionListConstants.maxItemsPerPage;
   final totalPages = (count / pageSize).ceil();
@@ -85,6 +85,8 @@ void _buildGroupItems(
       totalPages: totalPages,
     ));
   }
+
+  return items;
 }
 
 /// 需求：從 sessions 列表中裁切出指定頁的子列表

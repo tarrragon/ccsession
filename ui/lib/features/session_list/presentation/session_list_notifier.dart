@@ -129,6 +129,9 @@ class SessionListNotifier extends _$SessionListNotifier {
   /// 需求：按狀態分組的 session 列表（計算屬性）
   /// 約束：key 順序固定 active/idle/completed，空組不含
   /// 每組內按 lastEventAt 降序排列
+  /// 維護：生產程式碼已遷移至 filteredGroupedSessionsProvider，
+  /// 此 getter 僅供測試直接驗證分組邏輯使用
+  @visibleForTesting
   Map<SessionStatus, List<SessionInfo>> get groupedSessions {
     final currentState = state.valueOrNull;
     if (currentState == null) return {};
