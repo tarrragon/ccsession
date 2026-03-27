@@ -59,6 +59,15 @@ func setupTestClaudeHome(t *testing.T) (claudeHome string, projectDir string) {
 	return claudeHome, projectDir
 }
 
+// mockSessionRegisterer records all UpsertFromSessionEvent calls for test verification.
+type mockSessionRegisterer struct {
+	events []SessionEvent
+}
+
+func (m *mockSessionRegisterer) UpsertFromSessionEvent(event SessionEvent) {
+	m.events = append(m.events, event)
+}
+
 // drainEvents collects events from the channel until timeout or count reached.
 func drainEvents(ch <-chan SessionEvent, want int, timeout time.Duration) []SessionEvent {
 	var events []SessionEvent
@@ -76,7 +85,7 @@ func drainEvents(ch <-chan SessionEvent, want int, timeout time.Duration) []Sess
 
 func TestNewFileWatcher(t *testing.T) {
 	ch := make(chan SessionEvent, DefaultEventChannelSize)
-	fw := NewFileWatcher("/tmp/fake-claude", ch)
+	fw := NewFileWatcher("/tmp/fake-claude", ch, nil)
 
 	if fw.claudeHome != "/tmp/fake-claude" {
 		t.Errorf("claudeHome = %q, want %q", fw.claudeHome, "/tmp/fake-claude")
@@ -94,7 +103,7 @@ func TestNewFileWatcher(t *testing.T) {
 
 func TestFileWatcherEventsChannel(t *testing.T) {
 	ch := make(chan SessionEvent, DefaultEventChannelSize)
-	fw := NewFileWatcher("/tmp/fake", ch)
+	fw := NewFileWatcher("/tmp/fake", ch, nil)
 
 	readCh := fw.Events()
 	if readCh == nil {
@@ -120,7 +129,8 @@ func TestFileWatcherScanExisting(t *testing.T) {
 	}
 
 	ch := make(chan SessionEvent, DefaultEventChannelSize)
-	fw := NewFileWatcher(claudeHome, ch)
+	mockReg := &mockSessionRegisterer{}
+	fw := NewFileWatcher(claudeHome, ch, mockReg)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -131,22 +141,29 @@ func TestFileWatcherScanExisting(t *testing.T) {
 		}
 	}()
 
-	// Initial scan should emit a session_discovered event (no history content)
-	events := drainEvents(ch, 1, 2*time.Second)
-	if len(events) != 1 {
-		t.Fatalf("expected 1 session_discovered event from initial scan, got %d", len(events))
+	// Give watcher time to complete initial scan
+	time.Sleep(500 * time.Millisecond)
+
+	// Initial scan should register session directly via registry (not channel)
+	if len(mockReg.events) != 1 {
+		t.Fatalf("expected 1 registry call from initial scan, got %d", len(mockReg.events))
 	}
-	if events[0].Type != EventTypeSessionDiscovered {
-		t.Errorf("event Type = %q, want %q", events[0].Type, EventTypeSessionDiscovered)
+	if mockReg.events[0].Type != EventTypeSessionDiscovered {
+		t.Errorf("event Type = %q, want %q", mockReg.events[0].Type, EventTypeSessionDiscovered)
 	}
-	if events[0].SessionID != "session-001" {
-		t.Errorf("event SessionID = %q, want %q", events[0].SessionID, "session-001")
+	if mockReg.events[0].SessionID != "session-001" {
+		t.Errorf("event SessionID = %q, want %q", mockReg.events[0].SessionID, "session-001")
 	}
-	if events[0].ProjectPath != "test-project" {
-		t.Errorf("event ProjectPath = %q, want %q", events[0].ProjectPath, "test-project")
+	if mockReg.events[0].ProjectPath != "test-project" {
+		t.Errorf("event ProjectPath = %q, want %q", mockReg.events[0].ProjectPath, "test-project")
 	}
-	if events[0].Content.Text != "" {
-		t.Errorf("event Content.Text = %q, want empty (no history read)", events[0].Content.Text)
+
+	// Verify no events were sent to the channel
+	select {
+	case evt := <-ch:
+		t.Errorf("unexpected event on channel: %+v", evt)
+	default:
+		// expected: no channel events from initial scan
 	}
 
 	// Verify the reader was registered
@@ -176,7 +193,7 @@ func TestFileWatcherNewFile(t *testing.T) {
 	claudeHome, projectDir := setupTestClaudeHome(t)
 
 	ch := make(chan SessionEvent, DefaultEventChannelSize)
-	fw := NewFileWatcher(claudeHome, ch)
+	fw := NewFileWatcher(claudeHome, ch, nil)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -221,7 +238,7 @@ func TestFileWatcherAppend(t *testing.T) {
 	}
 
 	ch := make(chan SessionEvent, DefaultEventChannelSize)
-	fw := NewFileWatcher(claudeHome, ch)
+	fw := NewFileWatcher(claudeHome, ch, nil)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -232,11 +249,8 @@ func TestFileWatcherAppend(t *testing.T) {
 		}
 	}()
 
-	// Drain the session_discovered event from initial scan
-	discoveryEvents := drainEvents(ch, 1, 2*time.Second)
-	if len(discoveryEvents) != 1 || discoveryEvents[0].Type != EventTypeSessionDiscovered {
-		t.Fatalf("expected 1 session_discovered event, got %d", len(discoveryEvents))
-	}
+	// Wait for initial scan to complete (discovery goes directly to registry, not channel)
+	time.Sleep(500 * time.Millisecond)
 
 	// Append a new line to the file
 	line2 := makeAssistantJSONL(t, "msg-2", "second message")
@@ -275,7 +289,7 @@ func TestFileWatcherRemove(t *testing.T) {
 	}
 
 	ch := make(chan SessionEvent, DefaultEventChannelSize)
-	fw := NewFileWatcher(claudeHome, ch)
+	fw := NewFileWatcher(claudeHome, ch, nil)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -286,11 +300,8 @@ func TestFileWatcherRemove(t *testing.T) {
 		}
 	}()
 
-	// Drain the session_discovered event from initial scan
-	discoveryEvents := drainEvents(ch, 1, 2*time.Second)
-	if len(discoveryEvents) != 1 || discoveryEvents[0].Type != EventTypeSessionDiscovered {
-		t.Fatalf("expected 1 session_discovered event, got %d", len(discoveryEvents))
-	}
+	// Wait for initial scan to complete (discovery goes directly to registry, not channel)
+	time.Sleep(500 * time.Millisecond)
 
 	// Remove the file
 	if err := os.Remove(jsonlPath); err != nil {
@@ -331,7 +342,7 @@ func TestFileWatcherPermissionError(t *testing.T) {
 	})
 
 	ch := make(chan SessionEvent, DefaultEventChannelSize)
-	fw := NewFileWatcher(claudeHome, ch)
+	fw := NewFileWatcher(claudeHome, ch, nil)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -342,14 +353,24 @@ func TestFileWatcherPermissionError(t *testing.T) {
 		}
 	}()
 
-	// Should receive a session_discovered event (os.Stat succeeds even on 0o000 files)
-	// but no content events (file is unreadable)
-	events := drainEvents(ch, 1, 2*time.Second)
-	if len(events) != 1 {
-		t.Fatalf("expected 1 session_discovered event for permission-denied file, got %d", len(events))
+	// Wait for initial scan to complete
+	time.Sleep(500 * time.Millisecond)
+
+	// With nil registry, discovery is a no-op. Verify no content events on channel
+	// (file is unreadable, so no parsed events should appear).
+	select {
+	case evt := <-ch:
+		t.Errorf("unexpected event on channel: %+v", evt)
+	default:
+		// expected: no events
 	}
-	if events[0].Type != EventTypeSessionDiscovered {
-		t.Errorf("Type = %q, want %q", events[0].Type, EventTypeSessionDiscovered)
+
+	// Verify reader was still registered (os.Stat succeeds on 0o000 files)
+	fw.mu.RLock()
+	_, ok := fw.readers[jsonlPath]
+	fw.mu.RUnlock()
+	if !ok {
+		t.Error("expected reader to be registered even for permission-denied file")
 	}
 }
 
@@ -357,7 +378,7 @@ func TestFileWatcherContextCancel(t *testing.T) {
 	claudeHome, _ := setupTestClaudeHome(t)
 
 	ch := make(chan SessionEvent, DefaultEventChannelSize)
-	fw := NewFileWatcher(claudeHome, ch)
+	fw := NewFileWatcher(claudeHome, ch, nil)
 
 	ctx, cancel := context.WithCancel(context.Background())
 

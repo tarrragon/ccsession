@@ -41,7 +41,7 @@ func main() {
 	// 初始化元件
 	timeProvider := time.Now
 	registry := NewSessionRegistry(timeProvider)
-	watcher := NewFileWatcher(claudeHome, sessionEvCh)
+	watcher := NewFileWatcher(claudeHome, sessionEvCh, registry)
 	dispatcher := NewEventDispatcher(registry, sessionEvCh, hookEvCh, dispatchCh, timeProvider)
 	wsServer := NewWebSocketServer(registry, dispatchCh, timeProvider)
 

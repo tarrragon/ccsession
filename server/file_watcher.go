@@ -29,9 +29,14 @@ const (
 	LogWatcherPermissionWarn = "permission denied, skipping file"
 	LogWatcherFsnotifyError  = "fsnotify error"
 	LogWatcherNewDir         = "watching new project directory"
-	LogWatcherEventDropped      = "event channel full, dropping event"
-	LogWatcherDiscoveryDropped  = "discovery event channel full, dropping"
+	LogWatcherEventDropped = "event channel full, dropping event"
 )
+
+// SessionRegisterer allows FileWatcher to register sessions directly
+// during initial scan, bypassing the event channel to avoid buffer overflow.
+type SessionRegisterer interface {
+	UpsertFromSessionEvent(event SessionEvent)
+}
 
 // FileWatcher monitors ~/.claude/projects/ for JSONL file changes
 // and emits parsed SessionEvents through a channel.
@@ -39,6 +44,7 @@ type FileWatcher struct {
 	claudeHome string
 	readers    map[string]*SessionFileReader
 	eventCh    chan SessionEvent
+	registry   SessionRegisterer // 初始掃描時直接註冊 session
 	watcher    *fsnotify.Watcher
 	mu         sync.RWMutex
 	logger     *slog.Logger
@@ -54,11 +60,12 @@ type SessionFileReader struct {
 
 // NewFileWatcher creates a FileWatcher that monitors claudeHome/projects/
 // for JSONL file changes and sends parsed events to eventCh.
-func NewFileWatcher(claudeHome string, eventCh chan SessionEvent) *FileWatcher {
+func NewFileWatcher(claudeHome string, eventCh chan SessionEvent, registry SessionRegisterer) *FileWatcher {
 	return &FileWatcher{
 		claudeHome: claudeHome,
 		readers:    make(map[string]*SessionFileReader),
 		eventCh:    eventCh,
+		registry:   registry,
 		logger:     slog.Default(),
 	}
 }
@@ -273,21 +280,15 @@ func (fw *FileWatcher) addFileSeekEnd(path string) {
 	// Watch individual file for WRITE events (required on macOS kqueue)
 	fw.watchFile(path)
 
-	// Send a lightweight discovery event so SessionRegistry registers this session.
-	// Without this, idle sessions (no new writes) would never appear in the session list.
-	discoveryEvent := SessionEvent{
-		SessionID:   sessionID,
-		ProjectPath: projectPath,
-		Type:        EventTypeSessionDiscovered,
-		Timestamp:   info.ModTime(),
-	}
-	select {
-	case fw.eventCh <- discoveryEvent:
-		// successfully sent
-	default:
-		fw.logger.Warn(LogWatcherDiscoveryDropped,
-			"layer", "file_watcher",
-			"sessionID", sessionID)
+	// Register session directly in the registry, bypassing the event channel.
+	// This avoids buffer overflow when scanning hundreds of existing sessions.
+	if fw.registry != nil {
+		fw.registry.UpsertFromSessionEvent(SessionEvent{
+			SessionID:   sessionID,
+			ProjectPath: projectPath,
+			Type:        EventTypeSessionDiscovered,
+			Timestamp:   info.ModTime(),
+		})
 	}
 }
 
