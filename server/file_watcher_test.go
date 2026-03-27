@@ -131,10 +131,22 @@ func TestFileWatcherScanExisting(t *testing.T) {
 		}
 	}()
 
-	// Initial scan should skip history (seek to EOF), so no events expected
-	events := drainEvents(ch, 1, 1*time.Second)
-	if len(events) != 0 {
-		t.Errorf("expected 0 events from initial scan (history skipped), got %d", len(events))
+	// Initial scan should emit a session_discovered event (no history content)
+	events := drainEvents(ch, 1, 2*time.Second)
+	if len(events) != 1 {
+		t.Fatalf("expected 1 session_discovered event from initial scan, got %d", len(events))
+	}
+	if events[0].Type != EventTypeSessionDiscovered {
+		t.Errorf("event Type = %q, want %q", events[0].Type, EventTypeSessionDiscovered)
+	}
+	if events[0].SessionID != "session-001" {
+		t.Errorf("event SessionID = %q, want %q", events[0].SessionID, "session-001")
+	}
+	if events[0].ProjectPath != "test-project" {
+		t.Errorf("event ProjectPath = %q, want %q", events[0].ProjectPath, "test-project")
+	}
+	if events[0].Content.Text != "" {
+		t.Errorf("event Content.Text = %q, want empty (no history read)", events[0].Content.Text)
 	}
 
 	// Verify the reader was registered
@@ -220,9 +232,11 @@ func TestFileWatcherAppend(t *testing.T) {
 		}
 	}()
 
-	// Initial scan skips history (seeks to EOF), so no events to drain.
-	// Give watcher time to start.
-	time.Sleep(200 * time.Millisecond)
+	// Drain the session_discovered event from initial scan
+	discoveryEvents := drainEvents(ch, 1, 2*time.Second)
+	if len(discoveryEvents) != 1 || discoveryEvents[0].Type != EventTypeSessionDiscovered {
+		t.Fatalf("expected 1 session_discovered event, got %d", len(discoveryEvents))
+	}
 
 	// Append a new line to the file
 	line2 := makeAssistantJSONL(t, "msg-2", "second message")
@@ -272,8 +286,11 @@ func TestFileWatcherRemove(t *testing.T) {
 		}
 	}()
 
-	// Initial scan skips history, give watcher time to start
-	time.Sleep(200 * time.Millisecond)
+	// Drain the session_discovered event from initial scan
+	discoveryEvents := drainEvents(ch, 1, 2*time.Second)
+	if len(discoveryEvents) != 1 || discoveryEvents[0].Type != EventTypeSessionDiscovered {
+		t.Fatalf("expected 1 session_discovered event, got %d", len(discoveryEvents))
+	}
 
 	// Remove the file
 	if err := os.Remove(jsonlPath); err != nil {
@@ -325,10 +342,14 @@ func TestFileWatcherPermissionError(t *testing.T) {
 		}
 	}()
 
-	// Should not receive any events (permission denied is logged as WARN)
-	events := drainEvents(ch, 1, 1*time.Second)
-	if len(events) != 0 {
-		t.Errorf("expected 0 events for permission-denied file, got %d", len(events))
+	// Should receive a session_discovered event (os.Stat succeeds even on 0o000 files)
+	// but no content events (file is unreadable)
+	events := drainEvents(ch, 1, 2*time.Second)
+	if len(events) != 1 {
+		t.Fatalf("expected 1 session_discovered event for permission-denied file, got %d", len(events))
+	}
+	if events[0].Type != EventTypeSessionDiscovered {
+		t.Errorf("Type = %q, want %q", events[0].Type, EventTypeSessionDiscovered)
 	}
 }
 

@@ -73,6 +73,7 @@ class SessionListNotifier extends _$SessionListNotifier {
   /// 維護：新增訊息類型時需擴充此 switch
   /// 約束：異常不可中斷 stream，log 後繼續處理後續訊息
   void _handleMessage(ServerMessage message) {
+    debugPrint('[SessionList] handleMessage: type=${message.type}');
     try {
       switch (message.type) {
         case 'session_list':
@@ -101,6 +102,7 @@ class SessionListNotifier extends _$SessionListNotifier {
   /// 需求：session_list 訊息替換整個列表
   void _handleSessionList(ServerMessage message) {
     final data = SessionListData.fromJson(message.data);
+    debugPrint('[SessionList] sessions updated: ${data.sessions.length} total');
     state = AsyncData(_currentState.copyWith(sessions: data.sessions));
   }
 

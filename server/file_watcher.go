@@ -29,7 +29,8 @@ const (
 	LogWatcherPermissionWarn = "permission denied, skipping file"
 	LogWatcherFsnotifyError  = "fsnotify error"
 	LogWatcherNewDir         = "watching new project directory"
-	LogWatcherEventDropped   = "event channel full, dropping event"
+	LogWatcherEventDropped      = "event channel full, dropping event"
+	LogWatcherDiscoveryDropped  = "discovery event channel full, dropping"
 )
 
 // FileWatcher monitors ~/.claude/projects/ for JSONL file changes
@@ -271,6 +272,23 @@ func (fw *FileWatcher) addFileSeekEnd(path string) {
 
 	// Watch individual file for WRITE events (required on macOS kqueue)
 	fw.watchFile(path)
+
+	// Send a lightweight discovery event so SessionRegistry registers this session.
+	// Without this, idle sessions (no new writes) would never appear in the session list.
+	discoveryEvent := SessionEvent{
+		SessionID:   sessionID,
+		ProjectPath: projectPath,
+		Type:        EventTypeSessionDiscovered,
+		Timestamp:   info.ModTime(),
+	}
+	select {
+	case fw.eventCh <- discoveryEvent:
+		// successfully sent
+	default:
+		fw.logger.Warn(LogWatcherDiscoveryDropped,
+			"layer", "file_watcher",
+			"sessionID", sessionID)
+	}
 }
 
 // watchFile adds an individual file to the fsnotify watcher.

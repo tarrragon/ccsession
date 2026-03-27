@@ -163,6 +163,7 @@ class ConversationNotifier extends _$ConversationNotifier {
   /// 需求：處理 Server 推送的訊息
   /// 約束：異常不可中斷 stream，log 後繼續
   void _handleMessage(ServerMessage message) {
+    debugPrint('[Conv] handleMessage: type=${message.type}');
     try {
       switch (message.type) {
         case 'session_history':
@@ -185,6 +186,10 @@ class ConversationNotifier extends _$ConversationNotifier {
   /// 需求：session_history 回應處理（首次載入或分頁 prepend）
   void _handleSessionHistory(ServerMessage message) {
     final data = SessionHistoryData.fromJson(message.data);
+    debugPrint(
+      '[Conv] history loaded: ${data.events.length} events, '
+      'hasMore=${data.hasMore}',
+    );
     if (data.sessionId != _currentState.sessionId) return;
 
     final current = _currentState;
@@ -209,12 +214,19 @@ class ConversationNotifier extends _$ConversationNotifier {
   /// 約束：sessionId 不匹配則忽略；fallback 格式（無 type/content）靜默忽略
   void _handleSessionEvent(ServerMessage message) {
     final event = SessionEvent.fromJson(message.data);
-    if (!event.isComplete) return;
+    if (!event.isComplete) {
+      debugPrint('[Conv] skipped incomplete event');
+      return;
+    }
     if (event.sessionId != _currentState.sessionId) return;
 
     state = AsyncData(_currentState.copyWith(
       events: [..._currentState.events, event],
     ));
+    debugPrint(
+      '[Conv] event added, total=${_currentState.events.length}, '
+      'sessionId=${event.sessionId}',
+    );
   }
 
   /// 需求：error 回應處理

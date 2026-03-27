@@ -9,7 +9,8 @@ const (
 	EventTypeToolUse          = "tool_use"
 	EventTypeToolResult       = "tool_result"
 	EventTypeThinking         = "thinking"
-	EventTypeSessionCompleted = "session_completed"
+	EventTypeSessionCompleted  = "session_completed"
+	EventTypeSessionDiscovered = "session_discovered"
 )
 
 // ContentIndex sentinel value for non-assistant events

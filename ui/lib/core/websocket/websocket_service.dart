@@ -187,6 +187,7 @@ class WebSocketServiceImpl implements WebSocketService {
   // -- 私有方法 --
 
   void _setConnectionState(WsConnectionState state) {
+    debugPrint('[WS] state: $state');
     _connectionState = state;
     if (!_connectionStateController.isClosed) {
       _connectionStateController.add(state);
@@ -206,6 +207,10 @@ class WebSocketServiceImpl implements WebSocketService {
     try {
       final map = jsonDecode(raw as String) as Map<String, dynamic>;
       final message = ServerMessage.fromJson(map);
+      debugPrint(
+        '[WS] received: type=${message.type}, '
+        'dataKeys=${message.data.keys}',
+      );
       _messageController.add(message);
     } on Object catch (e) {
       // 需求：JSON 解析失敗時 log ERROR，丟棄該訊息，不中斷連線
