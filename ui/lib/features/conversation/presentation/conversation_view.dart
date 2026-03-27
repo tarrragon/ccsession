@@ -1,3 +1,4 @@
+import 'package:ccsession/core/constants/duration_constants.dart';
 import 'package:ccsession/features/conversation/presentation/conversation_notifier.dart';
 import 'package:ccsession/features/conversation/presentation/conversation_search_notifier.dart';
 import 'package:ccsession/features/conversation/presentation/conversation_search_state.dart';
@@ -99,48 +100,119 @@ Widget _buildMessageListWithFab(
   ConversationState state,
   int panelIndex,
 ) {
-  return Stack(
-    children: [
-      _buildMessageList(ref, state, panelIndex),
-      if (!state.isAutoScrollEnabled)
-        Positioned(
-          right: 16,
-          bottom: 16,
-          child: FloatingActionButton.small(
-            key: const Key('conversation_jump_to_latest'),
-            onPressed: () {
-              ref
-                  .read(conversationNotifierProvider(panelIndex).notifier)
-                  .setAutoScroll(true);
-            },
-            child: const Icon(Icons.arrow_downward),
-          ),
-        ),
-    ],
+  return _AutoScrollMessageList(
+    key: Key('auto_scroll_message_list_$panelIndex'),
+    state: state,
+    panelIndex: panelIndex,
   );
 }
 
-Widget _buildMessageList(WidgetRef ref, ConversationState state, int panelIndex) {
-  final hasLoadMore = state.hasMore;
-  final itemCount = state.events.length + (hasLoadMore ? 1 : 0);
-  final searchState = ref.watch(conversationSearchNotifierProvider(panelIndex));
+/// 需求：[0.2.0-W7-004.4] 自動捲動訊息列表
+/// 約束：ConsumerStatefulWidget 管理 ScrollController 生命週期，
+///       新事件到達且 isAutoScrollEnabled 時自動捲動到底部
+class _AutoScrollMessageList extends ConsumerStatefulWidget {
+  const _AutoScrollMessageList({
+    required this.state,
+    required this.panelIndex,
+    super.key,
+  });
 
-  return ListView.builder(
-    reverse: true,
-    itemCount: itemCount,
-    itemBuilder: (context, index) {
-      if (hasLoadMore && index == itemCount - 1) {
-        return _buildLoadMoreButton(ref, panelIndex);
-      }
-      final eventIndex = state.events.length - 1 - index;
-      final event = state.events[eventIndex];
-      final highlightRanges = _computeHighlightRanges(
-        searchState,
-        eventIndex,
-      );
-      return MessageBubbleFactory.build(event, highlightRanges: highlightRanges);
-    },
-  );
+  final ConversationState state;
+  final int panelIndex;
+
+  @override
+  ConsumerState<_AutoScrollMessageList> createState() =>
+      _AutoScrollMessageListState();
+}
+
+class _AutoScrollMessageListState
+    extends ConsumerState<_AutoScrollMessageList> {
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  /// 需求：[0.2.0-W7-004.4] 監聽 state 變更，自動捲動到底部
+  /// 約束：reverse:true 時 offset 0 = 最新訊息
+  void _scrollToBottomIfEnabled() {
+    if (!widget.state.isAutoScrollEnabled) return;
+    if (!_scrollController.hasClients) return;
+
+    _scrollController.animateTo(
+      0,
+      duration: DurationConstants.autoScrollDuration,
+      curve: Curves.easeOut,
+    );
+  }
+
+  @override
+  void didUpdateWidget(covariant _AutoScrollMessageList oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.state.events.length > oldWidget.state.events.length) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _scrollToBottomIfEnabled();
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final state = widget.state;
+    final panelIndex = widget.panelIndex;
+
+    return Stack(
+      children: [
+        _buildMessageList(state, panelIndex),
+        if (!state.isAutoScrollEnabled)
+          Positioned(
+            right: 16,
+            bottom: 16,
+            child: FloatingActionButton.small(
+              key: const Key('conversation_jump_to_latest'),
+              onPressed: () {
+                ref
+                    .read(conversationNotifierProvider(panelIndex).notifier)
+                    .setAutoScroll(true);
+                _scrollToBottomIfEnabled();
+              },
+              child: const Icon(Icons.arrow_downward),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildMessageList(ConversationState state, int panelIndex) {
+    final hasLoadMore = state.hasMore;
+    final itemCount = state.events.length + (hasLoadMore ? 1 : 0);
+    final searchState =
+        ref.watch(conversationSearchNotifierProvider(panelIndex));
+
+    return ListView.builder(
+      key: const Key('conversation_message_list'),
+      controller: _scrollController,
+      reverse: true,
+      itemCount: itemCount,
+      itemBuilder: (context, index) {
+        if (hasLoadMore && index == itemCount - 1) {
+          return _buildLoadMoreButton(ref, panelIndex);
+        }
+        final eventIndex = state.events.length - 1 - index;
+        final event = state.events[eventIndex];
+        final highlightRanges = _computeHighlightRanges(
+          searchState,
+          eventIndex,
+        );
+        return MessageBubbleFactory.build(
+          event,
+          highlightRanges: highlightRanges,
+        );
+      },
+    );
+  }
 }
 
 /// 需求：計算特定 event 的高亮範圍（Phase 3a 4.8）
