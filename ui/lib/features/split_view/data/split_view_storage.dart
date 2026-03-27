@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:ccsession/features/split_view/domain/layout_mode.dart';
 import 'package:ccsession/features/split_view/domain/panel_state.dart';
 import 'package:ccsession/features/split_view/domain/split_view_state.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -42,7 +43,14 @@ class SharedPrefsSplitViewStorage implements SplitViewStorage {
     try {
       final map = jsonDecode(raw) as Map<String, dynamic>;
       return _stateFromJson(map);
-    } on Object {
+    } on FormatException catch (e) {
+      debugPrint('[SplitViewStorage] JSON 解析失敗: $e');
+      return null;
+    } on TypeError catch (e) {
+      debugPrint('[SplitViewStorage] 型別轉換失敗: $e');
+      return null;
+    } on ArgumentError catch (e) {
+      debugPrint('[SplitViewStorage] 引數錯誤: $e');
       return null;
     }
   }

@@ -77,6 +77,29 @@ void main() {
       expect(loaded, isNull);
     });
 
+    // W6-004: 錯誤的 layoutMode 值回傳 null
+    test('load returns null for invalid layoutMode value', () async {
+      SharedPreferences.setMockInitialValues({
+        SharedPrefsSplitViewStorage.storageKey:
+            '{"layoutMode":"nonExistent","panels":[]}',
+      });
+      final prefs = await SharedPreferences.getInstance();
+      final s = SharedPrefsSplitViewStorage(prefs);
+      final loaded = await s.load();
+      expect(loaded, isNull);
+    });
+
+    // W6-004: 缺少必要欄位回傳 null
+    test('load returns null when required fields are missing', () async {
+      SharedPreferences.setMockInitialValues({
+        SharedPrefsSplitViewStorage.storageKey: '{"unrelated":"data"}',
+      });
+      final prefs = await SharedPreferences.getInstance();
+      final s = SharedPrefsSplitViewStorage(prefs);
+      final loaded = await s.load();
+      expect(loaded, isNull);
+    });
+
     // A-ST06
     test('save and load empty panels list', () async {
       const state = SplitViewState(
