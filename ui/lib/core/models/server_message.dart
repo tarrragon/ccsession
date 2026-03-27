@@ -1,14 +1,10 @@
 import 'package:equatable/equatable.dart';
-import 'package:json_annotation/json_annotation.dart';
 
 import 'package:ccsession/core/models/session_event.dart';
 import 'package:ccsession/core/models/session_info.dart';
 
-part 'server_message.g.dart';
-
 /// 需求：Server -> Client 訊息信封
 /// 約束：data 為 raw Map，消費端依 type 選擇 payload 類別解析
-@JsonSerializable()
 class ServerMessage extends Equatable {
   const ServerMessage({
     required this.type,
@@ -18,17 +14,23 @@ class ServerMessage extends Equatable {
   final String type;
   final Map<String, dynamic> data;
 
-  factory ServerMessage.fromJson(Map<String, dynamic> json) =>
-      _$ServerMessageFromJson(json);
+  factory ServerMessage.fromJson(Map<String, dynamic> json) {
+    return ServerMessage(
+      type: json['type'] as String,
+      data: json['data'] as Map<String, dynamic>,
+    );
+  }
 
-  Map<String, dynamic> toJson() => _$ServerMessageToJson(this);
+  Map<String, dynamic> toJson() => {
+        'type': type,
+        'data': data,
+      };
 
   @override
   List<Object?> get props => [type, data];
 }
 
 /// session_list payload
-@JsonSerializable()
 class SessionListData extends Equatable {
   const SessionListData({
     required this.sessions,
@@ -36,17 +38,23 @@ class SessionListData extends Equatable {
 
   final List<SessionInfo> sessions;
 
-  factory SessionListData.fromJson(Map<String, dynamic> json) =>
-      _$SessionListDataFromJson(json);
+  factory SessionListData.fromJson(Map<String, dynamic> json) {
+    return SessionListData(
+      sessions: (json['sessions'] as List<dynamic>)
+          .map((e) => SessionInfo.fromJson(e as Map<String, dynamic>))
+          .toList(),
+    );
+  }
 
-  Map<String, dynamic> toJson() => _$SessionListDataToJson(this);
+  Map<String, dynamic> toJson() => {
+        'sessions': sessions.map((e) => e.toJson()).toList(),
+      };
 
   @override
   List<Object?> get props => [sessions];
 }
 
 /// session_event payload
-@JsonSerializable()
 class SessionEventData extends Equatable {
   const SessionEventData({
     required this.sessionId,
@@ -56,17 +64,23 @@ class SessionEventData extends Equatable {
   final String sessionId;
   final String agentId;
 
-  factory SessionEventData.fromJson(Map<String, dynamic> json) =>
-      _$SessionEventDataFromJson(json);
+  factory SessionEventData.fromJson(Map<String, dynamic> json) {
+    return SessionEventData(
+      sessionId: json['sessionId'] as String,
+      agentId: (json['agentId'] as String?) ?? '',
+    );
+  }
 
-  Map<String, dynamic> toJson() => _$SessionEventDataToJson(this);
+  Map<String, dynamic> toJson() => {
+        'sessionId': sessionId,
+        'agentId': agentId,
+      };
 
   @override
   List<Object?> get props => [sessionId, agentId];
 }
 
 /// session_status_change payload
-@JsonSerializable()
 class SessionStatusChangeData extends Equatable {
   const SessionStatusChangeData({
     required this.sessionId,
@@ -76,17 +90,23 @@ class SessionStatusChangeData extends Equatable {
   final String sessionId;
   final SessionStatus status;
 
-  factory SessionStatusChangeData.fromJson(Map<String, dynamic> json) =>
-      _$SessionStatusChangeDataFromJson(json);
+  factory SessionStatusChangeData.fromJson(Map<String, dynamic> json) {
+    return SessionStatusChangeData(
+      sessionId: json['sessionId'] as String,
+      status: SessionStatus.values.byName(json['status'] as String),
+    );
+  }
 
-  Map<String, dynamic> toJson() => _$SessionStatusChangeDataToJson(this);
+  Map<String, dynamic> toJson() => {
+        'sessionId': sessionId,
+        'status': status.name,
+      };
 
   @override
   List<Object?> get props => [sessionId, status];
 }
 
 /// session_history payload
-@JsonSerializable()
 class SessionHistoryData extends Equatable {
   const SessionHistoryData({
     required this.sessionId,
@@ -98,17 +118,27 @@ class SessionHistoryData extends Equatable {
   final List<SessionEvent> events;
   final bool hasMore;
 
-  factory SessionHistoryData.fromJson(Map<String, dynamic> json) =>
-      _$SessionHistoryDataFromJson(json);
+  factory SessionHistoryData.fromJson(Map<String, dynamic> json) {
+    return SessionHistoryData(
+      sessionId: json['sessionId'] as String,
+      events: (json['events'] as List<dynamic>)
+          .map((e) => SessionEvent.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      hasMore: (json['hasMore'] as bool?) ?? false,
+    );
+  }
 
-  Map<String, dynamic> toJson() => _$SessionHistoryDataToJson(this);
+  Map<String, dynamic> toJson() => {
+        'sessionId': sessionId,
+        'events': events.map((e) => e.toJson()).toList(),
+        'hasMore': hasMore,
+      };
 
   @override
   List<Object?> get props => [sessionId, events, hasMore];
 }
 
 /// error payload
-@JsonSerializable()
 class ErrorData extends Equatable {
   const ErrorData({
     required this.code,
@@ -116,10 +146,15 @@ class ErrorData extends Equatable {
 
   final String code;
 
-  factory ErrorData.fromJson(Map<String, dynamic> json) =>
-      _$ErrorDataFromJson(json);
+  factory ErrorData.fromJson(Map<String, dynamic> json) {
+    return ErrorData(
+      code: json['code'] as String,
+    );
+  }
 
-  Map<String, dynamic> toJson() => _$ErrorDataToJson(this);
+  Map<String, dynamic> toJson() => {
+        'code': code,
+      };
 
   @override
   List<Object?> get props => [code];
