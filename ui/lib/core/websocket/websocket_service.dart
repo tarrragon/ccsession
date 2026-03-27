@@ -103,6 +103,7 @@ class WebSocketServiceImpl implements WebSocketService {
     _cancelReconnectTimer();
     _currentUri = uri ?? _buildDefaultUri();
     _isManualDisconnect = false;
+    debugPrint('[WS] connect: uri=$_currentUri');
     _setConnectionState(WsConnectionState.connecting);
 
     try {
@@ -131,6 +132,7 @@ class WebSocketServiceImpl implements WebSocketService {
     if (_isDisposed) return;
     if (_channel == null) return;
 
+    debugPrint('[WS] send: action=${message.action}');
     final jsonString = jsonEncode(message.toJson());
     _channel!.sink.add(jsonString);
   }
@@ -207,9 +209,10 @@ class WebSocketServiceImpl implements WebSocketService {
     try {
       final map = jsonDecode(raw as String) as Map<String, dynamic>;
       final message = ServerMessage.fromJson(map);
+      final sessionId = message.data['session_id'] as String?;
       debugPrint(
         '[WS] received: type=${message.type}, '
-        'dataKeys=${message.data.keys}',
+        'sessionId=$sessionId',
       );
       _messageController.add(message);
     } on Object catch (e) {

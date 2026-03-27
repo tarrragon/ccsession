@@ -1,5 +1,7 @@
 import 'dart:math';
 
+import 'package:flutter/foundation.dart';
+
 import 'package:ccsession/features/split_view/data/split_view_storage.dart';
 import 'package:ccsession/features/split_view/domain/layout_mode.dart';
 import 'package:ccsession/features/split_view/domain/panel_state.dart';
@@ -28,6 +30,7 @@ class SplitViewNotifier extends _$SplitViewNotifier {
   /// 需求：UC-004 切換佈局模式（場景 1-3）
   /// 約束：保留可延續面板 sessionId，切換後立即持久化
   void switchLayout(LayoutMode mode) {
+    debugPrint('[SplitView] switchLayout: $mode');
     final current = state.valueOrNull;
     if (current == null || current.layoutMode == mode) return;
 
@@ -46,6 +49,7 @@ class SplitViewNotifier extends _$SplitViewNotifier {
   /// 需求：UC-004 為指定面板選擇 session（場景 4）
   /// 約束：同時設定 activePanelIndex，選擇後立即持久化
   void selectSession({required int panelIndex, required String sessionId}) {
+    debugPrint('[SplitView] selectSession: panel=$panelIndex, sessionId=$sessionId');
     final current = _validStateForPanel(panelIndex);
     if (current == null) return;
 

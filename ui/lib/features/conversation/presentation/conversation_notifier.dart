@@ -220,11 +220,12 @@ class ConversationNotifier extends _$ConversationNotifier {
     }
     if (event.sessionId != _currentState.sessionId) return;
 
+    final previousCount = _currentState.events.length;
     state = AsyncData(_currentState.copyWith(
       events: [..._currentState.events, event],
     ));
     debugPrint(
-      '[Conv] event added, total=${_currentState.events.length}, '
+      '[Conv] session_event: count $previousCount -> ${_currentState.events.length}, '
       'sessionId=${event.sessionId}',
     );
   }
