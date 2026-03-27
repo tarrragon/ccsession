@@ -30,6 +30,17 @@ abstract final class SessionListConstants {
   /// 狀態指示燈尺寸（直徑，邏輯像素）
   static const statusIndicatorSize = 10.0;
 
+  // -- UI 文字常數（待 l10n 系統建立後遷移至 ARB） --
+
+  /// 空 projectPath 的 Tab 標籤名稱
+  static const otherProjectLabel = 'Other';
+
+  /// Session 載入失敗訊息
+  static const loadFailedMessage = 'Failed to load sessions';
+
+  /// 無 session 時的提示訊息
+  static const noSessionsMessage = 'No sessions';
+
   /// 需求：SessionStatus -> 指示燈顏色對應
   /// 約束：與 spec 4.1 一致
   static Color statusColor(SessionStatus status) {

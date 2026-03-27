@@ -5,6 +5,7 @@ import 'package:ccsession/core/models/session_info.dart';
 import 'package:ccsession/core/websocket/websocket_provider.dart';
 import 'package:ccsession/core/websocket/websocket_service.dart';
 import 'package:ccsession/features/session_list/presentation/session_list_notifier.dart';
+import 'package:ccsession/features/session_list/presentation/filtered_grouped_sessions_provider.dart';
 import 'package:ccsession/features/session_list/presentation/session_list_search_notifier.dart';
 import 'package:ccsession/features/session_list/presentation/session_list_search_state.dart';
 import 'package:fake_async/fake_async.dart';
@@ -60,9 +61,7 @@ void main() {
   }
 
   Map<SessionStatus, List<SessionInfo>> getFiltered() {
-    return container
-        .read(sessionListSearchNotifierProvider.notifier)
-        .filteredGroupedSessions();
+    return container.read(filteredGroupedSessionsProvider());
   }
 
   int countAllSessions(Map<SessionStatus, List<SessionInfo>> grouped) {
@@ -545,9 +544,9 @@ void main() {
         4,
       );
 
-      final filtered = container
-          .read(sessionListSearchNotifierProvider.notifier)
-          .filteredGroupedSessions(projectPath: '/proj1');
+      final filtered = container.read(
+        filteredGroupedSessionsProvider(projectPath: '/proj1'),
+      );
 
       final totalCount = countAllSessions(filtered);
       expect(totalCount, 2);
@@ -563,9 +562,9 @@ void main() {
         createTestSession(id: '2', projectPath: '/proj1'),
       ]);
 
-      final filtered = container
-          .read(sessionListSearchNotifierProvider.notifier)
-          .filteredGroupedSessions(projectPath: '/proj2');
+      final filtered = container.read(
+        filteredGroupedSessionsProvider(projectPath: '/proj2'),
+      );
 
       expect(filtered, isEmpty);
     });
@@ -602,8 +601,8 @@ void main() {
         async.elapse(const Duration(milliseconds: 300));
       });
 
-      final filtered = notifier.filteredGroupedSessions(
-        projectPath: '/proj1',
+      final filtered = container.read(
+        filteredGroupedSessionsProvider(projectPath: '/proj1'),
       );
 
       expect(countAllSessions(filtered), 2);
@@ -617,9 +616,9 @@ void main() {
         createTestSession(id: '3', projectPath: '/proj1'),
       ]);
 
-      final filtered = container
-          .read(sessionListSearchNotifierProvider.notifier)
-          .filteredGroupedSessions(projectPath: '');
+      final filtered = container.read(
+        filteredGroupedSessionsProvider(projectPath: ''),
+      );
 
       expect(countAllSessions(filtered), 1);
     });

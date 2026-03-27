@@ -1,4 +1,6 @@
+import 'package:ccsession/core/constants/session_list_constants.dart';
 import 'package:ccsession/core/models/session_info.dart';
+import 'package:ccsession/features/session_list/presentation/filtered_grouped_sessions_provider.dart';
 import 'package:ccsession/features/session_list/presentation/session_group_ui_notifier.dart';
 import 'package:ccsession/features/session_list/presentation/session_group_utils.dart';
 import 'package:ccsession/features/session_list/presentation/session_list_helpers.dart';
@@ -35,7 +37,7 @@ Widget _buildLoading() {
 
 Widget _buildError(Object error) {
   // TODO: i18n — 遷移至 ARB
-  return const Center(child: Text('Failed to load sessions'));
+  return const Center(child: Text(SessionListConstants.loadFailedMessage));
 }
 
 Widget _buildData(BuildContext context, WidgetRef ref, SessionListState state) {
@@ -43,7 +45,7 @@ Widget _buildData(BuildContext context, WidgetRef ref, SessionListState state) {
 
   if (state.sessions.isEmpty) {
     // TODO: i18n — 遷移至 ARB
-    return const Center(child: Text('No sessions'));
+    return const Center(child: Text(SessionListConstants.noSessionsMessage));
   }
 
   return Column(
@@ -140,7 +142,9 @@ class _ProjectTabbedViewState extends ConsumerState<_ProjectTabbedView>
   /// 約束：空 projectPath 顯示 "Other"
   String _buildTabLabel(String path, int count) {
     // TODO: i18n — "Other" 遷移至 ARB
-    final name = path.isEmpty ? 'Other' : extractProjectName(path);
+    final name = path.isEmpty
+        ? SessionListConstants.otherProjectLabel
+        : extractProjectName(path);
     return '$name ($count)';
   }
 }
@@ -169,40 +173,44 @@ class _SessionGroupListView extends ConsumerWidget {
           .resetAllPages();
     });
 
-    // 需求：監聽搜尋狀態變化，自動重算分組
-    ref.watch(sessionListSearchNotifierProvider);
-    final grouped = ref
-        .read(sessionListSearchNotifierProvider.notifier)
-        .filteredGroupedSessions(projectPath: projectPath);
+    final grouped = ref.watch(
+      filteredGroupedSessionsProvider(projectPath: projectPath),
+    );
     final uiState = ref.watch(sessionGroupUiNotifierProvider(projectPath));
+    final uiNotifier =
+        ref.read(sessionGroupUiNotifierProvider(projectPath).notifier);
     final items = flattenGroups(grouped, uiState);
 
     return ListView.builder(
       itemCount: items.length,
-      itemBuilder: (context, index) => switch (items[index]) {
-        HeaderItem(:final status, :final count, :final isExpanded) =>
-          SessionGroupHeader(
-            status: status,
-            count: count,
-            isExpanded: isExpanded,
-            onToggleExpand: () => ref
-                .read(sessionGroupUiNotifierProvider(projectPath).notifier)
-                .toggleExpanded(status),
-          ),
-        TileItem(:final session) => SessionListTile(
-            session: session,
-            isSelected: session.id == selectedSessionId,
-            onTap: () => onSelectSession(session.id),
-          ),
-        PaginationItem(:final status, :final currentPage, :final totalPages) =>
-          PaginationControls(
-            currentPage: currentPage,
-            totalPages: totalPages,
-            onPageChanged: (page) => ref
-                .read(sessionGroupUiNotifierProvider(projectPath).notifier)
-                .setPage(status, page),
-          ),
-      },
+      itemBuilder: (context, index) => _buildItem(items[index], uiNotifier),
     );
+  }
+
+  /// 需求：根據 SessionListItem 類型建立對應 Widget
+  Widget _buildItem(
+    SessionListItem item,
+    SessionGroupUiNotifier uiNotifier,
+  ) {
+    return switch (item) {
+      HeaderItem(:final status, :final count, :final isExpanded) =>
+        SessionGroupHeader(
+          status: status,
+          count: count,
+          isExpanded: isExpanded,
+          onToggleExpand: () => uiNotifier.toggleExpanded(status),
+        ),
+      TileItem(:final session) => SessionListTile(
+          session: session,
+          isSelected: session.id == selectedSessionId,
+          onTap: () => onSelectSession(session.id),
+        ),
+      PaginationItem(:final status, :final currentPage, :final totalPages) =>
+        PaginationControls(
+          currentPage: currentPage,
+          totalPages: totalPages,
+          onPageChanged: (page) => uiNotifier.setPage(status, page),
+        ),
+    };
   }
 }

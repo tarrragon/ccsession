@@ -7,7 +7,7 @@ part of 'session_list_search_notifier.dart';
 // **************************************************************************
 
 String _$sessionListSearchNotifierHash() =>
-    r'544bafbd5cabd2c5221e6074fd071650b3af8d4f';
+    r'252c9e95b59a901c9ba464c44a2448c72e9cc676';
 
 /// 需求：[0.2.0-W4-003] 管理 session 列表篩選狀態
 /// 約束：監聽 sessionListNotifierProvider，sessions 變化時自動重新篩選
