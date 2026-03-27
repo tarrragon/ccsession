@@ -62,7 +62,7 @@ class SessionListSearchNotifier extends _$SessionListSearchNotifier {
   /// 需求：取得篩選後的分組 session 列表
   /// 約束：空 query（trim 後）回傳完整列表；非空則對四個欄位做 case-insensitive contains
   /// 約束：分組順序固定 active/idle/completed，每組內按 lastEventAt 降序
-  Map<SessionStatus, List<SessionInfo>> get filteredGroupedSessions {
+  Map<SessionStatus, List<SessionInfo>> filteredGroupedSessions() {
     final sessionListState =
         ref.read(sessionListNotifierProvider).valueOrNull;
     if (sessionListState == null) return {};

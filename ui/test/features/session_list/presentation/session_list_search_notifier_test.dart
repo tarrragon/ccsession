@@ -62,7 +62,7 @@ void main() {
   Map<SessionStatus, List<SessionInfo>> getFiltered() {
     return container
         .read(sessionListSearchNotifierProvider.notifier)
-        .filteredGroupedSessions;
+        .filteredGroupedSessions();
   }
 
   int countAllSessions(Map<SessionStatus, List<SessionInfo>> grouped) {

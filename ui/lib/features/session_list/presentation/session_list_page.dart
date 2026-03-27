@@ -36,7 +36,7 @@ Widget _buildError(Object error) {
 Widget _buildData(BuildContext context, WidgetRef ref, SessionListState state) {
   final notifier = ref.read(sessionListNotifierProvider.notifier);
   final searchNotifier = ref.read(sessionListSearchNotifierProvider.notifier);
-  final grouped = searchNotifier.filteredGroupedSessions;
+  final grouped = searchNotifier.filteredGroupedSessions();
 
   if (grouped.isEmpty) {
     // TODO: i18n — 遷移至 ARB
