@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:ccsession/core/models/session_info.dart';
 import 'package:ccsession/features/session_list/presentation/session_group_ui_state.dart';
+import 'package:ccsession/features/session_list/presentation/session_list_search_notifier.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 part 'session_group_ui_notifier.g.dart';
@@ -12,6 +13,10 @@ part 'session_group_ui_notifier.g.dart';
 class SessionGroupUiNotifier extends _$SessionGroupUiNotifier {
   @override
   SessionGroupUiState build(String projectPath) {
+    // 需求：搜尋狀態變化時重置所有分頁
+    ref.listen(sessionListSearchNotifierProvider, (prev, next) {
+      resetAllPages();
+    });
     return const SessionGroupUiState();
   }
 

@@ -6,7 +6,6 @@ import 'package:ccsession/features/session_list/presentation/session_group_utils
 import 'package:ccsession/features/session_list/presentation/session_list_helpers.dart';
 import 'package:ccsession/features/session_list/presentation/session_list_items.dart';
 import 'package:ccsession/features/session_list/presentation/session_list_notifier.dart';
-import 'package:ccsession/features/session_list/presentation/session_list_search_notifier.dart';
 import 'package:ccsession/features/session_list/presentation/widgets/pagination_controls.dart';
 import 'package:ccsession/features/session_list/presentation/widgets/session_group_header.dart';
 import 'package:ccsession/features/session_list/presentation/widgets/session_list_search_bar.dart';
@@ -166,13 +165,6 @@ class _SessionGroupListView extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // 需求：搜尋狀態變化時重置所有分頁
-    ref.listen(sessionListSearchNotifierProvider, (prev, next) {
-      ref
-          .read(sessionGroupUiNotifierProvider(projectPath).notifier)
-          .resetAllPages();
-    });
-
     final grouped = ref.watch(
       filteredGroupedSessionsProvider(projectPath: projectPath),
     );
