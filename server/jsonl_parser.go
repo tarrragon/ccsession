@@ -26,10 +26,11 @@ const (
 // a message field worth parsing. Other types (progress, system, etc.)
 // are silently skipped.
 var conversationLineTypes = map[string]bool{
-	"human":       true,
-	"ai":          true,
-	"assistant":   true,
-	"tool_result": true,
+	EventTypeUser:       true, // "user" — spec.md 定義的正式 type
+	"human":             true, // 向後相容（舊版 JSONL）
+	"ai":                true, // 向後相容（舊版 JSONL）
+	EventTypeAssistant:  true, // "assistant"
+	EventTypeToolResult: true, // "tool_result"
 }
 
 // JSONL raw field keys
