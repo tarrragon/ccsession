@@ -1,3 +1,4 @@
+import 'package:ccsession/core/constants/split_view_constants.dart';
 import 'package:flutter/material.dart';
 
 /// 需求：UC-004 可拖拉的分隔線，調整相鄰面板大小
@@ -16,7 +17,7 @@ class ResizableDivider extends StatefulWidget {
   final ValueChanged<double> onDrag;
 
   /// 分隔線粗細（像素）
-  static const double thickness = 8;
+  static const double thickness = SplitViewConstants.dividerThickness;
 
   @override
   State<ResizableDivider> createState() => _ResizableDividerState();
