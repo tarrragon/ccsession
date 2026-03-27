@@ -49,6 +49,11 @@ func TestEventDispatcher_ProcessSessionEvent_NewSession(t *testing.T) {
 				if dispatched.Session.ID != tt.event.SessionID {
 					t.Errorf("expected SessionID %s, got %s", tt.event.SessionID, dispatched.Session.ID)
 				}
+				if dispatched.Event == nil {
+					t.Error("expected Event to be non-nil for JSONL session event")
+				} else if dispatched.Event.SessionID != tt.event.SessionID {
+					t.Errorf("expected Event.SessionID %s, got %s", tt.event.SessionID, dispatched.Event.SessionID)
+				}
 			case <-time.After(100 * time.Millisecond):
 				t.Error("expected event on output channel")
 			}
@@ -93,6 +98,9 @@ func TestEventDispatcher_ProcessHookEvent_SubagentStart(t *testing.T) {
 				}
 				if dispatched.Session.AgentID != tt.event.AgentID {
 					t.Errorf("expected AgentID %s, got %s", tt.event.AgentID, dispatched.Session.AgentID)
+				}
+				if dispatched.Event != nil {
+					t.Error("expected Event to be nil for hook event")
 				}
 			case <-time.After(100 * time.Millisecond):
 				t.Error("expected event on output channel")

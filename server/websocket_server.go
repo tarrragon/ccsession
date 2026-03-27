@@ -346,21 +346,28 @@ func (s *WebSocketServer) processDispatchedEvent(event DispatchedEvent) {
 		s.broadcastSessionList()
 		s.pushToSubscribers(event.Session.ID, ServerMessage{
 			Type: MsgTypeSessionEvent,
-			Data: SessionEventData{
-				SessionID: event.Session.ID,
-				AgentID:   event.Session.AgentID,
-			},
+			Data: buildSessionEventPayload(event),
 		})
 	case ChangeTypeUpdated:
 		s.pushToSubscribers(event.Session.ID, ServerMessage{
 			Type: MsgTypeSessionEvent,
-			Data: SessionEventData{
-				SessionID: event.Session.ID,
-				AgentID:   event.Session.AgentID,
-			},
+			Data: buildSessionEventPayload(event),
 		})
 	case ChangeTypeStatusChanged:
 		s.broadcastStatusChange(event.Session.ID, event.Session.Status)
+	}
+}
+
+// buildSessionEventPayload 根據 DispatchedEvent 建構 session_event 的 data 欄位。
+// 若 Event 不為 nil（JSONL 事件場景），回傳完整 SessionEvent 供前端解析。
+// 若 Event 為 nil（Hook 場景），回傳 SessionEventData 作為 fallback。
+func buildSessionEventPayload(event DispatchedEvent) any {
+	if event.Event != nil {
+		return event.Event
+	}
+	return SessionEventData{
+		SessionID: event.Session.ID,
+		AgentID:   event.Session.AgentID,
 	}
 }
 

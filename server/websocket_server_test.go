@@ -1223,3 +1223,133 @@ func TestSendChannelFull_GracefulHandling(t *testing.T) {
 	time.Sleep(500 * time.Millisecond)
 	// No panic = success. The client with full buffer is handled gracefully.
 }
+
+// === TC-35: session_event with full SessionEvent when Event is set ===
+
+func TestPushToSubscribers_WithSessionEvent_SendsFullEvent(t *testing.T) {
+	q := newMockQuerier(&SessionInfo{ID: "s1", Status: SessionStatusActive, AgentID: "agent-x"})
+	env := setupTestServer(t, q)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	go env.server.Run(ctx)
+	t.Cleanup(cancel)
+
+	conn := dialWS(t, env.httpServer.URL)
+	_ = readServerMessage(t, conn) // initial session_list
+
+	sendClientMessage(t, conn, ClientMessage{Action: ActionSubscribeSession, SessionID: "s1"})
+	time.Sleep(50 * time.Millisecond)
+
+	// Dispatch event with full SessionEvent (JSONL scenario)
+	fullEvent := &SessionEvent{
+		SessionID:   "s1",
+		Type:        "assistant",
+		Timestamp:   time.Date(2026, 3, 27, 10, 0, 0, 0, time.UTC),
+		MessageID:   "msg-001",
+		Content:     EventContent{Text: "Hello world"},
+		IsLastContent: true,
+	}
+	env.dispatchCh <- DispatchedEvent{
+		ChangeType: ChangeTypeUpdated,
+		Session:    &SessionInfo{ID: "s1", Status: SessionStatusActive, AgentID: "agent-x"},
+		Timestamp:  time.Now(),
+		Event:      fullEvent,
+	}
+
+	// Read and verify full SessionEvent fields are present
+	msgType, data := readServerMessageTyped[SessionEvent](t, conn)
+	if msgType != MsgTypeSessionEvent {
+		t.Fatalf("expected %s, got %s", MsgTypeSessionEvent, msgType)
+	}
+	if data.SessionID != "s1" {
+		t.Fatalf("expected sessionId s1, got %s", data.SessionID)
+	}
+	if data.Type != "assistant" {
+		t.Fatalf("expected type assistant, got %s", data.Type)
+	}
+	if data.MessageID != "msg-001" {
+		t.Fatalf("expected messageId msg-001, got %s", data.MessageID)
+	}
+	if data.Content.Text != "Hello world" {
+		t.Fatalf("expected content text 'Hello world', got %s", data.Content.Text)
+	}
+}
+
+// === TC-36: session_event fallback to SessionEventData when Event is nil (Hook scenario) ===
+
+func TestPushToSubscribers_WithoutSessionEvent_FallsBackToEventData(t *testing.T) {
+	q := newMockQuerier(&SessionInfo{ID: "s1", Status: SessionStatusActive, AgentID: "agent-y"})
+	env := setupTestServer(t, q)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	go env.server.Run(ctx)
+	t.Cleanup(cancel)
+
+	conn := dialWS(t, env.httpServer.URL)
+	_ = readServerMessage(t, conn)
+
+	sendClientMessage(t, conn, ClientMessage{Action: ActionSubscribeSession, SessionID: "s1"})
+	time.Sleep(50 * time.Millisecond)
+
+	// Dispatch event without SessionEvent (Hook scenario, Event=nil)
+	env.dispatchCh <- DispatchedEvent{
+		ChangeType: ChangeTypeUpdated,
+		Session:    &SessionInfo{ID: "s1", Status: SessionStatusActive, AgentID: "agent-y"},
+		Timestamp:  time.Now(),
+		// Event is nil
+	}
+
+	_, data := readServerMessageTyped[SessionEventData](t, conn)
+	if data.SessionID != "s1" {
+		t.Fatalf("expected sessionId s1, got %s", data.SessionID)
+	}
+	if data.AgentID != "agent-y" {
+		t.Fatalf("expected agentId agent-y, got %s", data.AgentID)
+	}
+}
+
+// === TC-37: ChangeTypeNew with SessionEvent sends full event + broadcasts list ===
+
+func TestProcessDispatchedEvent_NewWithEvent_BroadcastsListAndFullEvent(t *testing.T) {
+	q := newMockQuerier(&SessionInfo{ID: "s2", Status: SessionStatusActive, AgentID: "agent-z"})
+	env := setupTestServer(t, q)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	go env.server.Run(ctx)
+	t.Cleanup(cancel)
+
+	conn := dialWS(t, env.httpServer.URL)
+	_ = readServerMessage(t, conn)
+
+	sendClientMessage(t, conn, ClientMessage{Action: ActionSubscribeSession, SessionID: "s2"})
+	time.Sleep(50 * time.Millisecond)
+
+	fullEvent := &SessionEvent{
+		SessionID: "s2",
+		Type:      "user",
+		Timestamp: time.Date(2026, 3, 27, 10, 0, 0, 0, time.UTC),
+		MessageID: "msg-002",
+		Content:   EventContent{Text: "User message"},
+	}
+	env.dispatchCh <- DispatchedEvent{
+		ChangeType: ChangeTypeNew,
+		Session:    &SessionInfo{ID: "s2", Status: SessionStatusActive, AgentID: "agent-z"},
+		Timestamp:  time.Now(),
+		Event:      fullEvent,
+	}
+
+	// First message: broadcast session_list
+	listType, _ := readServerMessageTyped[SessionListData](t, conn)
+	if listType != MsgTypeSessionList {
+		t.Fatalf("expected %s, got %s", MsgTypeSessionList, listType)
+	}
+
+	// Second message: session_event with full SessionEvent
+	evType, evData := readServerMessageTyped[SessionEvent](t, conn)
+	if evType != MsgTypeSessionEvent {
+		t.Fatalf("expected %s, got %s", MsgTypeSessionEvent, evType)
+	}
+	if evData.Type != "user" {
+		t.Fatalf("expected type user, got %s", evData.Type)
+	}
+}

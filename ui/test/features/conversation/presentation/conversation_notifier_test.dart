@@ -252,6 +252,31 @@ void main() {
       expect(getState().events.length, 2);
     });
 
+    // TC-20-08b: 即時事件接收 — fallback 格式（Hook 來源）靜默忽略
+    test('ignores fallback session_event with only sessionId', () async {
+      await initNotifier();
+
+      container.read(conversationNotifierProvider(0).notifier).loadSession('session-1');
+      await sendMessage(
+        createSessionHistoryMessage('session-1', [
+          createUserEvent('hello', sessionId: 'session-1'),
+        ]),
+      );
+      expect(getState().events.length, 1);
+
+      // Fallback 格式：只有 sessionId 和 agentId，無 type/content
+      await sendMessage(const ServerMessage(
+        type: 'session_event',
+        data: {'sessionId': 'session-1', 'agentId': 'agent-1'},
+      ));
+      expect(getState().events.length, 1);
+
+      // 後續完整格式事件仍正常處理
+      final validEvent = createAssistantEvent('works', sessionId: 'session-1');
+      await sendMessage(createSessionEventMessage(validEvent));
+      expect(getState().events.length, 2);
+    });
+
     // TC-20-09: 即時事件接收 — 格式異常容錯
     test('handles malformed session_event gracefully', () async {
       await initNotifier();

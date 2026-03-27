@@ -10,9 +10,10 @@ import (
 // DispatchedEvent 是事件融合層的輸出結構體，
 // 代表一個單一的狀態變更事件。
 type DispatchedEvent struct {
-	ChangeType ChangeType   `json:"changeType"`
-	Session    *SessionInfo `json:"session"`
-	Timestamp  time.Time    `json:"timestamp"`
+	ChangeType ChangeType    `json:"changeType"`
+	Session    *SessionInfo  `json:"session"`
+	Timestamp  time.Time     `json:"timestamp"`
+	Event      *SessionEvent `json:"event,omitempty"`
 }
 
 // deduplicationKey 用於去重檢查的複合鍵。
@@ -108,7 +109,7 @@ func (d *EventDispatcher) Run(ctx context.Context) {
 
 // dispatchAfterUpdate 記錄舊狀態、執行 update、取得新狀態、推送事件。
 // 提取自 processSessionEvent 和 processHookEvent 的共同邏輯。
-func (d *EventDispatcher) dispatchAfterUpdate(sessionID string, timestamp time.Time, update func()) {
+func (d *EventDispatcher) dispatchAfterUpdate(sessionID string, timestamp time.Time, sessionEvent *SessionEvent, update func()) {
 	oldSession, _ := d.registry.Get(sessionID)
 	oldStatus := ""
 	if oldSession != nil {
@@ -135,6 +136,7 @@ func (d *EventDispatcher) dispatchAfterUpdate(sessionID string, timestamp time.T
 		ChangeType: changeType,
 		Session:    newSession,
 		Timestamp:  timestamp,
+		Event:      sessionEvent,
 	})
 }
 
@@ -178,7 +180,8 @@ func (d *EventDispatcher) processSessionEvent(event SessionEvent) {
 	d.dedupTable[key] = EventSourceJSONL
 	d.dedupMu.Unlock()
 
-	d.dispatchAfterUpdate(event.SessionID, d.now(), func() {
+	eventCopy := event
+	d.dispatchAfterUpdate(event.SessionID, d.now(), &eventCopy, func() {
 		d.registry.UpsertFromSessionEvent(event)
 		d.registry.AppendEvent(event.SessionID, event)
 	})
@@ -236,7 +239,7 @@ func (d *EventDispatcher) processHookEvent(event HookEvent) {
 	d.dedupTable[key] = EventSourceHTTP
 	d.dedupMu.Unlock()
 
-	d.dispatchAfterUpdate(event.SessionID, timestamp, func() {
+	d.dispatchAfterUpdate(event.SessionID, timestamp, nil, func() {
 		d.registry.UpsertFromHookEvent(event)
 	})
 

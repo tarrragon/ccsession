@@ -79,6 +79,10 @@ class SessionListNotifier extends _$SessionListNotifier {
           _handleSessionList(message);
         case 'session_status_change':
           _handleStatusChange(message);
+        case 'session_event':
+        case 'session_history':
+        case 'error':
+          break; // 由 ConversationNotifier 處理
         default:
           debugPrint(
             'SessionListNotifier: unknown message type: ${message.type}',

@@ -73,6 +73,35 @@ void main() {
       expect(result.toolInput, isNull);
     });
 
+    /// TC-02-05a: SessionEvent fallback 格式（Hook 來源，缺少 type/timestamp/content）
+    test('SessionEvent fallback 格式安全解析', () {
+      final json = <String, dynamic>{
+        'sessionId': 's1',
+        'agentId': 'agent-1',
+      };
+
+      final result = SessionEvent.fromJson(json);
+
+      expect(result.sessionId, 's1');
+      expect(result.type, '');
+      expect(result.timestamp, isNull);
+      expect(result.isComplete, isFalse);
+    });
+
+    /// TC-02-05b: SessionEvent 完整格式 isComplete 為 true
+    test('SessionEvent 完整格式 isComplete 為 true', () {
+      final json = <String, dynamic>{
+        'sessionId': 's1',
+        'type': 'human',
+        'timestamp': '2026-03-25T10:00:00.000Z',
+        'content': {'text': 'hello'},
+      };
+
+      final result = SessionEvent.fromJson(json);
+
+      expect(result.isComplete, isTrue);
+    });
+
     /// TC-02-05: SessionEvent toJson 往返
     test('SessionEvent toJson 往返', () {
       final original = SessionEvent(

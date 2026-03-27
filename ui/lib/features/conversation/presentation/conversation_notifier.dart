@@ -152,7 +152,8 @@ class ConversationNotifier extends _$ConversationNotifier {
 
     state = AsyncData(current.copyWith(isLoadingHistory: true));
 
-    final before = current.events.first.timestamp.toIso8601String();
+    final before = current.events.first.timestamp?.toIso8601String();
+    if (before == null) return;
     ref.read(webSocketServiceProvider).requestSessionHistory(
           current.sessionId!,
           before: before,
@@ -205,9 +206,10 @@ class ConversationNotifier extends _$ConversationNotifier {
   }
 
   /// 需求：session_event 即時事件處理（Phase 1 流程 4.2）
-  /// 約束：sessionId 不匹配則忽略
+  /// 約束：sessionId 不匹配則忽略；fallback 格式（無 type/content）靜默忽略
   void _handleSessionEvent(ServerMessage message) {
     final event = SessionEvent.fromJson(message.data);
+    if (!event.isComplete) return;
     if (event.sessionId != _currentState.sessionId) return;
 
     state = AsyncData(_currentState.copyWith(

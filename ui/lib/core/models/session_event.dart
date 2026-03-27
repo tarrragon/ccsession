@@ -10,24 +10,28 @@ class SessionEvent extends Equatable {
   const SessionEvent({
     required this.sessionId,
     this.projectPath = '',
-    required this.type,
-    required this.timestamp,
+    this.type = '',
+    this.timestamp,
     this.messageId = '',
     this.contentIndex = -1,
     this.isLastContent = false,
-    required this.content,
+    this.content = const EventContent(),
     this.toolName = '',
   });
 
   final String sessionId;
   final String projectPath;
   final String type;
-  final DateTime timestamp;
+  final DateTime? timestamp;
   final String messageId;
   final int contentIndex;
   final bool isLastContent;
   final EventContent content;
   final String toolName;
+
+  /// 需求：判斷是否為完整的 SessionEvent（JSONL 來源）
+  /// 約束：fallback 格式（Hook 來源）只有 sessionId/agentId，缺少 type/content
+  bool get isComplete => type.isNotEmpty && timestamp != null;
 
   factory SessionEvent.fromJson(Map<String, dynamic> json) =>
       _$SessionEventFromJson(json);
