@@ -2,7 +2,10 @@ package main
 
 import (
 	"errors"
+	"log/slog"
+	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 )
@@ -145,13 +148,43 @@ func (r *SessionRegistry) UpsertFromHookEvent(event HookEvent) {
 		session.Status = SessionStatusActive
 
 	case HookEventSubagentStop:
-		// SubagentStop 必須在已存在的 session 上才處理（孤立事件忽略）
-		if !exists {
-			return // 孤立的 Stop 事件，不建立新 session
+		// SubagentStop 的 session_id 是主 session ID（非 subagent）。
+		// 主 session 仍在運行，不應被標記為 completed。
+		// 若 TranscriptPath 存在，從中提取 subagent session ID 並註冊。
+		if exists {
+			session.LastEventAt = now
 		}
-		session.LastMessage = event.LastMessage
-		session.LastEventAt = now
-		session.Status = SessionStatusCompleted // 即時完成
+
+		// 從 TranscriptPath 提取 subagent session ID 並建立獨立的 registry 條目
+		subagentID := extractSessionIDFromPath(event.TranscriptPath)
+		if subagentID == "" {
+			slog.Debug(LogSubagentPathEmpty,
+				"layer", "session_registry",
+				"mainSessionID", event.SessionID)
+			return
+		}
+
+		subSession, subExists := r.sessions[subagentID]
+		if !subExists {
+			subSession = &SessionInfo{
+				ID:           subagentID,
+				Status:       SessionStatusCompleted,
+				FirstEventAt: now,
+				LastEventAt:  now,
+			}
+			r.sessions[subagentID] = subSession
+		}
+		subSession.AgentID = event.AgentID
+		subSession.AgentType = event.AgentType
+		subSession.LastMessage = event.LastMessage
+		subSession.LastEventAt = now
+		subSession.ParentAgentID = event.ParentAgentID
+		subSession.Status = SessionStatusCompleted
+
+		slog.Info(LogSubagentRegistered,
+			"layer", "session_registry",
+			"subagentID", subagentID,
+			"mainSessionID", event.SessionID)
 
 	case HookEventTaskCompleted:
 		// TaskCompleted 只在已存在的 session 上處理
@@ -337,4 +370,18 @@ func copySessionInfo(session *SessionInfo) *SessionInfo {
 	}
 	copy := *session
 	return &copy
+}
+
+// extractSessionIDFromPath 從 JSONL 檔案路徑提取 session UUID。
+// 路徑格式：{any_prefix}/{session_uuid}.jsonl
+// 返回空字串若路徑無效或不含 .jsonl 副檔名。
+func extractSessionIDFromPath(path string) string {
+	if path == "" {
+		return ""
+	}
+	base := filepath.Base(path)
+	if !strings.HasSuffix(base, JSONLExtension) {
+		return ""
+	}
+	return strings.TrimSuffix(base, JSONLExtension)
 }
