@@ -75,6 +75,40 @@ Claude Code 的所有對話紀錄以 JSONL 格式即時寫入 `~/.claude/` 目�
 
 > Backend 必須先啟動，Frontend 會自動連線 `ws://localhost:8765/ws`。
 
+### Zellij 開發佈局
+
+在 zellij 環境下開發時，使用以下三欄佈局：
+
+```
+┌──────────────┬──────────────┐
+│              │   後端 (上)   │
+│   claude     ├──────────────┤
+│   (左 50%)   │   前端 (下)   │
+└──────────────┴──────────────┘
+```
+
+```bash
+# 從 claude pane 建立佈局
+zellij action new-pane --direction right --name "後端"
+zellij action new-pane --direction down --name "前端"
+zellij action focus-previous-pane && zellij action focus-previous-pane
+
+# 啟動後端（右上）
+zellij action focus-next-pane && \
+zellij action write-chars "cd /Users/mac-eric/project/ccsession/server && go run ." && \
+zellij action write 10
+
+# 啟動前端（右下）
+zellij action focus-next-pane && \
+zellij action write-chars "cd /Users/mac-eric/project/ccsession/ui && flutter run -d macos" && \
+zellij action write 10
+
+# 切回 claude pane
+zellij action focus-previous-pane && zellij action focus-previous-pane
+```
+
+> Pane 順序（focus-next-pane）：claude → 後端 → 前端 → claude
+
 ### Smoke Test（版本發布前驗收）
 
 ```bash
@@ -109,4 +143,4 @@ Claude Code 的所有對話紀錄以 JSONL 格式即時寫入 `~/.claude/` 目�
 ---
 
 *最後更新: 2026-03-27*
-*版本: 2.1.0 - 新增啟動應用和 Smoke Test 章節*
+*版本: 2.2.0 - 新增 Zellij 開發佈局章節*
