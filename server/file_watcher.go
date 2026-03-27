@@ -29,6 +29,7 @@ const (
 	LogWatcherPermissionWarn = "permission denied, skipping file"
 	LogWatcherFsnotifyError  = "fsnotify error"
 	LogWatcherNewDir         = "watching new project directory"
+	LogWatcherEventDropped   = "event channel full, dropping event"
 )
 
 // FileWatcher monitors ~/.claude/projects/ for JSONL file changes
@@ -37,6 +38,7 @@ type FileWatcher struct {
 	claudeHome string
 	readers    map[string]*SessionFileReader
 	eventCh    chan SessionEvent
+	watcher    *fsnotify.Watcher
 	mu         sync.RWMutex
 	logger     *slog.Logger
 }
@@ -77,6 +79,8 @@ func (fw *FileWatcher) Start(ctx context.Context) error {
 		return err
 	}
 	defer watcher.Close()
+
+	fw.watcher = watcher
 
 	projectsDir := filepath.Join(fw.claudeHome, ProjectsDirName)
 	if err := fw.scanExistingFiles(projectsDir, watcher); err != nil {
@@ -151,7 +155,7 @@ func (fw *FileWatcher) scanExistingFiles(projectsDir string, watcher *fsnotify.W
 		}
 		for _, f := range files {
 			if !f.IsDir() && strings.HasSuffix(f.Name(), JSONLExtension) {
-				fw.addFile(filepath.Join(subDir, f.Name()))
+				fw.addFileSeekEnd(filepath.Join(subDir, f.Name()))
 			}
 		}
 	}
@@ -209,6 +213,8 @@ func (fw *FileWatcher) handleFsEvent(event fsnotify.Event, watcher *fsnotify.Wat
 }
 
 // addFile registers a new JSONL file and reads its existing content.
+// On macOS (kqueue), a CREATE event may fire before the file content is
+// flushed, so we retry once after a short delay if no lines are read.
 func (fw *FileWatcher) addFile(path string) {
 	sessionID, projectPath := extractSessionInfo(path)
 
@@ -223,7 +229,63 @@ func (fw *FileWatcher) addFile(path string) {
 	fw.readers[path] = reader
 	fw.mu.Unlock()
 
+	// Watch individual file for WRITE events (required on macOS kqueue)
+	fw.watchFile(path)
+
 	fw.readNewLinesForReader(reader)
+
+	// On macOS kqueue, CREATE may fire before content is written.
+	// If we read nothing, retry after a short delay to catch the content.
+	if reader.offset == 0 {
+		time.AfterFunc(AddFileRetryDelay, func() {
+			fw.readNewLinesForReader(reader)
+		})
+	}
+}
+
+// addFileSeekEnd registers a JSONL file and seeks to the end without reading
+// history. Used during initial scan to avoid flooding eventCh with old events.
+func (fw *FileWatcher) addFileSeekEnd(path string) {
+	sessionID, projectPath := extractSessionInfo(path)
+
+	// Determine file size to set offset at EOF
+	info, err := os.Stat(path)
+	if err != nil {
+		fw.logger.Warn(LogWatcherReadError,
+			"layer", "file_watcher",
+			"path", path,
+			"error", err.Error())
+		return
+	}
+
+	reader := &SessionFileReader{
+		filePath:    path,
+		offset:      info.Size(),
+		sessionID:   sessionID,
+		projectPath: projectPath,
+	}
+
+	fw.mu.Lock()
+	fw.readers[path] = reader
+	fw.mu.Unlock()
+
+	// Watch individual file for WRITE events (required on macOS kqueue)
+	fw.watchFile(path)
+}
+
+// watchFile adds an individual file to the fsnotify watcher.
+// On macOS kqueue, directory watches don't emit WRITE events for files,
+// so each JSONL file must be watched individually.
+func (fw *FileWatcher) watchFile(path string) {
+	if fw.watcher == nil {
+		return
+	}
+	if err := fw.watcher.Add(path); err != nil {
+		fw.logger.Warn(LogWatcherWatchDirError,
+			"layer", "file_watcher",
+			"path", path,
+			"error", err.Error())
+	}
 }
 
 // readNewLines reads newly appended lines from a known JSONL file.
@@ -286,7 +348,15 @@ func (fw *FileWatcher) readNewLinesForReader(r *SessionFileReader) {
 		}
 
 		for _, evt := range events {
-			fw.eventCh <- evt
+			select {
+			case fw.eventCh <- evt:
+				// sent successfully
+			default:
+				fw.logger.Warn(LogWatcherEventDropped,
+					"layer", "file_watcher",
+					"sessionID", r.sessionID,
+					"eventType", evt.Type)
+			}
 		}
 	}
 
@@ -306,14 +376,28 @@ func (fw *FileWatcher) removeFile(path string) {
 	}
 	fw.mu.Unlock()
 
+	// Remove individual file watch (ignore error if already removed by OS)
+	if fw.watcher != nil {
+		_ = fw.watcher.Remove(path)
+	}
+
 	if ok {
-		fw.eventCh <- SessionEvent{
+		evt := SessionEvent{
 			SessionID:     reader.sessionID,
 			ProjectPath:   reader.projectPath,
 			Type:          EventTypeSessionCompleted,
 			Timestamp:     time.Now(),
 			ContentIndex:  ContentIndexNone,
 			IsLastContent: true,
+		}
+		select {
+		case fw.eventCh <- evt:
+			// sent successfully
+		default:
+			fw.logger.Warn(LogWatcherEventDropped,
+				"layer", "file_watcher",
+				"sessionID", reader.sessionID,
+				"eventType", evt.Type)
 		}
 	}
 }

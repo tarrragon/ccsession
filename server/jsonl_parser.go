@@ -27,6 +27,7 @@ const (
 // are silently skipped.
 var conversationLineTypes = map[string]bool{
 	"human":       true,
+	"ai":          true,
 	"assistant":   true,
 	"tool_result": true,
 }

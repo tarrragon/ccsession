@@ -131,23 +131,32 @@ func TestFileWatcherScanExisting(t *testing.T) {
 		}
 	}()
 
-	events := drainEvents(ch, 1, 3*time.Second)
-	if len(events) < 1 {
-		t.Fatal("expected at least 1 event from existing file, got 0")
+	// Initial scan should skip history (seek to EOF), so no events expected
+	events := drainEvents(ch, 1, 1*time.Second)
+	if len(events) != 0 {
+		t.Errorf("expected 0 events from initial scan (history skipped), got %d", len(events))
 	}
 
-	evt := events[0]
-	if evt.SessionID != "session-001" {
-		t.Errorf("SessionID = %q, want %q", evt.SessionID, "session-001")
+	// Verify the reader was registered
+	fw.mu.RLock()
+	reader, ok := fw.readers[jsonlPath]
+	fw.mu.RUnlock()
+	if !ok {
+		t.Fatal("expected reader to be registered for existing file")
 	}
-	if evt.ProjectPath != "test-project" {
-		t.Errorf("ProjectPath = %q, want %q", evt.ProjectPath, "test-project")
+	if reader.sessionID != "session-001" {
+		t.Errorf("SessionID = %q, want %q", reader.sessionID, "session-001")
 	}
-	if evt.Type != EventTypeUser {
-		t.Errorf("Type = %q, want %q", evt.Type, EventTypeUser)
+	if reader.projectPath != "test-project" {
+		t.Errorf("ProjectPath = %q, want %q", reader.projectPath, "test-project")
 	}
-	if evt.Content.Text != "hello world" {
-		t.Errorf("Content.Text = %q, want %q", evt.Content.Text, "hello world")
+	// Offset should be at EOF (file size)
+	info, err := os.Stat(jsonlPath)
+	if err != nil {
+		t.Fatalf("failed to stat file: %v", err)
+	}
+	if reader.offset != info.Size() {
+		t.Errorf("offset = %d, want %d (EOF)", reader.offset, info.Size())
 	}
 }
 
@@ -211,8 +220,9 @@ func TestFileWatcherAppend(t *testing.T) {
 		}
 	}()
 
-	// Drain the initial event from scanning
-	drainEvents(ch, 1, 3*time.Second)
+	// Initial scan skips history (seeks to EOF), so no events to drain.
+	// Give watcher time to start.
+	time.Sleep(200 * time.Millisecond)
 
 	// Append a new line to the file
 	line2 := makeAssistantJSONL(t, "msg-2", "second message")
@@ -262,8 +272,8 @@ func TestFileWatcherRemove(t *testing.T) {
 		}
 	}()
 
-	// Drain the initial user event
-	drainEvents(ch, 1, 3*time.Second)
+	// Initial scan skips history, give watcher time to start
+	time.Sleep(200 * time.Millisecond)
 
 	// Remove the file
 	if err := os.Remove(jsonlPath); err != nil {

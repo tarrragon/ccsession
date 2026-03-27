@@ -1,5 +1,7 @@
 package main
 
+import "time"
+
 // Session event types from JSONL records
 const (
 	EventTypeUser             = "user"
@@ -18,6 +20,7 @@ const (
 	DefaultEventChannelSize = 100
 	ProjectsDirName         = "projects"
 	JSONLExtension          = ".jsonl"
+	AddFileRetryDelay       = 50 * time.Millisecond
 )
 
 // Main server configuration
