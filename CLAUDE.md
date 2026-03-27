@@ -63,10 +63,13 @@ Claude Code 的所有對話紀錄以 JSONL 格式即時寫入 `~/.claude/` 目�
 ### 啟動應用
 
 ```bash
-# 1. 啟動 Go Backend（監聽 localhost:8765）
+# 1. 產生 Riverpod/JSON code（.g.dart 不在 git 中，merge 後必須重跑）
+(cd ui && dart run build_runner build --delete-conflicting-outputs)
+
+# 2. 啟動 Go Backend（監聽 localhost:8765）
 (cd server && go run .)
 
-# 2. 啟動 Flutter Frontend（另開終端）
+# 3. 啟動 Flutter Frontend（另開終端）
 (cd ui && flutter run -d macos)    # macOS
 (cd ui && flutter run -d linux)    # Linux
 (cd ui && flutter run -d windows)  # Windows
