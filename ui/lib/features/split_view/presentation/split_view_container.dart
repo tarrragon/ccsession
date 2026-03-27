@@ -1,3 +1,4 @@
+import 'package:ccsession/core/constants/split_view_constants.dart';
 import 'package:ccsession/features/split_view/domain/layout_mode.dart';
 import 'package:ccsession/features/split_view/presentation/split_view_notifier.dart';
 import 'package:ccsession/features/split_view/domain/split_view_state.dart';
@@ -143,14 +144,21 @@ class _SplitViewContainerState extends ConsumerState<SplitViewContainer> {
     );
   }
 
-  int _getFlex(String key) => (_flexValues[key] ?? 100).round();
+  int _getFlex(String key) =>
+      (_flexValues[key] ?? SplitViewConstants.defaultFlex).round();
 
   void _handleDrag(String leftKey, String rightKey, double delta) {
     setState(() {
-      final leftFlex = _flexValues[leftKey] ?? 100.0;
-      final rightFlex = _flexValues[rightKey] ?? 100.0;
-      _flexValues[leftKey] = (leftFlex + delta).clamp(20, 280);
-      _flexValues[rightKey] = (rightFlex - delta).clamp(20, 280);
+      final leftFlex = _flexValues[leftKey] ?? SplitViewConstants.defaultFlex;
+      final rightFlex = _flexValues[rightKey] ?? SplitViewConstants.defaultFlex;
+      _flexValues[leftKey] = (leftFlex + delta).clamp(
+        SplitViewConstants.minFlex,
+        SplitViewConstants.maxFlex,
+      );
+      _flexValues[rightKey] = (rightFlex - delta).clamp(
+        SplitViewConstants.minFlex,
+        SplitViewConstants.maxFlex,
+      );
     });
   }
 }

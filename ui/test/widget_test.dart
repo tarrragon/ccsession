@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'features/dashboard/presentation/dashboard_test_helpers.dart';
 import 'features/split_view/helpers/fake_split_view_storage.dart';
 
 void main() {
@@ -12,6 +13,8 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          webSocketServiceProvider
+              .overrideWithValue(FakeWebSocketService()),
           connectionStateProvider.overrideWith(
             (ref) => const Stream.empty(),
           ),

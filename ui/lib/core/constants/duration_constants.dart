@@ -10,4 +10,7 @@ abstract final class DurationConstants {
 
   /// Pong 超時（對應 Go PongWaitTimeout = 35s）
   static const pongTimeout = Duration(seconds: 35);
+
+  /// 自動捲動動畫時長（ConversationView auto-scroll）
+  static const autoScrollDuration = Duration(milliseconds: 200);
 }

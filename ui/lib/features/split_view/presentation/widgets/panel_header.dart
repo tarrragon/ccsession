@@ -1,3 +1,4 @@
+import 'package:ccsession/core/constants/split_view_constants.dart';
 import 'package:ccsession/features/split_view/presentation/session_name_provider.dart';
 import 'package:ccsession/features/split_view/presentation/split_view_notifier.dart';
 import 'package:flutter/material.dart';
@@ -26,7 +27,7 @@ class PanelHeader extends ConsumerWidget {
     return GestureDetector(
       onDoubleTap: () => _toggleMaximize(notifier, isMaximized),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        padding: SplitViewConstants.headerPadding,
         color: Theme.of(context).colorScheme.surfaceContainerHighest,
         child: Row(
           children: [
@@ -40,16 +41,16 @@ class PanelHeader extends ConsumerWidget {
             IconButton(
               key: Key('panel_${panelIndex}_maximize'),
               icon: Icon(isMaximized ? Icons.fullscreen_exit : Icons.fullscreen),
-              iconSize: 18,
-              constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+              iconSize: SplitViewConstants.headerIconSize,
+              constraints: SplitViewConstants.headerButtonConstraints,
               padding: EdgeInsets.zero,
               onPressed: () => _toggleMaximize(notifier, isMaximized),
             ),
             IconButton(
               key: Key('panel_${panelIndex}_close'),
               icon: const Icon(Icons.close),
-              iconSize: 18,
-              constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+              iconSize: SplitViewConstants.headerIconSize,
+              constraints: SplitViewConstants.headerButtonConstraints,
               padding: EdgeInsets.zero,
               onPressed: () => notifier.closePanel(panelIndex),
             ),

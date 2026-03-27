@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:ccsession/core/constants/duration_constants.dart';
+import 'package:flutter/foundation.dart';
 
 /// 需求：指數退避重連策略（spec 4.4）
 /// 序列：1s -> 2s -> 4s -> 8s -> 16s -> 30s -> 30s -> ...
@@ -11,6 +12,7 @@ class ReconnectStrategy {
   Duration nextDelay() {
     final delay = currentDelay;
     _attempt++;
+    debugPrint('[Reconnect] attempt=$_attempt, delay=${delay.inSeconds}s');
     return delay;
   }
 

@@ -31,3 +31,10 @@ const MaxSummaryLength = 100
 
 // 狀態掃描週期（定時觸發狀態機評估）
 const StatusScanInterval = 30 * time.Second
+
+// Log messages for session registry
+const (
+	LogSubagentRegistered      = "subagent session registered from transcript path"
+	LogSubagentPathEmpty       = "SubagentStop without transcript path, updating main session only"
+	LogSubagentPathParseError  = "failed to extract session ID from transcript path"
+)

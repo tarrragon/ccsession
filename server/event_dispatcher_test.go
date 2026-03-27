@@ -110,58 +110,98 @@ func TestEventDispatcher_ProcessHookEvent_SubagentStart(t *testing.T) {
 }
 
 func TestEventDispatcher_ProcessHookEvent_SubagentStop_Completed(t *testing.T) {
-	tests := []struct {
-		name         string
-		setup        func(*SessionRegistry)
-		event        HookEvent
-		expectedType ChangeType
-	}{
-		{
-			name: "SubagentStop sets status to completed immediately",
-			setup: func(registry *SessionRegistry) {
-				// Pre-create session with SubagentStart
-				registry.UpsertFromHookEvent(HookEvent{
-					Type:      HookEventSubagentStart,
-					AgentID:   "agent-1",
-					AgentType: "rosemary",
-					SessionID: "sess-stop-1",
-					Timestamp: time.Now().Format(time.RFC3339),
-				})
-			},
-			event: HookEvent{
-				Type:      HookEventSubagentStop,
-				AgentID:   "agent-1",
-				SessionID: "sess-stop-1",
-				Timestamp: time.Now().Format(time.RFC3339),
-				LastMessage: "Task completed",
-			},
-			expectedType: ChangeTypeStatusChanged,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			registry := NewSessionRegistry(time.Now)
-			tt.setup(registry)
-
-			sessionEvCh := make(chan SessionEvent, 10)
-			hookEvCh := make(chan HookEvent, 10)
-			outCh := make(chan DispatchedEvent, 10)
-
-			dispatcher := NewEventDispatcher(registry, sessionEvCh, hookEvCh, outCh, time.Now)
-
-			dispatcher.processHookEvent(tt.event)
-
-			select {
-			case dispatched := <-outCh:
-				if dispatched.Session.Status != SessionStatusCompleted {
-					t.Errorf("expected status completed, got %s", dispatched.Session.Status)
-				}
-			case <-time.After(100 * time.Millisecond):
-				t.Error("expected event on output channel")
-			}
+	t.Run("SubagentStop with TranscriptPath registers subagent as completed", func(t *testing.T) {
+		registry := NewSessionRegistry(time.Now)
+		// Pre-create main session with SubagentStart
+		registry.UpsertFromHookEvent(HookEvent{
+			Type:      HookEventSubagentStart,
+			AgentID:   "agent-1",
+			AgentType: "rosemary",
+			SessionID: "sess-main",
+			Timestamp: time.Now().Format(time.RFC3339),
 		})
-	}
+
+		sessionEvCh := make(chan SessionEvent, 10)
+		hookEvCh := make(chan HookEvent, 10)
+		outCh := make(chan DispatchedEvent, 10)
+		dispatcher := NewEventDispatcher(registry, sessionEvCh, hookEvCh, outCh, time.Now)
+
+		dispatcher.processHookEvent(HookEvent{
+			Type:           HookEventSubagentStop,
+			AgentID:        "agent-1",
+			SessionID:      "sess-main",
+			Timestamp:      time.Now().Format(time.RFC3339),
+			LastMessage:    "Task completed",
+			TranscriptPath: "/home/user/.claude/projects/test/subagent-uuid-123.jsonl",
+		})
+
+		// Should receive two events: main session update + subagent new
+		var events []DispatchedEvent
+		for i := 0; i < 2; i++ {
+			select {
+			case e := <-outCh:
+				events = append(events, e)
+			case <-time.After(200 * time.Millisecond):
+			}
+		}
+		if len(events) < 2 {
+			t.Fatalf("expected at least 2 events, got %d", len(events))
+		}
+
+		// Verify subagent session was created as completed
+		subSession, ok := registry.Get("subagent-uuid-123")
+		if !ok {
+			t.Fatal("subagent session not found in registry")
+		}
+		if subSession.Status != SessionStatusCompleted {
+			t.Errorf("expected subagent status completed, got %s", subSession.Status)
+		}
+		if subSession.LastMessage != "Task completed" {
+			t.Errorf("expected LastMessage 'Task completed', got %q", subSession.LastMessage)
+		}
+
+		// Verify main session is NOT marked completed
+		mainSession, ok := registry.Get("sess-main")
+		if !ok {
+			t.Fatal("main session not found in registry")
+		}
+		if mainSession.Status == SessionStatusCompleted {
+			t.Error("main session should NOT be marked completed by SubagentStop")
+		}
+	})
+
+	t.Run("SubagentStop without TranscriptPath updates main session only", func(t *testing.T) {
+		registry := NewSessionRegistry(time.Now)
+		registry.UpsertFromHookEvent(HookEvent{
+			Type:      HookEventSubagentStart,
+			AgentID:   "agent-1",
+			AgentType: "rosemary",
+			SessionID: "sess-main-2",
+			Timestamp: time.Now().Format(time.RFC3339),
+		})
+
+		sessionEvCh := make(chan SessionEvent, 10)
+		hookEvCh := make(chan HookEvent, 10)
+		outCh := make(chan DispatchedEvent, 10)
+		dispatcher := NewEventDispatcher(registry, sessionEvCh, hookEvCh, outCh, time.Now)
+
+		dispatcher.processHookEvent(HookEvent{
+			Type:        HookEventSubagentStop,
+			AgentID:     "agent-1",
+			SessionID:   "sess-main-2",
+			Timestamp:   time.Now().Format(time.RFC3339),
+			LastMessage: "done",
+		})
+
+		// Main session should stay active (not completed)
+		mainSession, ok := registry.Get("sess-main-2")
+		if !ok {
+			t.Fatal("main session not found")
+		}
+		if mainSession.Status == SessionStatusCompleted {
+			t.Error("main session should NOT be marked completed without TranscriptPath")
+		}
+	})
 }
 
 func TestEventDispatcher_Dedup_HTTPFirst_JSONLIgnored(t *testing.T) {

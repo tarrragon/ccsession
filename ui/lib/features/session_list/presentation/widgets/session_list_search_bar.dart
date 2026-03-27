@@ -19,6 +19,7 @@ class _SessionListSearchBarState extends ConsumerState<SessionListSearchBar> {
   final _focusNode = FocusNode();
   final _keyboardListenerFocusNode = FocusNode();
   final _controller = TextEditingController();
+  bool _hasPendingFocusRequest = false;
 
   @override
   void dispose() {
@@ -36,18 +37,23 @@ class _SessionListSearchBarState extends ConsumerState<SessionListSearchBar> {
       return const SizedBox.shrink();
     }
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_focusNode.hasFocus) {
-        _focusNode.requestFocus();
-      }
-    });
+    // 需求：搜尋列開啟時自動聚焦（只註冊一次回呼）
+    if (!_hasPendingFocusRequest) {
+      _hasPendingFocusRequest = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _hasPendingFocusRequest = false;
+        if (mounted && !_focusNode.hasFocus) {
+          _focusNode.requestFocus();
+        }
+      });
+    }
 
     return _buildSearchRow();
   }
 
   Widget _buildSearchRow() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: SearchConstants.barPadding,
       child: Row(
         children: [
           Expanded(child: _buildTextField()),
@@ -69,7 +75,7 @@ class _SessionListSearchBarState extends ConsumerState<SessionListSearchBar> {
           hintText: SearchConstants.sessionFilterHint,
           isDense: true,
           border: OutlineInputBorder(),
-          contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+          contentPadding: SearchConstants.inputContentPadding,
         ),
         onChanged: _onQueryChanged,
       ),
@@ -80,8 +86,8 @@ class _SessionListSearchBarState extends ConsumerState<SessionListSearchBar> {
     return IconButton(
       icon: const Icon(Icons.close),
       onPressed: _onCloseSearch,
-      iconSize: 20,
-      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+      iconSize: SearchConstants.buttonIconSize,
+      constraints: SearchConstants.buttonConstraints,
     );
   }
 

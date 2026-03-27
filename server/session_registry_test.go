@@ -214,37 +214,71 @@ func TestSessionRegistry_UpsertFromHookEvent_SubagentStart(t *testing.T) {
 
 // TestSessionRegistry_UpsertFromHookEvent_SubagentStop 測試 SubagentStop Hook 事件
 func TestSessionRegistry_UpsertFromHookEvent_SubagentStop(t *testing.T) {
-	baseTime := time.Date(2026, 3, 25, 12, 0, 0, 0, time.UTC)
-	registry := NewSessionRegistry(func() time.Time { return baseTime })
+	t.Run("with TranscriptPath registers subagent session", func(t *testing.T) {
+		baseTime := time.Date(2026, 3, 25, 12, 0, 0, 0, time.UTC)
+		registry := NewSessionRegistry(func() time.Time { return baseTime })
 
-	// 先建立 session
-	jsonlEvent := SessionEvent{
-		SessionID: "hook-test-2",
-		Type:      EventTypeUser,
-		Timestamp: baseTime,
-	}
-	registry.UpsertFromSessionEvent(jsonlEvent)
+		// 先建立主 session
+		registry.UpsertFromSessionEvent(SessionEvent{
+			SessionID: "main-sess",
+			Type:      EventTypeUser,
+			Timestamp: baseTime,
+		})
 
-	session, _ := registry.Get("hook-test-2")
-	if session.Status != SessionStatusActive {
-		t.Fatalf("expected initial Status=%q", SessionStatusActive)
-	}
+		// 收到 SubagentStop Hook（含 TranscriptPath）
+		registry.UpsertFromHookEvent(HookEvent{
+			Type:           HookEventSubagentStop,
+			SessionID:      "main-sess",
+			AgentID:        "agent-1",
+			AgentType:      "rosemary",
+			LastMessage:    "Task completed",
+			TranscriptPath: "/home/user/.claude/projects/test/sub-uuid-abc.jsonl",
+		})
 
-	// 收到 SubagentStop Hook
-	hookEvent := HookEvent{
-		Type:        HookEventSubagentStop,
-		SessionID:   "hook-test-2",
-		LastMessage: "Task completed",
-	}
-	registry.UpsertFromHookEvent(hookEvent)
+		// 主 session 不應被標記為 completed
+		mainSession, _ := registry.Get("main-sess")
+		if mainSession.Status == SessionStatusCompleted {
+			t.Error("main session should NOT be completed by SubagentStop")
+		}
 
-	session, _ = registry.Get("hook-test-2")
-	if session.Status != SessionStatusCompleted {
-		t.Errorf("expected Status=%q, got %q", SessionStatusCompleted, session.Status)
-	}
-	if session.LastMessage != "Task completed" {
-		t.Errorf("expected LastMessage=%q, got %q", "Task completed", session.LastMessage)
-	}
+		// subagent session 應被建立且為 completed
+		subSession, ok := registry.Get("sub-uuid-abc")
+		if !ok {
+			t.Fatal("subagent session not found in registry")
+		}
+		if subSession.Status != SessionStatusCompleted {
+			t.Errorf("expected subagent Status=%q, got %q", SessionStatusCompleted, subSession.Status)
+		}
+		if subSession.LastMessage != "Task completed" {
+			t.Errorf("expected LastMessage=%q, got %q", "Task completed", subSession.LastMessage)
+		}
+		if subSession.AgentID != "agent-1" {
+			t.Errorf("expected AgentID=%q, got %q", "agent-1", subSession.AgentID)
+		}
+	})
+
+	t.Run("without TranscriptPath updates main session only", func(t *testing.T) {
+		baseTime := time.Date(2026, 3, 25, 12, 0, 0, 0, time.UTC)
+		registry := NewSessionRegistry(func() time.Time { return baseTime })
+
+		registry.UpsertFromSessionEvent(SessionEvent{
+			SessionID: "main-sess-2",
+			Type:      EventTypeUser,
+			Timestamp: baseTime,
+		})
+
+		registry.UpsertFromHookEvent(HookEvent{
+			Type:        HookEventSubagentStop,
+			SessionID:   "main-sess-2",
+			LastMessage: "done",
+		})
+
+		// 主 session 不應被標記為 completed
+		session, _ := registry.Get("main-sess-2")
+		if session.Status == SessionStatusCompleted {
+			t.Error("main session should NOT be completed without TranscriptPath")
+		}
+	})
 }
 
 // TestSessionRegistry_UpsertFromHookEvent_TeammateIdle 測試 TeammateIdle Hook 事件
@@ -468,15 +502,16 @@ func TestScanAndUpdateStatus_DoesNotRevertCompleted(t *testing.T) {
 		Timestamp: baseTime,
 	})
 
-	// 透過 SubagentStop 設為 completed
-	registry.UpsertFromHookEvent(HookEvent{
-		Type:      HookEventSubagentStop,
+	// 透過 session_completed 事件設為 completed
+	registry.UpsertFromSessionEvent(SessionEvent{
 		SessionID: "completed-guard-1",
+		Type:      EventTypeSessionCompleted,
+		Timestamp: baseTime,
 	})
 
 	session, _ := registry.Get("completed-guard-1")
 	if session.Status != SessionStatusCompleted {
-		t.Fatalf("expected completed after SubagentStop, got %q", session.Status)
+		t.Fatalf("expected completed after session_completed, got %q", session.Status)
 	}
 
 	// 不推進時間（elapsed < ActiveThreshold），觸發掃描
@@ -504,10 +539,11 @@ func TestUpsertFromSessionEvent_DoesNotRevertCompleted(t *testing.T) {
 		Timestamp: baseTime,
 	})
 
-	// 透過 SubagentStop 設為 completed
-	registry.UpsertFromHookEvent(HookEvent{
-		Type:      HookEventSubagentStop,
+	// 透過 session_completed 事件設為 completed
+	registry.UpsertFromSessionEvent(SessionEvent{
 		SessionID: "completed-guard-2",
+		Type:      EventTypeSessionCompleted,
+		Timestamp: baseTime,
 	})
 
 	// 送入非 session_completed 的事件

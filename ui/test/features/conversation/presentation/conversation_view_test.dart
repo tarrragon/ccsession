@@ -159,6 +159,49 @@ void main() {
           find.byKey(const Key('conversation_jump_to_latest')), findsNothing);
     });
 
+    // TC-21-09: reverse:true 索引 — 最新訊息在底部（index 0）
+    testWidgets('renders newest message at bottom in reverse ListView',
+        (tester) async {
+      final events = <SessionEvent>[
+        createUserEvent('oldest'),
+        createAssistantEvent('middle'),
+        createUserEvent('newest'),
+      ];
+
+      await tester.pumpWidget(_buildWidget(
+        ConversationState(sessionId: 's1', events: events),
+      ));
+      await tester.pumpAndSettle();
+
+      // reverse:true 時，螢幕底部是 index 0，應對應 events 最後一筆（newest）
+      // 驗證：三個 bubble 都渲染，且最新的 UserMessageBubble 含 'newest'
+      expect(find.byType(UserMessageBubble), findsNWidgets(2));
+      expect(find.byType(AssistantMessageBubble), findsOneWidget);
+      expect(find.text('newest'), findsOneWidget);
+      expect(find.text('oldest'), findsOneWidget);
+    });
+
+    // TC-21-10: reverse:true + hasMore — Load More 在頂部，索引不錯位
+    testWidgets('load more button at top does not shift event indices',
+        (tester) async {
+      final events = <SessionEvent>[
+        createUserEvent('first'),
+        createAssistantEvent('second'),
+      ];
+
+      await tester.pumpWidget(_buildWidget(
+        ConversationState(sessionId: 's1', events: events, hasMore: true),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('conversation_load_more_button')),
+          findsOneWidget);
+      expect(find.byType(UserMessageBubble), findsOneWidget);
+      expect(find.byType(AssistantMessageBubble), findsOneWidget);
+      expect(find.text('first'), findsOneWidget);
+      expect(find.text('second'), findsOneWidget);
+    });
+
     // TC-21-08: 錯誤狀態 — 顯示錯誤訊息
     testWidgets('shows error message when errorMessage is set',
         (tester) async {

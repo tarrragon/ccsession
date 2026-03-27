@@ -239,12 +239,28 @@ func (d *EventDispatcher) processHookEvent(event HookEvent) {
 	d.dedupTable[key] = EventSourceHTTP
 	d.dedupMu.Unlock()
 
+	// SubagentStop 會在 registry 中建立 subagent 條目（從 TranscriptPath 提取）。
+	// 需要為主 session 和 subagent session 分別推送事件。
+	subagentID := ""
+	if event.Type == HookEventSubagentStop && event.TranscriptPath != "" {
+		subagentID = extractSessionIDFromPath(event.TranscriptPath)
+	}
+
 	d.dispatchAfterUpdate(event.SessionID, timestamp, nil, func() {
 		d.registry.UpsertFromHookEvent(event)
 	})
 
-	// 若 dispatchAfterUpdate 內 newSession 為 nil（孤立事件），
-	// 不會推送事件，此處 log 仍記錄嘗試
+	// 若 SubagentStop 建立了 subagent 條目，為其推送 new 事件
+	if subagentID != "" {
+		if subSession, ok := d.registry.Get(subagentID); ok {
+			d.sendToOutCh(DispatchedEvent{
+				ChangeType: ChangeTypeNew,
+				Session:    subSession,
+				Timestamp:  timestamp,
+			})
+		}
+	}
+
 	logger.Info(LogHookEventProcessed,
 		"layer", "event_dispatcher",
 		"sessionID", event.SessionID,

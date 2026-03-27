@@ -1,5 +1,7 @@
 import 'dart:math';
 
+import 'package:flutter/foundation.dart';
+
 import 'package:ccsession/features/split_view/data/split_view_storage.dart';
 import 'package:ccsession/features/split_view/domain/layout_mode.dart';
 import 'package:ccsession/features/split_view/domain/panel_state.dart';
@@ -28,6 +30,7 @@ class SplitViewNotifier extends _$SplitViewNotifier {
   /// 需求：UC-004 切換佈局模式（場景 1-3）
   /// 約束：保留可延續面板 sessionId，切換後立即持久化
   void switchLayout(LayoutMode mode) {
+    debugPrint('[SplitView] switchLayout: $mode');
     final current = state.valueOrNull;
     if (current == null || current.layoutMode == mode) return;
 
@@ -46,6 +49,7 @@ class SplitViewNotifier extends _$SplitViewNotifier {
   /// 需求：UC-004 為指定面板選擇 session（場景 4）
   /// 約束：同時設定 activePanelIndex，選擇後立即持久化
   void selectSession({required int panelIndex, required String sessionId}) {
+    debugPrint('[SplitView] selectSession: panel=$panelIndex, sessionId=$sessionId');
     final current = _validStateForPanel(panelIndex);
     if (current == null) return;
 
@@ -90,11 +94,18 @@ class SplitViewNotifier extends _$SplitViewNotifier {
     if (current == null || current.panels.length <= 1) return;
     if (panelIndex < 0 || panelIndex >= current.panels.length) return;
 
-    final remaining = _adjustPanelsAfterClose(current.panels, panelIndex);
+    final remaining = _adjustPanelsAfterClose(
+      current.panels,
+      panelIndex,
+      current.activePanelIndex,
+    );
     final newMode = _determineLayoutAfterClose(remaining.length);
     final newPanels = _reindexPanels(remaining);
-    final newActiveIndex =
-        panelIndex == current.activePanelIndex ? 0 : min(current.activePanelIndex, newPanels.length - 1);
+    final newActiveIndex = _adjustActiveIndexAfterClose(
+      current.activePanelIndex,
+      panelIndex,
+      newPanels.length,
+    );
 
     final newMaximizedIndex = _adjustMaximizedIndexAfterClose(
       current.maximizedPanelIndex,
@@ -109,6 +120,14 @@ class SplitViewNotifier extends _$SplitViewNotifier {
     );
     state = AsyncData(newState);
     _storage.save(newState);
+  }
+
+  /// 需求：UC-004 關閉面板後調整 activePanelIndex
+  /// 約束：關閉 active 本身歸零，關閉前方面板遞減，關閉後方面板不變
+  int _adjustActiveIndexAfterClose(int activeIndex, int closedIndex, int newLength) {
+    if (closedIndex == activeIndex) return 0;
+    final adjusted = closedIndex < activeIndex ? activeIndex - 1 : activeIndex;
+    return min(adjusted, newLength - 1);
   }
 
   /// 需求：UC-004 關閉面板後調整 maximizedPanelIndex
@@ -126,13 +145,22 @@ class SplitViewNotifier extends _$SplitViewNotifier {
   }
 
   /// 需求：UC-004 關閉面板後調整面板列表
-  /// 約束：剩 3 面板時取前 2 個（grid2x2 降級場景 9）
+  /// 約束：剩 3 面板時降級為 2 個，優先保留 active panel
   List<PanelState> _adjustPanelsAfterClose(
     List<PanelState> panels,
     int closedIndex,
+    int activePanelIndex,
   ) {
     final remaining = panels.where((p) => p.panelIndex != closedIndex).toList();
-    return remaining.length > 2 ? remaining.take(2).toList() : remaining;
+    if (remaining.length <= 2) return remaining;
+
+    final activePanel = panels[activePanelIndex];
+    final activeInRemaining =
+        remaining.indexWhere((p) => p.panelIndex == activePanel.panelIndex);
+
+    if (activeInRemaining < 2) return remaining.take(2).toList();
+
+    return [remaining.first, remaining[activeInRemaining]];
   }
 
   /// 需求：UC-004 設定焦點面板

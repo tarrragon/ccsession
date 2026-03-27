@@ -19,4 +19,42 @@ abstract final class SearchConstants {
 
   /// Session 列表篩選 hint 文字
   static const String sessionFilterHint = 'Filter sessions...';
+
+  /// 對話搜尋 hint 文字
+  static const String conversationSearchHint = 'Search...';
+
+  // -- 搜尋列佈局常數 --
+
+  /// 搜尋列水平內距
+  static const double barHorizontalPadding = 8.0;
+
+  /// 搜尋列垂直內距
+  static const double barVerticalPadding = 4.0;
+
+  /// 搜尋列內距
+  static const EdgeInsets barPadding = EdgeInsets.symmetric(
+    horizontal: barHorizontalPadding,
+    vertical: barVerticalPadding,
+  );
+
+  /// 搜尋輸入框內容內距
+  static const EdgeInsets inputContentPadding = EdgeInsets.symmetric(
+    horizontal: 8.0,
+    vertical: 8.0,
+  );
+
+  /// 搜尋列按鈕圖示大小
+  static const double buttonIconSize = 20.0;
+
+  /// 搜尋列按鈕最小觸控區域
+  static const double buttonMinSize = 32.0;
+
+  /// 搜尋列按鈕約束
+  static const BoxConstraints buttonConstraints = BoxConstraints(
+    minWidth: buttonMinSize,
+    minHeight: buttonMinSize,
+  );
+
+  /// 匹配計數顯示水平間距
+  static const double matchCountHorizontalPadding = 8.0;
 }
