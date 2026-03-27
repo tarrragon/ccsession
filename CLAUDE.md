@@ -112,6 +112,34 @@ zellij action focus-previous-pane && zellij action focus-previous-pane
 
 > Pane 順序（focus-next-pane）：claude → 後端 → 前端 → claude
 
+### 重啟伺服器注意事項
+
+重啟 Go Backend 時，必須確認舊 process 已完全停止，否則新 process 會因 port 被佔用而靜默失敗：
+
+```bash
+# 1. 先在後端 pane 送 Ctrl+C 停止
+zellij action focus-next-pane && zellij action write 3
+
+# 2. 確認 port 空了（應無輸出）
+lsof -i :8765
+
+# 3. 若仍有殘留 process，強制 kill
+kill -9 $(lsof -ti :8765) 2>/dev/null
+
+# 4. 確認後再啟動
+zellij action focus-next-pane && \
+zellij action write-chars "cd /Users/mac-eric/project/ccsession/server && go run ." && \
+zellij action write 10
+
+# 5. 等待編譯完成後，讀取後端 log 確認啟動成功
+#    必須看到 "scanning existing JSONL files" 和 "ccsession-monitor starting"
+sleep 10 && zellij action focus-next-pane && \
+zellij action dump-screen /tmp/zellij-backend-check.txt && \
+zellij action focus-previous-pane
+```
+
+> 重點：不要假設伺服器能正常啟動。每次重啟後必須讀取 log 確認 `scanning existing JSONL files` 出現，才能進行後續驗證。
+
 ### Smoke Test（版本發布前驗收）
 
 ```bash
