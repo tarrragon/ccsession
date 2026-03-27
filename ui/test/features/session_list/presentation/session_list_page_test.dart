@@ -5,6 +5,7 @@ import 'package:ccsession/core/models/session_info.dart';
 import 'package:ccsession/core/websocket/websocket_provider.dart';
 import 'package:ccsession/core/websocket/websocket_service.dart';
 import 'package:ccsession/features/session_list/presentation/session_list_page.dart';
+import 'package:ccsession/features/session_list/presentation/session_list_search_notifier.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -28,6 +29,12 @@ void main() {
       when(() => mockService.messageStream)
           .thenAnswer((_) => messageController.stream);
     });
+
+    /// 設定大畫面以讓所有 ListView items 可見
+    Future<void> setLargeSurface(WidgetTester tester) async {
+      await tester.binding.setSurfaceSize(const Size(800, 5000));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+    }
 
     tearDown(() {
       messageController.close();
@@ -55,10 +62,7 @@ void main() {
     // TC-12-01: Loading 狀態顯示載入指示器
     testWidgets('shows loading indicator initially', (tester) async {
       await tester.pumpWidget(buildSubject());
-      // 初始狀態：Notifier 未收到訊息，仍為 AsyncLoading 或 empty data
-      // build() 回傳 empty SessionListState 後會是 AsyncData with empty
       await tester.pump();
-      // After build completes with empty state, shows 'No sessions'
       expect(find.text('No sessions'), findsOneWidget);
     });
 
@@ -90,7 +94,6 @@ void main() {
 
     // TC-12-04: 錯誤狀態顯示錯誤訊息
     testWidgets('shows error message on error', (tester) async {
-      // Override with a service that causes stream error
       final errorController = StreamController<ServerMessage>.broadcast();
       final errorService = MockWebSocketService();
       when(() => errorService.requestSessionList()).thenThrow(Exception('fail'));
@@ -123,7 +126,6 @@ void main() {
       await tester.tap(find.text('My Task'));
       await tester.pump();
 
-      // After tap, the tile should now be selected (ListTile.selected == true)
       final listTile = tester.widget<ListTile>(find.byType(ListTile));
       expect(listTile.selected, isTrue);
     });
@@ -138,15 +140,241 @@ void main() {
         createTestSession(id: 'session-B', summary: 'Task B'),
       ]));
 
-      // Select session-A
       await tester.tap(find.text('Task A'));
       await tester.pump();
 
       final tiles = tester.widgetList<ListTile>(find.byType(ListTile)).toList();
-      // session-A is selected
       expect(tiles[0].selected, isTrue);
-      // session-B is not selected
       expect(tiles[1].selected, isFalse);
+    });
+
+    // TC-12-10: Completed 預設摺疊 — 只顯示 Header
+    testWidgets('completed group is collapsed by default', (tester) async {
+      await tester.pumpWidget(buildSubject());
+      await tester.pump();
+
+      await sendMessage(tester, createSessionListMessage([
+        createTestSession(id: 'a1', status: SessionStatus.active),
+        createTestSession(id: 'a2', status: SessionStatus.active),
+        createTestSession(id: 'a3', status: SessionStatus.active),
+        ...List.generate(
+          5,
+          (i) => createTestSession(
+            id: 'c$i',
+            status: SessionStatus.completed,
+            summary: 'Completed $i',
+          ),
+        ),
+      ]));
+
+      expect(find.text('Active (3)'), findsOneWidget);
+      expect(find.text('Completed (5)'), findsOneWidget);
+      // Completed tiles should not be visible
+      expect(find.text('Completed 0'), findsNothing);
+    });
+
+    // TC-12-11: 點擊 Completed Header — 展開顯示 session
+    testWidgets('tapping completed header expands group', (tester) async {
+      await tester.pumpWidget(buildSubject());
+      await tester.pump();
+
+      await sendMessage(tester, createSessionListMessage([
+        createTestSession(id: 'a1', status: SessionStatus.active),
+        ...List.generate(
+          5,
+          (i) => createTestSession(
+            id: 'c$i',
+            status: SessionStatus.completed,
+            summary: 'Done $i',
+          ),
+        ),
+      ]));
+
+      // Verify collapsed
+      expect(find.text('Done 0'), findsNothing);
+
+      // Tap to expand
+      await tester.tap(find.text('Completed (5)'));
+      await tester.pump();
+
+      // Now visible (5 items, no pagination)
+      expect(find.text('Done 0'), findsOneWidget);
+      expect(find.byIcon(Icons.chevron_right), findsNothing);
+    });
+
+    // TC-12-12: 分頁顯示 — 超過 10 筆顯示分頁控制
+    testWidgets('shows pagination for groups with more than 10 items',
+        (tester) async {
+      await setLargeSurface(tester);
+      await tester.pumpWidget(buildSubject());
+      await tester.pump();
+
+      await sendMessage(tester, createSessionListMessage(
+        List.generate(
+          15,
+          (i) => createTestSession(
+            id: 'a$i',
+            status: SessionStatus.active,
+            summary: 'Active $i',
+          ),
+        ),
+      ));
+
+      expect(find.text('Active (15)'), findsOneWidget);
+      // Only 10 tiles visible
+      expect(find.byType(ListTile), findsNWidgets(10));
+      // Pagination visible
+      expect(find.text('1 / 2'), findsOneWidget);
+    });
+
+    // TC-12-13: 分頁切換 — 點擊下一頁
+    testWidgets('clicking next page shows next set of items', (tester) async {
+      await setLargeSurface(tester);
+      await tester.pumpWidget(buildSubject());
+      await tester.pump();
+
+      await sendMessage(tester, createSessionListMessage(
+        List.generate(
+          15,
+          (i) => createTestSession(
+            id: 'a$i',
+            status: SessionStatus.active,
+            summary: 'Active $i',
+          ),
+        ),
+      ));
+
+      expect(find.text('1 / 2'), findsOneWidget);
+
+      await tester.tap(find.byIcon(Icons.chevron_right));
+      await tester.pump();
+
+      // Now on page 2
+      expect(find.text('2 / 2'), findsOneWidget);
+      // Only 5 tiles on page 2
+      expect(find.byType(ListTile), findsNWidgets(5));
+    });
+
+    // TC-12-14: 搜尋重置分頁
+    testWidgets('search resets pagination', (tester) async {
+      await setLargeSurface(tester);
+      late ProviderContainer container;
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container = ProviderContainer(
+            overrides: [
+              webSocketServiceProvider.overrideWithValue(mockService),
+            ],
+          ),
+          child: const MaterialApp(home: Scaffold(body: SessionListPage())),
+        ),
+      );
+      await tester.pump();
+
+      // Send 15 active sessions
+      messageController.add(createSessionListMessage(
+        List.generate(
+          15,
+          (i) => createTestSession(
+            id: 'a$i',
+            status: SessionStatus.active,
+            summary: 'Active $i',
+          ),
+        ),
+      ));
+      await tester.pump();
+      await tester.pump();
+
+      // Go to page 2
+      await tester.tap(find.byIcon(Icons.chevron_right));
+      await tester.pump();
+      expect(find.text('2 / 2'), findsOneWidget);
+
+      // Trigger search state change via notifier (opens search bar)
+      container.read(sessionListSearchNotifierProvider.notifier).openSearch();
+      await tester.pump();
+
+      // ref.listen detects search state change → resetAllPages
+      expect(find.text('1 / 2'), findsOneWidget);
+
+      container.dispose();
+    });
+
+    // TC-12-15: 分頁切換不影響其他分組
+    testWidgets('page change in one group does not affect others',
+        (tester) async {
+      await setLargeSurface(tester);
+      await tester.pumpWidget(buildSubject());
+      await tester.pump();
+
+      await sendMessage(tester, createSessionListMessage([
+        ...List.generate(
+          15,
+          (i) => createTestSession(
+            id: 'a$i',
+            status: SessionStatus.active,
+            summary: 'Active $i',
+          ),
+        ),
+        ...List.generate(
+          12,
+          (i) => createTestSession(
+            id: 'i$i',
+            status: SessionStatus.idle,
+            summary: 'Idle $i',
+          ),
+        ),
+      ]));
+
+      // Both on page 1
+      // Find the active pagination (first chevron_right)
+      final nextButtons = find.byIcon(Icons.chevron_right);
+      expect(nextButtons, findsNWidgets(2)); // active + idle
+
+      // Tap active's next
+      await tester.tap(nextButtons.first);
+      await tester.pump();
+
+      // Active shows page 2, idle still page 1
+      expect(find.text('2 / 2'), findsOneWidget); // active
+      expect(find.text('1 / 2'), findsOneWidget); // idle
+    });
+
+    // TC-12-16: 摺疊不影響其他分組展開狀態
+    testWidgets('collapsing one group does not affect others', (tester) async {
+      await tester.pumpWidget(buildSubject());
+      await tester.pump();
+
+      await sendMessage(tester, createSessionListMessage([
+        ...List.generate(
+          3,
+          (i) => createTestSession(
+            id: 'a$i',
+            status: SessionStatus.active,
+            summary: 'Active $i',
+          ),
+        ),
+        ...List.generate(
+          3,
+          (i) => createTestSession(
+            id: 'i$i',
+            status: SessionStatus.idle,
+            summary: 'Idle $i',
+          ),
+        ),
+      ]));
+
+      // Both groups expanded
+      expect(find.text('Active 0'), findsOneWidget);
+      expect(find.text('Idle 0'), findsOneWidget);
+
+      // Collapse active
+      await tester.tap(find.text('Active (3)'));
+      await tester.pump();
+
+      // Active tiles gone, idle tiles still visible
+      expect(find.text('Active 0'), findsNothing);
+      expect(find.text('Idle 0'), findsOneWidget);
     });
   });
 }

@@ -18,6 +18,15 @@ abstract final class SessionListConstants {
   /// Agent session 標題前綴
   static const agentTitlePrefix = '[Agent]';
 
+  /// 每頁最多顯示的 session 數量
+  static const maxItemsPerPage = 10;
+
+  /// 分組標題展開/摺疊圖示尺寸（邏輯像素）
+  static const groupHeaderIconSize = 20.0;
+
+  /// 分組標題圖示與文字間距（邏輯像素）
+  static const groupHeaderIconSpacing = 4.0;
+
   /// 狀態指示燈尺寸（直徑，邏輯像素）
   static const statusIndicatorSize = 10.0;
 
