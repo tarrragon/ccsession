@@ -477,6 +477,66 @@ void main() {
       expect(getState().maximizedPanelIndex, 1);
     });
 
+    test('closePanel: closing panel before active decrements activePanelIndex',
+        () async {
+      await initWithState(const SplitViewState(
+        layoutMode: LayoutMode.grid2x2,
+        panels: [
+          PanelState(panelIndex: 0, sessionId: 'A'),
+          PanelState(panelIndex: 1, sessionId: 'B'),
+          PanelState(panelIndex: 2, sessionId: 'C'),
+          PanelState(panelIndex: 3, sessionId: 'D'),
+        ],
+      ));
+      getNotifier().setActivePanel(2);
+      getNotifier().closePanel(0);
+      expect(getState().activePanelIndex, 1);
+    });
+
+    test('closePanel: closing panel after active keeps activePanelIndex',
+        () async {
+      await initWithState(const SplitViewState(
+        layoutMode: LayoutMode.grid2x2,
+        panels: [
+          PanelState(panelIndex: 0, sessionId: 'A'),
+          PanelState(panelIndex: 1, sessionId: 'B'),
+          PanelState(panelIndex: 2, sessionId: 'C'),
+          PanelState(panelIndex: 3, sessionId: 'D'),
+        ],
+      ));
+      getNotifier().setActivePanel(1);
+      getNotifier().closePanel(3);
+      expect(getState().activePanelIndex, 1);
+    });
+
+    test('closePanel: closing active panel itself resets to 0', () async {
+      await initWithState(const SplitViewState(
+        layoutMode: LayoutMode.splitHorizontal,
+        panels: [
+          PanelState(panelIndex: 0, sessionId: 'A'),
+          PanelState(panelIndex: 1, sessionId: 'B'),
+        ],
+      ));
+      getNotifier().setActivePanel(1);
+      getNotifier().closePanel(1);
+      expect(getState().activePanelIndex, 0);
+    });
+
+    test('closePanel: 2 panels closing panel before active decrements index',
+        () async {
+      await initWithState(const SplitViewState(
+        layoutMode: LayoutMode.splitHorizontal,
+        panels: [
+          PanelState(panelIndex: 0, sessionId: 'A'),
+          PanelState(panelIndex: 1, sessionId: 'B'),
+        ],
+      ));
+      getNotifier().setActivePanel(1);
+      getNotifier().closePanel(0);
+      expect(getState().activePanelIndex, 0);
+      expect(getState().panels.length, 1);
+    });
+
     // --- setActivePanel ---
 
     // A-N40

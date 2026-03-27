@@ -97,8 +97,11 @@ class SplitViewNotifier extends _$SplitViewNotifier {
     final remaining = _adjustPanelsAfterClose(current.panels, panelIndex);
     final newMode = _determineLayoutAfterClose(remaining.length);
     final newPanels = _reindexPanels(remaining);
-    final newActiveIndex =
-        panelIndex == current.activePanelIndex ? 0 : min(current.activePanelIndex, newPanels.length - 1);
+    final newActiveIndex = _adjustActiveIndexAfterClose(
+      current.activePanelIndex,
+      panelIndex,
+      newPanels.length,
+    );
 
     final newMaximizedIndex = _adjustMaximizedIndexAfterClose(
       current.maximizedPanelIndex,
@@ -113,6 +116,14 @@ class SplitViewNotifier extends _$SplitViewNotifier {
     );
     state = AsyncData(newState);
     _storage.save(newState);
+  }
+
+  /// 需求：UC-004 關閉面板後調整 activePanelIndex
+  /// 約束：關閉 active 本身歸零，關閉前方面板遞減，關閉後方面板不變
+  int _adjustActiveIndexAfterClose(int activeIndex, int closedIndex, int newLength) {
+    if (closedIndex == activeIndex) return 0;
+    final adjusted = closedIndex < activeIndex ? activeIndex - 1 : activeIndex;
+    return min(adjusted, newLength - 1);
   }
 
   /// 需求：UC-004 關閉面板後調整 maximizedPanelIndex
