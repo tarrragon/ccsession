@@ -11,7 +11,7 @@ part 'session_group_ui_notifier.g.dart';
 @riverpod
 class SessionGroupUiNotifier extends _$SessionGroupUiNotifier {
   @override
-  SessionGroupUiState build() {
+  SessionGroupUiState build(String projectPath) {
     return const SessionGroupUiState();
   }
 

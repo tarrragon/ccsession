@@ -17,11 +17,11 @@ void main() {
     });
 
     SessionGroupUiState readState() {
-      return container.read(sessionGroupUiNotifierProvider);
+      return container.read(sessionGroupUiNotifierProvider(''));
     }
 
     SessionGroupUiNotifier readNotifier() {
-      return container.read(sessionGroupUiNotifierProvider.notifier);
+      return container.read(sessionGroupUiNotifierProvider('').notifier);
     }
 
     // TC-20-01: 初始狀態 — 預設值
@@ -107,6 +107,63 @@ void main() {
 
       expect(readState().currentPages[SessionStatus.completed], 1);
       expect(readState().expandedGroups[SessionStatus.completed], false);
+    });
+  });
+
+  group('TG-33: SessionGroupUiNotifier family 化', () {
+    late ProviderContainer container;
+
+    setUp(() {
+      container = ProviderContainer();
+    });
+
+    tearDown(() {
+      container.dispose();
+    });
+
+    // TC-33-01: 不同 projectPath 狀態獨立
+    test('different projectPaths have independent page state', () {
+      container
+          .read(sessionGroupUiNotifierProvider('projA').notifier)
+          .setPage(SessionStatus.active, 2);
+
+      final stateA =
+          container.read(sessionGroupUiNotifierProvider('projA'));
+      final stateB =
+          container.read(sessionGroupUiNotifierProvider('projB'));
+
+      expect(stateA.currentPages[SessionStatus.active], 2);
+      expect(stateB.currentPages[SessionStatus.active], 0);
+    });
+
+    // TC-33-02: 不同 projectPath 摺疊獨立
+    test('different projectPaths have independent expanded state', () {
+      container
+          .read(sessionGroupUiNotifierProvider('projA').notifier)
+          .toggleExpanded(SessionStatus.active);
+
+      final stateA =
+          container.read(sessionGroupUiNotifierProvider('projA'));
+      final stateB =
+          container.read(sessionGroupUiNotifierProvider('projB'));
+
+      expect(stateA.expandedGroups[SessionStatus.active], false);
+      expect(stateB.expandedGroups[SessionStatus.active], true);
+    });
+
+    // TC-33-03: 同一 projectPath 多次存取一致
+    test('same projectPath returns consistent state across reads', () {
+      container
+          .read(sessionGroupUiNotifierProvider('projA').notifier)
+          .setPage(SessionStatus.idle, 3);
+
+      final state1 =
+          container.read(sessionGroupUiNotifierProvider('projA'));
+      final state2 =
+          container.read(sessionGroupUiNotifierProvider('projA'));
+
+      expect(state1, equals(state2));
+      expect(state1.currentPages[SessionStatus.idle], 3);
     });
   });
 }

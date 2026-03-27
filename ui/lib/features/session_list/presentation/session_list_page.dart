@@ -1,5 +1,7 @@
 import 'package:ccsession/core/models/session_info.dart';
 import 'package:ccsession/features/session_list/presentation/session_group_ui_notifier.dart';
+import 'package:ccsession/features/session_list/presentation/session_group_utils.dart';
+import 'package:ccsession/features/session_list/presentation/session_list_helpers.dart';
 import 'package:ccsession/features/session_list/presentation/session_list_items.dart';
 import 'package:ccsession/features/session_list/presentation/session_list_notifier.dart';
 import 'package:ccsession/features/session_list/presentation/session_list_search_notifier.dart';
@@ -38,10 +40,8 @@ Widget _buildError(Object error) {
 
 Widget _buildData(BuildContext context, WidgetRef ref, SessionListState state) {
   final notifier = ref.read(sessionListNotifierProvider.notifier);
-  final searchNotifier = ref.read(sessionListSearchNotifierProvider.notifier);
-  final grouped = searchNotifier.filteredGroupedSessions();
 
-  if (grouped.isEmpty) {
+  if (state.sessions.isEmpty) {
     // TODO: i18n — 遷移至 ARB
     return const Center(child: Text('No sessions'));
   }
@@ -50,8 +50,8 @@ Widget _buildData(BuildContext context, WidgetRef ref, SessionListState state) {
     children: [
       const SessionListSearchBar(),
       Expanded(
-        child: _SessionGroupListView(
-          grouped: grouped,
+        child: _ProjectTabbedView(
+          sessions: state.sessions,
           selectedSessionId: state.selectedSessionId,
           onSelectSession: notifier.selectSession,
         ),
@@ -60,27 +60,121 @@ Widget _buildData(BuildContext context, WidgetRef ref, SessionListState state) {
   );
 }
 
-/// 需求：[0.2.1-W2-002] 渲染分組列表（含分頁和摺疊）
-/// 約束：ConsumerWidget，監聽搜尋狀態變化以重置分頁
-class _SessionGroupListView extends ConsumerWidget {
-  const _SessionGroupListView({
-    required this.grouped,
+/// 需求：[0.2.1-W2-001] 按專案分組的 Tab 頁籤檢視
+/// 約束：ConsumerStatefulWidget + TickerProviderStateMixin（DefaultTabController 需要）
+/// 約束：Tab 數量變化時重建 TabController
+class _ProjectTabbedView extends ConsumerStatefulWidget {
+  const _ProjectTabbedView({
+    required this.sessions,
     required this.selectedSessionId,
     required this.onSelectSession,
   });
 
-  final Map<SessionStatus, List<SessionInfo>> grouped;
+  final List<SessionInfo> sessions;
   final String? selectedSessionId;
   final void Function(String) onSelectSession;
+
+  @override
+  ConsumerState<_ProjectTabbedView> createState() =>
+      _ProjectTabbedViewState();
+}
+
+class _ProjectTabbedViewState extends ConsumerState<_ProjectTabbedView>
+    with TickerProviderStateMixin {
+  TabController? _tabController;
+
+  @override
+  void dispose() {
+    _tabController?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final projectGroups = groupSessionsByProject(widget.sessions);
+    final paths = sortedProjectPaths(projectGroups);
+    final tabCount = paths.length;
+
+    _rebuildTabControllerIfNeeded(tabCount);
+
+    return Column(
+      children: [
+        TabBar(
+          controller: _tabController,
+          isScrollable: true,
+          tabs: [
+            for (final path in paths)
+              Tab(text: _buildTabLabel(path, projectGroups[path]!.length)),
+          ],
+        ),
+        Expanded(
+          child: TabBarView(
+            controller: _tabController,
+            children: [
+              for (final path in paths)
+                _SessionGroupListView(
+                  selectedSessionId: widget.selectedSessionId,
+                  onSelectSession: widget.onSelectSession,
+                  projectPath: path,
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// 需求：Tab 數量變化時重建 TabController，clamp 索引到有效範圍
+  void _rebuildTabControllerIfNeeded(int tabCount) {
+    if (_tabController?.length == tabCount) return;
+    final previousIndex = _tabController?.index ?? 0;
+    _tabController?.dispose();
+    _tabController = TabController(
+      length: tabCount,
+      vsync: this,
+      initialIndex: previousIndex.clamp(0, tabCount - 1),
+    );
+  }
+
+  /// 需求：Tab 標籤格式 — 專案名稱 + session 數量
+  /// 約束：空 projectPath 顯示 "Other"
+  String _buildTabLabel(String path, int count) {
+    // TODO: i18n — "Other" 遷移至 ARB
+    final name = path.isEmpty ? 'Other' : extractProjectName(path);
+    return '$name ($count)';
+  }
+}
+
+/// 需求：[0.2.1-W2-002] 渲染分組列表（含分頁和摺疊）
+/// 約束：ConsumerWidget，監聽搜尋狀態變化以重置分頁
+/// 維護：projectPath 用於 family provider 隔離各專案的 UI 狀態
+/// 維護：grouped 由內部從 filteredGroupedSessions 計算，確保搜尋變化時自動重算
+class _SessionGroupListView extends ConsumerWidget {
+  const _SessionGroupListView({
+    required this.selectedSessionId,
+    required this.onSelectSession,
+    this.projectPath = '',
+  });
+
+  final String? selectedSessionId;
+  final void Function(String) onSelectSession;
+  final String projectPath;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     // 需求：搜尋狀態變化時重置所有分頁
     ref.listen(sessionListSearchNotifierProvider, (prev, next) {
-      ref.read(sessionGroupUiNotifierProvider.notifier).resetAllPages();
+      ref
+          .read(sessionGroupUiNotifierProvider(projectPath).notifier)
+          .resetAllPages();
     });
 
-    final uiState = ref.watch(sessionGroupUiNotifierProvider);
+    // 需求：監聽搜尋狀態變化，自動重算分組
+    ref.watch(sessionListSearchNotifierProvider);
+    final grouped = ref
+        .read(sessionListSearchNotifierProvider.notifier)
+        .filteredGroupedSessions(projectPath: projectPath);
+    final uiState = ref.watch(sessionGroupUiNotifierProvider(projectPath));
     final items = flattenGroups(grouped, uiState);
 
     return ListView.builder(
@@ -92,7 +186,7 @@ class _SessionGroupListView extends ConsumerWidget {
             count: count,
             isExpanded: isExpanded,
             onToggleExpand: () => ref
-                .read(sessionGroupUiNotifierProvider.notifier)
+                .read(sessionGroupUiNotifierProvider(projectPath).notifier)
                 .toggleExpanded(status),
           ),
         TileItem(:final session) => SessionListTile(
@@ -105,7 +199,7 @@ class _SessionGroupListView extends ConsumerWidget {
             currentPage: currentPage,
             totalPages: totalPages,
             onPageChanged: (page) => ref
-                .read(sessionGroupUiNotifierProvider.notifier)
+                .read(sessionGroupUiNotifierProvider(projectPath).notifier)
                 .setPage(status, page),
           ),
       },

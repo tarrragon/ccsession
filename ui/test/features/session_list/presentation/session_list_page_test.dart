@@ -377,4 +377,236 @@ void main() {
       expect(find.text('Idle 0'), findsOneWidget);
     });
   });
+
+  group('TG-35: _ProjectTabbedView Widget', () {
+    late StreamController<ServerMessage> messageController;
+    late MockWebSocketService mockService;
+
+    setUp(() {
+      messageController = StreamController<ServerMessage>.broadcast();
+      mockService = MockWebSocketService();
+      when(() => mockService.requestSessionList()).thenReturn(null);
+      when(() => mockService.messageStream)
+          .thenAnswer((_) => messageController.stream);
+    });
+
+    tearDown(() {
+      messageController.close();
+    });
+
+    Widget buildSubject({List<Override> additionalOverrides = const []}) {
+      return ProviderScope(
+        overrides: [
+          webSocketServiceProvider.overrideWithValue(mockService),
+          ...additionalOverrides,
+        ],
+        child: const MaterialApp(home: Scaffold(body: SessionListPage())),
+      );
+    }
+
+    Future<void> sendMessage(
+      WidgetTester tester,
+      ServerMessage message,
+    ) async {
+      messageController.add(message);
+      await tester.pump();
+      await tester.pump();
+    }
+
+    // TC-35-01: 基本渲染 — 2 個專案顯示 2 個 Tab
+    testWidgets('displays tabs for multiple projects', (tester) async {
+      await tester.pumpWidget(buildSubject());
+      await tester.pump();
+
+      await sendMessage(tester, createSessionListMessage([
+        createTestSession(id: 's1', projectPath: '/a/proj1'),
+        createTestSession(id: 's2', projectPath: '/a/proj1'),
+        createTestSession(id: 's3', projectPath: '/b/proj2'),
+      ]));
+
+      expect(find.byType(TabBar), findsOneWidget);
+      expect(find.text('proj1 (2)'), findsOneWidget);
+      expect(find.text('proj2 (1)'), findsOneWidget);
+    });
+
+    // TC-35-02: Tab 標籤顯示正確的專案名稱和 session count
+    testWidgets('tab labels show project name and session count',
+        (tester) async {
+      await tester.pumpWidget(buildSubject());
+      await tester.pump();
+
+      await sendMessage(tester, createSessionListMessage([
+        createTestSession(id: 's1', projectPath: '/x/alpha'),
+        createTestSession(id: 's2', projectPath: '/x/alpha'),
+        createTestSession(id: 's3', projectPath: '/x/alpha'),
+        createTestSession(id: 's4', projectPath: '/y/beta'),
+      ]));
+
+      expect(find.text('alpha (3)'), findsOneWidget);
+      expect(find.text('beta (1)'), findsOneWidget);
+    });
+
+    // TC-35-03: 空 projectPath 顯示 "Other"
+    testWidgets('empty projectPath displays as Other tab', (tester) async {
+      await tester.pumpWidget(buildSubject());
+      await tester.pump();
+
+      await sendMessage(tester, createSessionListMessage([
+        createTestSession(id: 's1', projectPath: '/a/proj1'),
+        createTestSession(id: 's2', projectPath: ''),
+      ]));
+
+      expect(find.text('Other (1)'), findsOneWidget);
+
+      // Other tab should be last
+      final tabBar = tester.widget<TabBar>(find.byType(TabBar));
+      final tabs = tabBar.tabs.cast<Tab>();
+      expect(tabs.last.text, 'Other (1)');
+    });
+
+    // TC-35-04: Tab 切換後顯示對應專案的 sessions
+    testWidgets('switching tabs shows corresponding project sessions',
+        (tester) async {
+      await tester.pumpWidget(buildSubject());
+      await tester.pump();
+
+      await sendMessage(tester, createSessionListMessage([
+        createTestSession(
+          id: 's1',
+          projectPath: '/a/alpha',
+          summary: 'Alpha Task',
+          status: SessionStatus.active,
+        ),
+        createTestSession(
+          id: 's2',
+          projectPath: '/b/beta',
+          summary: 'Beta Task',
+          status: SessionStatus.active,
+        ),
+      ]));
+
+      // First tab (alpha) selected by default
+      expect(find.text('Alpha Task'), findsOneWidget);
+
+      // Switch to beta tab
+      await tester.tap(find.text('beta (1)'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Beta Task'), findsOneWidget);
+    });
+
+    // TC-35-05: 搜尋跨 Tab 生效
+    testWidgets('search filters apply across tabs', (tester) async {
+      late ProviderContainer container;
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container = ProviderContainer(
+            overrides: [
+              webSocketServiceProvider.overrideWithValue(mockService),
+            ],
+          ),
+          child: const MaterialApp(home: Scaffold(body: SessionListPage())),
+        ),
+      );
+      await tester.pump();
+
+      messageController.add(createSessionListMessage([
+        createTestSession(
+          id: 's1',
+          projectPath: '/a/alpha',
+          summary: 'auth login',
+          status: SessionStatus.active,
+        ),
+        createTestSession(
+          id: 's2',
+          projectPath: '/a/alpha',
+          summary: 'dashboard',
+          status: SessionStatus.active,
+        ),
+        createTestSession(
+          id: 's3',
+          projectPath: '/b/beta',
+          summary: 'auth signup',
+          status: SessionStatus.active,
+        ),
+      ]));
+      await tester.pump();
+      await tester.pump();
+
+      // Set search query
+      final searchNotifier =
+          container.read(sessionListSearchNotifierProvider.notifier);
+      searchNotifier.openSearch();
+      searchNotifier.updateQuery('auth');
+      await tester.pump();
+      await tester.pump();
+
+      // Force debounce to complete
+      await tester.pump(const Duration(milliseconds: 350));
+
+      // Alpha tab: only 'auth login' visible, not 'dashboard'
+      expect(find.text('auth login'), findsOneWidget);
+      expect(find.text('dashboard'), findsNothing);
+
+      // Switch to beta tab (tab label shows unfiltered count)
+      await tester.tap(find.text('beta (1)'));
+      await tester.pumpAndSettle();
+
+      // Beta tab: only 'auth signup' visible
+      expect(find.text('auth signup'), findsOneWidget);
+
+      container.dispose();
+    });
+
+    // TC-35-06: Tab 排序按字母排序，Other 排最後
+    testWidgets('tabs sorted alphabetically with Other last', (tester) async {
+      await tester.pumpWidget(buildSubject());
+      await tester.pump();
+
+      await sendMessage(tester, createSessionListMessage([
+        createTestSession(id: 's1', projectPath: '/x/zoo'),
+        createTestSession(id: 's2', projectPath: '/x/alpha'),
+        createTestSession(id: 's3', projectPath: '/x/beta'),
+        createTestSession(id: 's4', projectPath: ''),
+      ]));
+
+      final tabBar = tester.widget<TabBar>(find.byType(TabBar));
+      final tabs = tabBar.tabs.cast<Tab>();
+      expect(tabs.length, 4);
+      expect(tabs[0].text, 'alpha (1)');
+      expect(tabs[1].text, 'beta (1)');
+      expect(tabs[2].text, 'zoo (1)');
+      expect(tabs[3].text, 'Other (1)');
+    });
+
+    // TC-35-07: TabBar 可捲動（isScrollable: true）
+    testWidgets('TabBar is scrollable', (tester) async {
+      await tester.pumpWidget(buildSubject());
+      await tester.pump();
+
+      await sendMessage(tester, createSessionListMessage(
+        List.generate(
+          6,
+          (i) => createTestSession(
+            id: 's$i',
+            projectPath: '/x/project$i',
+          ),
+        ),
+      ));
+
+      final tabBar = tester.widget<TabBar>(find.byType(TabBar));
+      expect(tabBar.isScrollable, isTrue);
+    });
+
+    // TC-35-08: 空 sessions 時不顯示 TabBar
+    testWidgets('no TabBar when sessions list is empty', (tester) async {
+      await tester.pumpWidget(buildSubject());
+      await tester.pump();
+
+      await sendMessage(tester, createSessionListMessage([]));
+
+      expect(find.byType(TabBar), findsNothing);
+      expect(find.text('No sessions'), findsOneWidget);
+    });
+  });
 }

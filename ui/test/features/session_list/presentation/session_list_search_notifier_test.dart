@@ -510,6 +510,121 @@ void main() {
     });
   });
 
+  group('TG-34: filteredGroupedSessions projectPath 過濾', () {
+    test('TC-34-01: filters sessions by projectPath', () async {
+      await initNotifiers();
+
+      final s1 = createTestSession(
+        id: 's1',
+        projectPath: '/proj1',
+        status: SessionStatus.active,
+      );
+      final s2 = createTestSession(
+        id: 's2',
+        projectPath: '/proj1',
+        status: SessionStatus.idle,
+      );
+      final s3 = createTestSession(
+        id: 's3',
+        projectPath: '/proj2',
+        status: SessionStatus.active,
+      );
+      final s4 = createTestSession(
+        id: 's4',
+        projectPath: '/proj2',
+        status: SessionStatus.completed,
+      );
+      await loadSessions([s1, s2, s3, s4]);
+
+      expect(
+        container
+            .read(sessionListNotifierProvider)
+            .valueOrNull!
+            .sessions
+            .length,
+        4,
+      );
+
+      final filtered = container
+          .read(sessionListSearchNotifierProvider.notifier)
+          .filteredGroupedSessions(projectPath: '/proj1');
+
+      final totalCount = countAllSessions(filtered);
+      expect(totalCount, 2);
+      expect(filtered[SessionStatus.active]?.length, 1);
+      expect(filtered[SessionStatus.idle]?.length, 1);
+    });
+
+    test('TC-34-02: returns empty map when no sessions match projectPath',
+        () async {
+      await initNotifiers();
+      await loadSessions([
+        createTestSession(id: '1', projectPath: '/proj1'),
+        createTestSession(id: '2', projectPath: '/proj1'),
+      ]);
+
+      final filtered = container
+          .read(sessionListSearchNotifierProvider.notifier)
+          .filteredGroupedSessions(projectPath: '/proj2');
+
+      expect(filtered, isEmpty);
+    });
+
+    test('TC-34-03: combines search query with projectPath filter',
+        () async {
+      await initNotifiers();
+
+      final s1 = createTestSession(
+        id: 's1',
+        projectPath: '/proj1',
+        summary: 'auth login',
+        status: SessionStatus.active,
+      );
+      final s2 = createTestSession(
+        id: 's2',
+        projectPath: '/proj1',
+        summary: 'auth signup',
+        status: SessionStatus.active,
+      );
+      final s3 = createTestSession(
+        id: 's3',
+        projectPath: '/proj1',
+        summary: 'dashboard',
+        status: SessionStatus.active,
+      );
+      await loadSessions([s1, s2, s3]);
+
+      final notifier =
+          container.read(sessionListSearchNotifierProvider.notifier);
+      notifier.openSearch();
+      fakeAsync((async) {
+        notifier.updateQuery('auth');
+        async.elapse(const Duration(milliseconds: 300));
+      });
+
+      final filtered = notifier.filteredGroupedSessions(
+        projectPath: '/proj1',
+      );
+
+      expect(countAllSessions(filtered), 2);
+    });
+
+    test('TC-34-04: filters by empty projectPath', () async {
+      await initNotifiers();
+      await loadSessions([
+        createTestSession(id: '1', projectPath: ''),
+        createTestSession(id: '2', projectPath: '/proj1'),
+        createTestSession(id: '3', projectPath: '/proj1'),
+      ]);
+
+      final filtered = container
+          .read(sessionListSearchNotifierProvider.notifier)
+          .filteredGroupedSessions(projectPath: '');
+
+      expect(countAllSessions(filtered), 1);
+    });
+  });
+
   group('TG-FILTER-03: Debounce 與時間控制', () {
     test('TC-FILTER-20: debounce 只在最後一次輸入後 300ms 執行篩選',
         () async {
