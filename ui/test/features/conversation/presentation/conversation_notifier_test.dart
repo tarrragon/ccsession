@@ -252,11 +252,14 @@ void main() {
       expect(getState().events.length, 2);
     });
 
-    // TC-20-08b: 即時事件接收 — fallback 格式（Hook 來源）靜默忽略
-    test('ignores fallback session_event with only sessionId', () async {
+    // TC-20-08b: 即時事件接收 — fallback 格式（Hook 來源）觸發主動拉取
+    test('fetches history on incomplete session_event with matching sessionId',
+        () async {
       await initNotifier();
 
-      container.read(conversationNotifierProvider(0).notifier).loadSession('session-1');
+      container
+          .read(conversationNotifierProvider(0).notifier)
+          .loadSession('session-1');
       await sendMessage(
         createSessionHistoryMessage('session-1', [
           createUserEvent('hello', sessionId: 'session-1'),
@@ -264,17 +267,63 @@ void main() {
       );
       expect(getState().events.length, 1);
 
+      // 清除 loadSession 產生的呼叫記錄
+      clearInteractions(mockService);
+      when(() => mockService.messageStream)
+          .thenAnswer((_) => messageController.stream);
+      when(() => mockService.requestSessionHistory(any(),
+          limit: any(named: 'limit'),
+          before: any(named: 'before'))).thenReturn(null);
+
       // Fallback 格式：只有 sessionId 和 agentId，無 type/content
       await sendMessage(const ServerMessage(
         type: 'session_event',
         data: {'sessionId': 'session-1', 'agentId': 'agent-1'},
       ));
+
+      // 應觸發 requestSessionHistory 而非靜默忽略
+      verify(() => mockService.requestSessionHistory('session-1')).called(1);
+      // 事件本身不加入列表
       expect(getState().events.length, 1);
 
       // 後續完整格式事件仍正常處理
-      final validEvent = createAssistantEvent('works', sessionId: 'session-1');
+      final validEvent =
+          createAssistantEvent('works', sessionId: 'session-1');
       await sendMessage(createSessionEventMessage(validEvent));
       expect(getState().events.length, 2);
+    });
+
+    // TC-20-08c: 即時事件接收 — fallback 格式但 sessionId 不匹配則忽略
+    test('ignores incomplete session_event with mismatching sessionId',
+        () async {
+      await initNotifier();
+
+      container
+          .read(conversationNotifierProvider(0).notifier)
+          .loadSession('session-1');
+      await sendMessage(
+        createSessionHistoryMessage('session-1', [
+          createUserEvent('hello', sessionId: 'session-1'),
+        ]),
+      );
+
+      clearInteractions(mockService);
+      when(() => mockService.messageStream)
+          .thenAnswer((_) => messageController.stream);
+
+      // Fallback 格式但 sessionId 不匹配
+      await sendMessage(const ServerMessage(
+        type: 'session_event',
+        data: {'sessionId': 'session-other', 'agentId': 'agent-1'},
+      ));
+
+      // 不應觸發 requestSessionHistory
+      verifyNever(() => mockService.requestSessionHistory(
+            any(),
+            limit: any(named: 'limit'),
+            before: any(named: 'before'),
+          ));
+      expect(getState().events.length, 1);
     });
 
     // TC-20-09: 即時事件接收 — 格式異常容錯

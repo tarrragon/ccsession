@@ -1353,3 +1353,88 @@ func TestProcessDispatchedEvent_NewWithEvent_BroadcastsListAndFullEvent(t *testi
 		t.Fatalf("expected type user, got %s", evData.Type)
 	}
 }
+
+// === TC-35: StatusChanged with Event also pushes session_event ===
+
+func TestStatusChanged_WithEvent_PushesSessionEvent(t *testing.T) {
+	q := newMockQuerier(&SessionInfo{ID: "abc-123", Status: SessionStatusIdle})
+	env := setupTestServer(t, q)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	go env.server.Run(ctx)
+	t.Cleanup(cancel)
+
+	conn := dialWS(t, env.httpServer.URL)
+	_ = readServerMessage(t, conn) // initial session_list
+
+	sendClientMessage(t, conn, ClientMessage{Action: ActionSubscribeSession, SessionID: "abc-123"})
+	time.Sleep(50 * time.Millisecond)
+
+	// 狀態變更且帶有 JSONL 事件內容
+	env.dispatchCh <- DispatchedEvent{
+		ChangeType: ChangeTypeStatusChanged,
+		Session:    &SessionInfo{ID: "abc-123", Status: SessionStatusActive},
+		Timestamp:  time.Now(),
+		Event: &SessionEvent{
+			SessionID: "abc-123",
+			Type:      "user",
+			Timestamp: time.Now(),
+		},
+	}
+
+	// 第一條：status_change 廣播
+	msgType1, statusData := readServerMessageTyped[SessionStatusChangeData](t, conn)
+	if msgType1 != MsgTypeSessionStatusChange {
+		t.Fatalf("expected %s, got %s", MsgTypeSessionStatusChange, msgType1)
+	}
+	if statusData.Status != SessionStatusActive {
+		t.Fatalf("expected status active, got %s", statusData.Status)
+	}
+
+	// 第二條：session_event 推送（因為有 Event）
+	msgType2, evData := readServerMessageTyped[SessionEvent](t, conn)
+	if msgType2 != MsgTypeSessionEvent {
+		t.Fatalf("expected %s, got %s", MsgTypeSessionEvent, msgType2)
+	}
+	if evData.SessionID != "abc-123" {
+		t.Fatalf("expected sessionId abc-123, got %s", evData.SessionID)
+	}
+	if evData.Type != "user" {
+		t.Fatalf("expected type user, got %s", evData.Type)
+	}
+}
+
+// === TC-36: StatusChanged without Event does NOT push session_event ===
+
+func TestStatusChanged_WithoutEvent_NoPushSessionEvent(t *testing.T) {
+	q := newMockQuerier(&SessionInfo{ID: "abc-123", Status: SessionStatusActive})
+	env := setupTestServer(t, q)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	go env.server.Run(ctx)
+	t.Cleanup(cancel)
+
+	conn := dialWS(t, env.httpServer.URL)
+	_ = readServerMessage(t, conn) // initial session_list
+
+	sendClientMessage(t, conn, ClientMessage{Action: ActionSubscribeSession, SessionID: "abc-123"})
+	time.Sleep(50 * time.Millisecond)
+
+	// 純狀態變更，無 JSONL 事件
+	env.dispatchCh <- DispatchedEvent{
+		ChangeType: ChangeTypeStatusChanged,
+		Session:    &SessionInfo{ID: "abc-123", Status: SessionStatusCompleted},
+		Timestamp:  time.Now(),
+		Event:      nil,
+	}
+
+	// 應收到 status_change
+	msgType, _ := readServerMessageTyped[SessionStatusChangeData](t, conn)
+	if msgType != MsgTypeSessionStatusChange {
+		t.Fatalf("expected %s, got %s", MsgTypeSessionStatusChange, msgType)
+	}
+
+	// 不應收到 session_event
+	time.Sleep(100 * time.Millisecond)
+	expectNoMessage(t, conn)
+}

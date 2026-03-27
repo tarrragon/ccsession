@@ -355,6 +355,12 @@ func (s *WebSocketServer) processDispatchedEvent(event DispatchedEvent) {
 		})
 	case ChangeTypeStatusChanged:
 		s.broadcastStatusChange(event.Session.ID, event.Session.Status)
+		if event.Event != nil {
+			s.pushToSubscribers(event.Session.ID, ServerMessage{
+				Type: MsgTypeSessionEvent,
+				Data: buildSessionEventPayload(event),
+			})
+		}
 	}
 }
 

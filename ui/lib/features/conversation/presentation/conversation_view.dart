@@ -132,7 +132,7 @@ Widget _buildMessageList(WidgetRef ref, ConversationState state, int panelIndex)
       if (hasLoadMore && index == itemCount - 1) {
         return _buildLoadMoreButton(ref, panelIndex);
       }
-      final eventIndex = index;
+      final eventIndex = state.events.length - 1 - index;
       final event = state.events[eventIndex];
       final highlightRanges = _computeHighlightRanges(
         searchState,

@@ -211,11 +211,11 @@ class ConversationNotifier extends _$ConversationNotifier {
   }
 
   /// 需求：session_event 即時事件處理（Phase 1 流程 4.2）
-  /// 約束：sessionId 不匹配則忽略；fallback 格式（無 type/content）靜默忽略
+  /// 約束：sessionId 不匹配則忽略；fallback 格式（無 type/content）觸發主動拉取
   void _handleSessionEvent(ServerMessage message) {
     final event = SessionEvent.fromJson(message.data);
     if (!event.isComplete) {
-      debugPrint('[Conv] skipped incomplete event');
+      _fetchHistoryForIncompleteEvent(event);
       return;
     }
     if (event.sessionId != _currentState.sessionId) return;
@@ -227,6 +227,18 @@ class ConversationNotifier extends _$ConversationNotifier {
       '[Conv] event added, total=${_currentState.events.length}, '
       'sessionId=${event.sessionId}',
     );
+  }
+
+  /// 需求：[0.2.0-W7-004.3] incomplete event 時主動拉取最新歷史
+  /// 約束：僅在 sessionId 匹配當前查看的 session 時觸發
+  void _fetchHistoryForIncompleteEvent(SessionEvent event) {
+    final currentSessionId = _currentState.sessionId;
+    if (event.sessionId.isEmpty || event.sessionId != currentSessionId) {
+      debugPrint('[Conv] skipped incomplete event (session mismatch)');
+      return;
+    }
+    debugPrint('[Conv] incomplete event, fetching history for $currentSessionId');
+    ref.read(webSocketServiceProvider).requestSessionHistory(currentSessionId!);
   }
 
   /// 需求：error 回應處理
