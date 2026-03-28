@@ -336,6 +336,8 @@ func (d *EventDispatcher) cleanupDedupTable() {
 			"layer", "event_dispatcher",
 			"size", len(d.dedupTable),
 			"limit", MaxDedupTableSize)
+		// NOTE: 清空後 DedupWindowDuration（5 秒）內可能出現重複事件推送，
+		// 這是有意的 trade-off — 防止 OOM 優先於防止重複。
 		d.dedupTable = make(map[deduplicationKey]EventSource)
 	}
 }

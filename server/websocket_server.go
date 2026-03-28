@@ -222,6 +222,11 @@ func (s *WebSocketServer) handleSubscribeSession(client *Client, msg ClientMessa
 	}
 
 	client.mu.Lock()
+	if _, exists := client.subscriptions[msg.SessionID]; exists {
+		client.mu.Unlock()
+		logger.Debug(LogWSSubscribed, "layer", "ws_server", "sessionID", msg.SessionID, "note", "already subscribed")
+		return
+	}
 	if len(client.subscriptions) >= MaxSubscriptionsPerClient {
 		client.mu.Unlock()
 		logger.Warn(LogWSSubscriptionLimitReached,

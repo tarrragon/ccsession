@@ -144,6 +144,9 @@ class SessionListNotifier extends _$SessionListNotifier {
     final sorted = [...sessions]
       ..sort((a, b) => (b.lastEventAt ?? DateTime(0))
           .compareTo(a.lastEventAt ?? DateTime(0)));
+    debugPrint(
+      '[SessionListNotifier] sessions trimmed: ${sessions.length} → $max',
+    );
     return sorted.sublist(0, max);
   }
 

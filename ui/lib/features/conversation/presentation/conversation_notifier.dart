@@ -272,7 +272,11 @@ class ConversationNotifier extends _$ConversationNotifier {
   List<SessionEvent> _trimEvents(List<SessionEvent> events) {
     const max = ConversationConstants.maxEventsPerConversation;
     if (events.length <= max) return events;
-    return events.sublist(events.length - max);
+    final trimmed = events.sublist(events.length - max);
+    debugPrint(
+      '[ConversationNotifier] events trimmed: ${events.length} → $max',
+    );
+    return trimmed;
   }
 
   /// 需求：error 回應處理

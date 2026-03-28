@@ -35,7 +35,9 @@ abstract final class ConversationConstants {
   static const userBubblePreviewMaxLength = 50;
 
   /// 需求：[0.2.1-W5-004] 前端 UI state 中 events 列表的最大保留數量
-  /// 約束：與後端 MaxEventsPerSession (500) 對齊，超過時裁剪舊事件
+  /// 約束：後端 MaxEventsPerSession 為 500，前端設為 2 倍（1000）
+  /// 因為前端同時有 history prepend 和 live append 兩條路徑，
+  /// 需要比後端更大的緩衝以避免頻繁裁剪
   static const maxEventsPerConversation = 1000;
 
   /// 需求：[0.2.1-W4-003] 空內容 fallback 提示文字
