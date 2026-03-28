@@ -141,7 +141,7 @@ void main() {
       ));
       await tester.pumpAndSettle();
 
-      expect(find.byKey(const Key('conversation_jump_to_latest')),
+      expect(find.byKey(const Key('conversation_scroll_to_top')),
           findsOneWidget);
     });
 
@@ -156,11 +156,11 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(
-          find.byKey(const Key('conversation_jump_to_latest')), findsNothing);
+          find.byKey(const Key('conversation_scroll_to_top')), findsNothing);
     });
 
-    // TC-21-09: reverse:true 索引 — 最新訊息在底部（index 0）
-    testWidgets('renders newest message at bottom in reverse ListView',
+    // TC-21-09: 最新訊息在頂部顯示
+    testWidgets('renders newest message at top of list',
         (tester) async {
       final events = <SessionEvent>[
         createUserEvent('oldest'),
@@ -173,16 +173,15 @@ void main() {
       ));
       await tester.pumpAndSettle();
 
-      // reverse:true 時，螢幕底部是 index 0，應對應 events 最後一筆（newest）
-      // 驗證：三個 bubble 都渲染，且最新的 UserMessageBubble 含 'newest'
+      // 最新訊息在頂部：三個 bubble 都渲染
       expect(find.byType(UserMessageBubble), findsNWidgets(2));
       expect(find.byType(AssistantMessageBubble), findsOneWidget);
       expect(find.text('newest'), findsOneWidget);
       expect(find.text('oldest'), findsOneWidget);
     });
 
-    // TC-21-10: reverse:true + hasMore — Load More 在頂部，索引不錯位
-    testWidgets('load more button at top does not shift event indices',
+    // TC-21-10: hasMore 時 Load More 在底部，索引不錯位
+    testWidgets('load more button at bottom does not shift event indices',
         (tester) async {
       final events = <SessionEvent>[
         createUserEvent('first'),
