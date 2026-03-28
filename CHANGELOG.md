@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.2.1] - 2026-03-29
+
+**✅ UC-XX 功能名稱 - TDD 四階段完成**
+
+### Added
+- 新增功能項目
+
+### Changed
+- 變更項目
+
+### Fixed
+- 修復項目
+
+---
+
 ## [0.1.2] - 2026-03-25
 
 ### Added
