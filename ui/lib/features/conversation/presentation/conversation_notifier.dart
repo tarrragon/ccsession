@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:ccsession/core/models/connection_state.dart';
 import 'package:ccsession/core/models/server_message.dart';
 import 'package:ccsession/core/models/session_event.dart';
 import 'package:ccsession/core/websocket/websocket_provider.dart';
@@ -93,6 +94,18 @@ class ConversationNotifier extends _$ConversationNotifier {
 
     _subscription?.cancel();
     _subscription = service.messageStream.listen(_handleMessage);
+
+    // 需求：[0.2.1-W4-006] WebSocket 重連後自動重新訂閱當前 session
+    // 約束：重連會建立新的後端 Client，舊訂閱丟失
+    ref.listen<AsyncValue<WsConnectionState>>(connectionStateProvider,
+        (previous, next) {
+      final prevState = previous?.valueOrNull;
+      final nextState = next.valueOrNull;
+      if (nextState == WsConnectionState.connected &&
+          prevState != WsConnectionState.connected) {
+        _resubscribeCurrentSession();
+      }
+    });
 
     ref.onDispose(() {
       _subscription?.cancel();
@@ -228,6 +241,18 @@ class ConversationNotifier extends _$ConversationNotifier {
       '[Conv] session_event: count $previousCount -> ${_currentState.events.length}, '
       'sessionId=${event.sessionId}',
     );
+  }
+
+  /// 需求：[0.2.1-W4-006] WebSocket 重連後重新訂閱當前 session
+  /// 約束：僅在有正在查看的 session 時觸發
+  void _resubscribeCurrentSession() {
+    final sessionId = _currentState.sessionId;
+    if (sessionId == null) return;
+
+    debugPrint('[Conv] resubscribe after reconnect: $sessionId');
+    final service = ref.read(webSocketServiceProvider);
+    service.subscribeSession(sessionId);
+    service.requestSessionHistory(sessionId);
   }
 
   /// 需求：[0.2.0-W7-004.3] incomplete event 時主動拉取最新歷史
