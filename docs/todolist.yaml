@@ -3,9 +3,9 @@
 # 已排程的問題應移至 worklog
 
 status: active
-current_version: 0.2.0
-previous_version: 0.1.2
-next_version: 0.2.1
+current_version: 0.2.1
+previous_version: 0.2.0
+next_version: 0.2.2
 
 ## 技術債務追蹤
 ## TD-003~021 已排程至 W50（0.1.0-W50-001~007），從此清單移除
