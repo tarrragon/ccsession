@@ -354,7 +354,7 @@ func (s *WebSocketServer) processDispatchedEvent(event DispatchedEvent) {
 			Data: buildSessionEventPayload(event),
 		})
 	case ChangeTypeStatusChanged:
-		s.broadcastStatusChange(event.Session.ID, event.Session.Status)
+		s.broadcastStatusChange(event.Session.ID, event.Session.Status, event.Session.LastEventAt)
 		if event.Event != nil {
 			s.pushToSubscribers(event.Session.ID, ServerMessage{
 				Type: MsgTypeSessionEvent,
@@ -415,12 +415,13 @@ func (s *WebSocketServer) pushToSubscribers(sessionID string, msg ServerMessage)
 	}
 }
 
-func (s *WebSocketServer) broadcastStatusChange(sessionID string, status SessionStatus) {
+func (s *WebSocketServer) broadcastStatusChange(sessionID string, status SessionStatus, lastEventAt time.Time) {
 	data, err := marshalMessage(ServerMessage{
 		Type: MsgTypeSessionStatusChange,
 		Data: SessionStatusChangeData{
-			SessionID: sessionID,
-			Status:    status,
+			SessionID:   sessionID,
+			Status:      status,
+			LastEventAt: lastEventAt,
 		},
 	})
 	if err != nil {

@@ -106,17 +106,32 @@ class SessionListNotifier extends _$SessionListNotifier {
     state = AsyncData(_currentState.copyWith(sessions: data.sessions));
   }
 
-  /// 需求：session_status_change 更新單一 session 狀態
+  /// 需求：[0.2.1-W4-002] session_status_change 更新 status 及 lastEventAt
+  /// 約束：lastEventAt 為 null 時保留原值（向後相容舊版 backend）
   /// 邊界：未知 sessionId 靜默忽略
   void _handleStatusChange(ServerMessage message) {
     final data = SessionStatusChangeData.fromJson(message.data);
     final updatedSessions = _currentState.sessions.map((session) {
       if (session.id == data.sessionId) {
-        return session.copyWith(status: data.status);
+        return _applyStatusChange(session, data);
       }
       return session;
     }).toList();
     state = AsyncData(_currentState.copyWith(sessions: updatedSessions));
+  }
+
+  /// 需求：[0.2.1-W4-002] 套用狀態變更，有 lastEventAt 時同時更新
+  SessionInfo _applyStatusChange(
+    SessionInfo session,
+    SessionStatusChangeData data,
+  ) {
+    if (data.lastEventAt != null) {
+      return session.copyWith(
+        status: data.status,
+        lastEventAt: data.lastEventAt,
+      );
+    }
+    return session.copyWith(status: data.status);
   }
 
   /// 需求：使用者點擊 session 時更新選中狀態

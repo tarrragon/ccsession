@@ -19,13 +19,15 @@ class MockWebSocketService extends Mock implements WebSocketService {}
 
 ServerMessage _createStatusChangeMessage(
   String sessionId,
-  SessionStatus newStatus,
-) {
+  SessionStatus newStatus, {
+  DateTime? lastEventAt,
+}) {
   return ServerMessage(
     type: 'session_status_change',
     data: {
       'sessionId': sessionId,
       'status': newStatus.name,
+      if (lastEventAt != null) 'lastEventAt': lastEventAt.toIso8601String(),
     },
   );
 }
@@ -320,6 +322,224 @@ void main() {
       container.invalidate(sessionListNotifierProvider);
       await _pump();
       verify(() => mockService.requestSessionList()).called(1);
+    });
+  });
+
+  group('TG-W4-002-B: _handleStatusChange 同時更新 lastEventAt', () {
+    late ProviderContainer container;
+    late StreamController<ServerMessage> messageController;
+    late MockWebSocketService mockService;
+
+    setUp(() {
+      messageController = StreamController<ServerMessage>.broadcast();
+      mockService = MockWebSocketService();
+      when(() => mockService.requestSessionList()).thenReturn(null);
+      when(() => mockService.messageStream)
+          .thenAnswer((_) => messageController.stream);
+
+      container = ProviderContainer(
+        overrides: [
+          webSocketServiceProvider.overrideWithValue(mockService),
+        ],
+      );
+    });
+
+    tearDown(() {
+      container.dispose();
+      messageController.close();
+    });
+
+    Future<void> initNotifier() async {
+      container.listen(sessionListNotifierProvider, (_, __) {});
+      await _pump();
+    }
+
+    Future<void> sendMessage(ServerMessage message) async {
+      messageController.add(message);
+      await _pump();
+    }
+
+    /// TC-B01: status 變更同時更新 lastEventAt
+    test('updates both status and lastEventAt on status change', () async {
+      await initNotifier();
+      final time1000 = DateTime.utc(2026, 3, 25, 10, 0);
+      final time1045 = DateTime.utc(2026, 3, 25, 10, 45);
+
+      await sendMessage(createSessionListMessage([
+        createTestSession(
+          id: 'A',
+          status: SessionStatus.active,
+          lastEventAt: time1000,
+        ),
+      ]));
+
+      // 前置驗證
+      final before = container
+          .read(sessionListNotifierProvider)
+          .valueOrNull!
+          .sessions
+          .first;
+      expect(before.lastEventAt, time1000);
+
+      await sendMessage(_createStatusChangeMessage(
+        'A',
+        SessionStatus.idle,
+        lastEventAt: time1045,
+      ));
+
+      final after = container
+          .read(sessionListNotifierProvider)
+          .valueOrNull!
+          .sessions
+          .first;
+      expect(after.status, SessionStatus.idle);
+      expect(after.lastEventAt, time1045);
+    });
+
+    /// TC-B02: status 變更後排序即時反映
+    test('sort order updates after status change with new lastEventAt',
+        () async {
+      await initNotifier();
+      final time1000 = DateTime.utc(2026, 3, 25, 10, 0);
+      final time1030 = DateTime.utc(2026, 3, 25, 10, 30);
+      final time1045 = DateTime.utc(2026, 3, 25, 10, 45);
+
+      await sendMessage(createSessionListMessage([
+        createTestSession(
+          id: 'A',
+          status: SessionStatus.active,
+          lastEventAt: time1000,
+        ),
+        createTestSession(
+          id: 'B',
+          status: SessionStatus.active,
+          lastEventAt: time1030,
+        ),
+      ]));
+
+      final notifier =
+          container.read(sessionListNotifierProvider.notifier);
+
+      // 前置驗證：B 在 A 前面
+      expect(
+        notifier.groupedSessions[SessionStatus.active]!.map((s) => s.id),
+        ['B', 'A'],
+      );
+
+      await sendMessage(_createStatusChangeMessage(
+        'A',
+        SessionStatus.active,
+        lastEventAt: time1045,
+      ));
+
+      // A 現在排在 B 前面
+      expect(
+        notifier.groupedSessions[SessionStatus.active]!.map((s) => s.id),
+        ['A', 'B'],
+      );
+    });
+
+    /// TC-B03: lastEventAt 為 null 時保留原值（向後相容）
+    test('preserves original lastEventAt when null in status change',
+        () async {
+      await initNotifier();
+      final time1000 = DateTime.utc(2026, 3, 25, 10, 0);
+
+      await sendMessage(createSessionListMessage([
+        createTestSession(
+          id: 'A',
+          status: SessionStatus.active,
+          lastEventAt: time1000,
+        ),
+      ]));
+
+      // 不傳 lastEventAt（舊版 backend）
+      await sendMessage(
+        _createStatusChangeMessage('A', SessionStatus.idle),
+      );
+
+      final session = container
+          .read(sessionListNotifierProvider)
+          .valueOrNull!
+          .sessions
+          .first;
+      expect(session.status, SessionStatus.idle);
+      expect(session.lastEventAt, time1000);
+    });
+
+    /// TC-B04: 未知 sessionId 靜默忽略
+    test('ignores status change with lastEventAt for unknown sessionId',
+        () async {
+      await initNotifier();
+      await sendMessage(createSessionListMessage([
+        createTestSession(id: 'A'),
+      ]));
+
+      final before =
+          container.read(sessionListNotifierProvider).valueOrNull!;
+
+      await sendMessage(_createStatusChangeMessage(
+        'unknown',
+        SessionStatus.idle,
+        lastEventAt: DateTime.utc(2026, 3, 25, 10, 45),
+      ));
+
+      final after =
+          container.read(sessionListNotifierProvider).valueOrNull!;
+      expect(after.sessions.length, before.sessions.length);
+    });
+
+    /// TC-B05: status 變更跨組後排序正確
+    test('cross-group status change preserves correct sort order',
+        () async {
+      await initNotifier();
+      final time0900 = DateTime.utc(2026, 3, 25, 9, 0);
+      final time0930 = DateTime.utc(2026, 3, 25, 9, 30);
+      final time1000 = DateTime.utc(2026, 3, 25, 10, 0);
+      final time1045 = DateTime.utc(2026, 3, 25, 10, 45);
+
+      await sendMessage(createSessionListMessage([
+        createTestSession(
+          id: 'A',
+          status: SessionStatus.active,
+          lastEventAt: time1000,
+        ),
+        createTestSession(
+          id: 'C',
+          status: SessionStatus.completed,
+          lastEventAt: time0900,
+        ),
+        createTestSession(
+          id: 'D',
+          status: SessionStatus.completed,
+          lastEventAt: time0930,
+        ),
+      ]));
+
+      final notifier =
+          container.read(sessionListNotifierProvider.notifier);
+
+      // 前置驗證：Completed 組為 [D, C]
+      expect(
+        notifier.groupedSessions[SessionStatus.completed]!.map((s) => s.id),
+        ['D', 'C'],
+      );
+
+      // A 從 active 變為 completed
+      await sendMessage(_createStatusChangeMessage(
+        'A',
+        SessionStatus.completed,
+        lastEventAt: time1045,
+      ));
+
+      expect(
+        notifier.groupedSessions[SessionStatus.completed]!.map((s) => s.id),
+        ['A', 'D', 'C'],
+      );
+      expect(
+        notifier.groupedSessions.containsKey(SessionStatus.active),
+        isFalse,
+      );
     });
   });
 }

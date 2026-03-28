@@ -84,6 +84,121 @@ void main() {
     });
   });
 
+  group('TG-W4-002-C: groupSessionsByStatus 排序驗證', () {
+    /// TC-C01: 同一狀態組內降序排列
+    test('sorts sessions within group by lastEventAt descending', () {
+      final sessions = [
+        createTestSession(
+          id: '1',
+          status: SessionStatus.active,
+          lastEventAt: DateTime.utc(2026, 3, 25, 10, 0),
+        ),
+        createTestSession(
+          id: '2',
+          status: SessionStatus.active,
+          lastEventAt: DateTime.utc(2026, 3, 25, 10, 30),
+        ),
+        createTestSession(
+          id: '3',
+          status: SessionStatus.active,
+          lastEventAt: DateTime.utc(2026, 3, 25, 10, 15),
+        ),
+      ];
+
+      final result = groupSessionsByStatus(sessions);
+      final ids = result[SessionStatus.active]!.map((s) => s.id).toList();
+
+      expect(ids, ['2', '3', '1']);
+    });
+
+    /// TC-C02: 相同 lastEventAt 不產生錯誤
+    test('handles sessions with identical lastEventAt', () {
+      final sameTime = DateTime.utc(2026, 3, 25, 10, 0);
+      final sessions = [
+        createTestSession(id: '1', status: SessionStatus.active, lastEventAt: sameTime),
+        createTestSession(id: '2', status: SessionStatus.active, lastEventAt: sameTime),
+      ];
+
+      final result = groupSessionsByStatus(sessions);
+
+      expect(result[SessionStatus.active]!.length, 2);
+    });
+
+    /// TC-C03: 空列表和單一 session
+    test('handles empty list and single session', () {
+      expect(groupSessionsByStatus([]), isEmpty);
+
+      final single = [
+        createTestSession(id: '1', status: SessionStatus.idle),
+      ];
+      final result = groupSessionsByStatus(single);
+      expect(result[SessionStatus.idle]!.length, 1);
+    });
+
+    /// TC-C04: 多狀態組各自獨立排序
+    test('sorts each status group independently', () {
+      final sessions = [
+        createTestSession(id: 'a1', status: SessionStatus.active,
+            lastEventAt: DateTime.utc(2026, 3, 25, 10, 0)),
+        createTestSession(id: 'a2', status: SessionStatus.active,
+            lastEventAt: DateTime.utc(2026, 3, 25, 10, 30)),
+        createTestSession(id: 'i1', status: SessionStatus.idle,
+            lastEventAt: DateTime.utc(2026, 3, 25, 9, 0)),
+        createTestSession(id: 'i2', status: SessionStatus.idle,
+            lastEventAt: DateTime.utc(2026, 3, 25, 9, 45)),
+        createTestSession(id: 'c1', status: SessionStatus.completed,
+            lastEventAt: DateTime.utc(2026, 3, 25, 8, 0)),
+        createTestSession(id: 'c2', status: SessionStatus.completed,
+            lastEventAt: DateTime.utc(2026, 3, 25, 8, 15)),
+      ];
+
+      final result = groupSessionsByStatus(sessions);
+
+      expect(result[SessionStatus.active]!.map((s) => s.id), ['a2', 'a1']);
+      expect(result[SessionStatus.idle]!.map((s) => s.id), ['i2', 'i1']);
+      expect(result[SessionStatus.completed]!.map((s) => s.id), ['c2', 'c1']);
+    });
+  });
+
+  group('TG-W4-002-D: 搜尋結果排序驗證', () {
+    /// TC-D01: 搜尋結果中每個組內降序排列
+    test('filtered sessions maintain descending sort within group', () {
+      // 模擬搜尋結果：3 個匹配的 Active session
+      final filtered = [
+        createTestSession(
+          id: '1',
+          status: SessionStatus.active,
+          lastEventAt: DateTime.utc(2026, 3, 25, 10, 0),
+          summary: 'match',
+        ),
+        createTestSession(
+          id: '2',
+          status: SessionStatus.active,
+          lastEventAt: DateTime.utc(2026, 3, 25, 10, 30),
+          summary: 'match',
+        ),
+        createTestSession(
+          id: '3',
+          status: SessionStatus.active,
+          lastEventAt: DateTime.utc(2026, 3, 25, 10, 15),
+          summary: 'match',
+        ),
+      ];
+
+      final result = groupSessionsByStatus(filtered);
+      final ids = result[SessionStatus.active]!.map((s) => s.id).toList();
+
+      expect(ids, ['2', '3', '1']);
+    });
+
+    /// TC-D02: 搜尋結果為空時無排序錯誤
+    test('empty filtered list returns empty map without error', () {
+      final result = groupSessionsByStatus([]);
+
+      expect(result, isEmpty);
+    });
+  });
+
   group('TG-31: sortedProjectPaths', () {
     // TC-31-01: 正常排序 — 字母順序
     test('sorts by extractProjectName alphabetically', () {

@@ -1438,3 +1438,106 @@ func TestStatusChanged_WithoutEvent_NoPushSessionEvent(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 	expectNoMessage(t, conn)
 }
+
+// === TC-E01: SessionStatusChangeData 序列化含 lastEventAt（RFC3339 格式） ===
+
+func TestSessionStatusChangeData_Serialization_ContainsLastEventAt(t *testing.T) {
+	ts := time.Date(2026, 3, 28, 10, 30, 0, 0, time.UTC)
+	data := SessionStatusChangeData{
+		SessionID:   "sess-001",
+		Status:      SessionStatusActive,
+		LastEventAt: ts,
+	}
+
+	b, err := json.Marshal(data)
+	if err != nil {
+		t.Fatalf("marshal failed: %v", err)
+	}
+
+	var raw map[string]any
+	if err := json.Unmarshal(b, &raw); err != nil {
+		t.Fatalf("unmarshal failed: %v", err)
+	}
+
+	lastEventAt, ok := raw["lastEventAt"]
+	if !ok {
+		t.Fatal("expected lastEventAt field in JSON output")
+	}
+
+	str, ok := lastEventAt.(string)
+	if !ok {
+		t.Fatalf("expected lastEventAt to be string, got %T", lastEventAt)
+	}
+
+	if _, err := time.Parse(time.RFC3339, str); err != nil {
+		t.Fatalf("lastEventAt is not RFC3339 format: %s", str)
+	}
+
+	expected := "2026-03-28T10:30:00Z"
+	if str != expected {
+		t.Fatalf("expected lastEventAt=%s, got %s", expected, str)
+	}
+}
+
+// === TC-E02: lastEventAt 為 zero value 時 JSON 為 "0001-01-01T00:00:00Z" ===
+
+func TestSessionStatusChangeData_ZeroLastEventAt(t *testing.T) {
+	data := SessionStatusChangeData{
+		SessionID: "sess-002",
+		Status:    SessionStatusIdle,
+	}
+
+	b, err := json.Marshal(data)
+	if err != nil {
+		t.Fatalf("marshal failed: %v", err)
+	}
+
+	var raw map[string]any
+	if err := json.Unmarshal(b, &raw); err != nil {
+		t.Fatalf("unmarshal failed: %v", err)
+	}
+
+	str, ok := raw["lastEventAt"].(string)
+	if !ok {
+		t.Fatal("expected lastEventAt string field")
+	}
+
+	expected := "0001-01-01T00:00:00Z"
+	if str != expected {
+		t.Fatalf("expected lastEventAt=%s, got %s", expected, str)
+	}
+}
+
+// === TC-E03: broadcastStatusChange 將 lastEventAt 傳入 SessionStatusChangeData ===
+
+func TestBroadcastStatusChange_IncludesLastEventAt(t *testing.T) {
+	lastEvt := time.Date(2026, 3, 28, 12, 0, 0, 0, time.UTC)
+	q := newMockQuerier(&SessionInfo{ID: "sess-003", Status: SessionStatusActive, LastEventAt: lastEvt})
+	env := setupTestServer(t, q)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	go env.server.Run(ctx)
+	t.Cleanup(cancel)
+
+	conn := dialWS(t, env.httpServer.URL)
+	_ = readServerMessage(t, conn) // consume session_list
+
+	time.Sleep(50 * time.Millisecond)
+
+	env.dispatchCh <- DispatchedEvent{
+		ChangeType: ChangeTypeStatusChanged,
+		Session:    &SessionInfo{ID: "sess-003", Status: SessionStatusCompleted, LastEventAt: lastEvt},
+		Timestamp:  time.Now(),
+	}
+
+	msgType, data := readServerMessageTyped[SessionStatusChangeData](t, conn)
+	if msgType != MsgTypeSessionStatusChange {
+		t.Fatalf("expected %s, got %s", MsgTypeSessionStatusChange, msgType)
+	}
+	if data.SessionID != "sess-003" {
+		t.Fatalf("expected sessionId sess-003, got %s", data.SessionID)
+	}
+	if !data.LastEventAt.Equal(lastEvt) {
+		t.Fatalf("expected lastEventAt=%v, got %v", lastEvt, data.LastEventAt)
+	}
+}

@@ -81,29 +81,37 @@ class SessionEventData extends Equatable {
 }
 
 /// session_status_change payload
+/// 需求：[0.2.1-W4-002] session_status_change payload
+/// 約束：lastEventAt 為 nullable，向後相容舊版 backend
 class SessionStatusChangeData extends Equatable {
   const SessionStatusChangeData({
     required this.sessionId,
     required this.status,
+    this.lastEventAt,
   });
 
   final String sessionId;
   final SessionStatus status;
+  final DateTime? lastEventAt;
 
   factory SessionStatusChangeData.fromJson(Map<String, dynamic> json) {
+    final rawLastEventAt = json['lastEventAt'] as String?;
     return SessionStatusChangeData(
       sessionId: json['sessionId'] as String,
       status: SessionStatus.values.byName(json['status'] as String),
+      lastEventAt:
+          rawLastEventAt != null ? DateTime.parse(rawLastEventAt) : null,
     );
   }
 
   Map<String, dynamic> toJson() => {
         'sessionId': sessionId,
         'status': status.name,
+        if (lastEventAt != null) 'lastEventAt': lastEventAt!.toIso8601String(),
       };
 
   @override
-  List<Object?> get props => [sessionId, status];
+  List<Object?> get props => [sessionId, status, lastEventAt];
 }
 
 /// session_history payload
