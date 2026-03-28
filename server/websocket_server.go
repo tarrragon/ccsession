@@ -57,6 +57,7 @@ func (s *WebSocketServer) HandleWS(w http.ResponseWriter, r *http.Request) {
 	client := &Client{
 		conn:          conn,
 		send:          make(chan []byte, ClientSendBufferSize),
+		done:          make(chan struct{}),
 		subscriptions: make(map[string]struct{}),
 	}
 
@@ -133,6 +134,7 @@ func (s *WebSocketServer) readPump(client *Client) {
 	logger := slog.Default()
 	defer s.unregisterClient(client)
 	defer client.conn.Close()
+	defer close(client.done)
 
 	client.conn.SetReadLimit(MaxMessageSize)
 	client.conn.SetReadDeadline(s.now().Add(PongWaitTimeout))
@@ -182,6 +184,8 @@ func (s *WebSocketServer) writePump(client *Client) {
 				slog.Default().Debug(LogWSWriteError, "layer", "ws_server", "error", err)
 				return
 			}
+		case <-client.done:
+			return
 		}
 	}
 }

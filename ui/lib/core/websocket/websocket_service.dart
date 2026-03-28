@@ -107,6 +107,9 @@ class WebSocketServiceImpl implements WebSocketService {
     _setConnectionState(WsConnectionState.connecting);
 
     try {
+      _channelSubscription?.cancel();
+      _channelSubscription = null;
+      _channel?.sink.close();
       _channel = _channelFactory(_currentUri!);
       _setConnectionState(WsConnectionState.connected);
       _reconnectStrategy.reset();

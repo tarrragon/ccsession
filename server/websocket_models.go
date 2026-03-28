@@ -55,6 +55,7 @@ type ErrorData struct {
 type Client struct {
 	conn          *websocket.Conn
 	send          chan []byte
+	done          chan struct{} // closed when readPump exits, signals writePump to stop
 	subscriptions map[string]struct{}
 	mu            sync.RWMutex
 	closeOnce     sync.Once

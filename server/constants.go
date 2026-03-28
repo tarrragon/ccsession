@@ -24,6 +24,13 @@ const (
 	AddFileRetryDelay       = 50 * time.Millisecond
 )
 
+// Parser limits
+const (
+	// MaxToolInputLength is the maximum length (in bytes) for serialized tool input.
+	// Inputs exceeding this limit are truncated to prevent memory bloat.
+	MaxToolInputLength = 2000
+)
+
 // Main server configuration
 const (
 	DefaultPort              = "8765"
