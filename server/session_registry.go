@@ -280,6 +280,14 @@ func (r *SessionRegistry) ScanAndUpdateStatus() []*SessionInfo {
 		if oldStatus != newStatus {
 			session.Status = newStatus
 			updated = append(updated, copySessionInfo(session))
+
+			// 需求：[0.2.1-W5-002] 當 session 轉為 completed 時，
+			// 裁剪歷史事件至 CompletedSessionMaxEvents，釋放記憶體。
+			if newStatus == SessionStatusCompleted {
+				if events := r.history[session.ID]; len(events) > CompletedSessionMaxEvents {
+					r.history[session.ID] = events[len(events)-CompletedSessionMaxEvents:]
+				}
+			}
 		}
 	}
 
@@ -328,12 +336,19 @@ func truncateString(s string, maxLen int) string {
 }
 
 // AppendEvent appends a SessionEvent to the history for the given session.
+// 需求：[0.2.1-W5-002] 限制每 session 事件數，防止記憶體無限增長。
+// 超過 MaxEventsPerSession 時淘汰最早的事件。
 func (r *SessionRegistry) AppendEvent(sessionID string, event SessionEvent) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	copied := event
-	r.history[sessionID] = append(r.history[sessionID], &copied)
+	events := append(r.history[sessionID], &copied)
+
+	if len(events) > MaxEventsPerSession {
+		events = events[len(events)-MaxEventsPerSession:]
+	}
+	r.history[sessionID] = events
 }
 
 // GetHistory returns paginated history events for the given session.

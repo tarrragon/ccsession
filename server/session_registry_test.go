@@ -831,3 +831,87 @@ func TestSessionRegistry_ComputeStatus(t *testing.T) {
 		})
 	}
 }
+
+// TestAppendEvent_EvictsOldestWhenExceedsMax 驗證 AppendEvent 超過上限時淘汰最早事件
+func TestAppendEvent_EvictsOldestWhenExceedsMax(t *testing.T) {
+	baseTime := time.Date(2026, 3, 25, 12, 0, 0, 0, time.UTC)
+	registry := NewSessionRegistry(func() time.Time { return baseTime })
+
+	sessionID := "eviction-test"
+	// 先建立 session
+	registry.UpsertFromSessionEvent(SessionEvent{
+		SessionID: sessionID,
+		Type:      EventTypeUser,
+		Timestamp: baseTime,
+	})
+
+	// 填入 MaxEventsPerSession + 10 個事件
+	totalEvents := MaxEventsPerSession + 10
+	for i := 0; i < totalEvents; i++ {
+		registry.AppendEvent(sessionID, SessionEvent{
+			SessionID: sessionID,
+			Type:      EventTypeUser,
+			Timestamp: baseTime.Add(time.Duration(i) * time.Second),
+			Content:   EventContent{Text: "msg"},
+		})
+	}
+
+	// 驗證歷史長度不超過上限
+	events, _, err := registry.GetHistory(sessionID, MaxEventsPerSession+100, time.Time{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(events) != MaxEventsPerSession {
+		t.Errorf("expected %d events, got %d", MaxEventsPerSession, len(events))
+	}
+
+	// 驗證保留的是最新的事件（最早被淘汰的是 index 0~9）
+	firstKept := events[0]
+	expectedFirstTimestamp := baseTime.Add(time.Duration(totalEvents-MaxEventsPerSession) * time.Second)
+	if !firstKept.Timestamp.Equal(expectedFirstTimestamp) {
+		t.Errorf("expected oldest kept event timestamp=%v, got %v", expectedFirstTimestamp, firstKept.Timestamp)
+	}
+}
+
+// TestScanAndUpdateStatus_TrimsCompletedSessionHistory 驗證 completed session 歷史裁剪
+func TestScanAndUpdateStatus_TrimsCompletedSessionHistory(t *testing.T) {
+	baseTime := time.Date(2026, 3, 25, 12, 0, 0, 0, time.UTC)
+	currentTime := baseTime
+	registry := NewSessionRegistry(func() time.Time { return currentTime })
+
+	sessionID := "trim-test"
+	// 建立 active session
+	registry.UpsertFromSessionEvent(SessionEvent{
+		SessionID: sessionID,
+		Type:      EventTypeUser,
+		Timestamp: baseTime,
+	})
+
+	// 填入 200 個事件（遠超 CompletedSessionMaxEvents）
+	for i := 0; i < 200; i++ {
+		registry.AppendEvent(sessionID, SessionEvent{
+			SessionID: sessionID,
+			Type:      EventTypeUser,
+			Timestamp: baseTime.Add(time.Duration(i) * time.Second),
+			Content:   EventContent{Text: "msg"},
+		})
+	}
+
+	// 推進時間超過 IdleThreshold，觸發 completed 轉換
+	currentTime = baseTime.Add(IdleThreshold + time.Minute)
+	updated := registry.ScanAndUpdateStatus()
+
+	// 驗證狀態已轉為 completed
+	if len(updated) != 1 || updated[0].Status != SessionStatusCompleted {
+		t.Fatalf("expected session to become completed, got %v", updated)
+	}
+
+	// 驗證歷史已裁剪至 CompletedSessionMaxEvents
+	events, _, err := registry.GetHistory(sessionID, 1000, time.Time{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(events) != CompletedSessionMaxEvents {
+		t.Errorf("expected %d events after trim, got %d", CompletedSessionMaxEvents, len(events))
+	}
+}
