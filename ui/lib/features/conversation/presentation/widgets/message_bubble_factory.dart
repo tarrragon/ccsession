@@ -12,7 +12,7 @@ import 'package:flutter/material.dart';
 /// 需求：根據 SessionEvent.type 選擇對應的 Bubble Widget（Phase 3a 4.2）
 /// 約束：空內容顯示 fallback 提示文字，未知類型回傳 SizedBox.shrink
 /// 維護：highlightRanges 為 optional，搜尋功能注入高亮範圍（0.2.0-W2-005.2）
-/// 維護：[0.2.1-W4-003] 空內容改為顯示 fallback 提示，不再隱藏
+/// 維護：[0.2.1-W4-003] user 空內容隱藏（SizedBox.shrink），其他類型顯示 fallback
 abstract final class MessageBubbleFactory {
   /// 需求：建構對應類型的 Bubble Widget
   /// 約束：各類型空內容顯示 EmptyContentBubble，highlightRanges 傳入各 Bubble
@@ -31,16 +31,13 @@ abstract final class MessageBubbleFactory {
     };
   }
 
-  /// 需求：[0.2.1-W4-003] 空文字 user 事件顯示 fallback
+  /// 需求：[0.2.1-W4-003] 空文字 user 事件隱藏（自動繼續時的空 prompt）
   static Widget _buildUserOrFallback(
     SessionEvent event,
     List<HighlightRange>? highlightRanges,
   ) {
     if (event.content.text.trim().isEmpty) {
-      return const EmptyContentBubble(
-        eventType: 'user',
-        alignment: Alignment.centerRight,
-      );
+      return const SizedBox.shrink();
     }
     return UserMessageBubble(
         event: event, highlightRanges: highlightRanges);

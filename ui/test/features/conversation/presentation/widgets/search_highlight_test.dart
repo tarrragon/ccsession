@@ -159,6 +159,10 @@ void main() {
         ),
       );
 
+      // 展開 ExpansionTile 以顯示高亮內容
+      await tester.tap(find.byType(ExpansionTile));
+      await tester.pumpAndSettle();
+
       expect(find.byType(RichText), findsWidgets);
     });
 

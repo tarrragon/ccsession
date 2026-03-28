@@ -13,18 +13,29 @@ import '../../helpers/test_conversation_factory.dart';
 
 void main() {
   group('TG-22: MessageBubble Widgets', () {
-    // TC-22-01: UserMessageBubble — 正確渲染
-    testWidgets('UserMessageBubble renders text aligned right', (tester) async {
+    // TC-22-01: UserMessageBubble — 預設摺疊，展開後顯示完整文字
+    testWidgets('UserMessageBubble renders collapsed, expands to show text',
+        (tester) async {
       final event = createUserEvent('Hello world');
 
       await tester.pumpWidget(MaterialApp(
         home: Scaffold(body: UserMessageBubble(event: event)),
       ));
 
-      expect(find.text('Hello world'), findsOneWidget);
-      expect(find.byType(Align), findsOneWidget);
+      // 預設摺疊：標題預覽可見
+      expect(find.byType(ExpansionTile), findsOneWidget);
 
-      final align = tester.widget<Align>(find.byType(Align));
+      // 展開後顯示完整文字
+      await tester.tap(find.byType(ExpansionTile));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Hello world'), findsWidgets);
+
+      // 靠右對齊
+      final align = tester.widget<Align>(find.ancestor(
+        of: find.byType(Container).first,
+        matching: find.byType(Align),
+      ).first);
       expect(align.alignment, Alignment.centerRight);
     });
 
@@ -185,8 +196,8 @@ void main() {
       expect(find.byType(EmptyContentBubble), findsOneWidget);
     });
 
-    // TC-22-12: UserMessageBubble — 空文字顯示 fallback（0.2.1-W4-003）
-    testWidgets('empty user text renders EmptyContentBubble via factory',
+    // TC-22-12: UserMessageBubble — 空文字隱藏（0.2.1-W4-003）
+    testWidgets('empty user text renders SizedBox.shrink via factory',
         (tester) async {
       final event = createUserEvent('');
 
@@ -195,11 +206,8 @@ void main() {
       ));
 
       expect(find.byType(UserMessageBubble), findsNothing);
-      expect(find.byType(EmptyContentBubble), findsOneWidget);
-      expect(
-        find.text('[user] ${ConversationConstants.emptyContentFallback}'),
-        findsOneWidget,
-      );
+      expect(find.byType(EmptyContentBubble), findsNothing);
+      expect(find.byType(SizedBox), findsWidgets);
     });
 
     // TC-22-13: ToolUseBubble — 空 toolName 顯示 fallback（0.2.1-W4-003）
