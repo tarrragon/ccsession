@@ -46,4 +46,5 @@ const (
 	LogSubagentRegistered      = "subagent session registered from transcript path"
 	LogSubagentPathEmpty       = "SubagentStop without transcript path, updating main session only"
 	LogSubagentPathParseError  = "failed to extract session ID from transcript path"
+	LogCompletedEventsTrimmed  = "completed session events trimmed"
 )

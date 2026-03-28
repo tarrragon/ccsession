@@ -285,6 +285,12 @@ func (r *SessionRegistry) ScanAndUpdateStatus() []*SessionInfo {
 			// 裁剪歷史事件至 CompletedSessionMaxEvents，釋放記憶體。
 			if newStatus == SessionStatusCompleted {
 				if events := r.history[session.ID]; len(events) > CompletedSessionMaxEvents {
+					slog.Warn(LogCompletedEventsTrimmed,
+						"layer", "session_registry",
+						"session_id", session.ID,
+						"before", len(events),
+						"after", CompletedSessionMaxEvents,
+					)
 					r.history[session.ID] = events[len(events)-CompletedSessionMaxEvents:]
 				}
 			}
