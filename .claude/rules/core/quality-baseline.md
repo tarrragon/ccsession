@@ -102,6 +102,8 @@
 
 **實作**：`hook_utils.py` 的 `_log_exception` 在記錄檔案日誌後，額外輸出到 stderr。
 
+> Go/Dart 的具體可觀測性要求見 `.claude/rules/core/observability-rules.md`。
+
 ### 規則 5：所有發現必須追蹤
 
 **發現任何問題，無論優先級，都必須建立 Ticket 追蹤。發現即建立，不詢問確認。**
