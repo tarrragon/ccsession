@@ -82,7 +82,16 @@ func (r *SessionRegistry) UpsertFromSessionEvent(event SessionEvent) {
 
 	// 更新現有或新建的 session
 	session.EventCount++
-	session.LastEventAt = eventTime
+
+	// 即時事件（非初始掃描）：LastEventAt 使用當前時間，
+	// 因為 eventTime 是 JSONL 中記錄的歷史時間，可能遠早於偵測時刻，
+	// 會導致 ScanAndUpdateStatus 用真正的 now 計算時誤判為 idle/completed。
+	// 初始掃描事件：使用 eventTime（檔案修改時間）保持一致性。
+	if event.Type == EventTypeSessionDiscovered {
+		session.LastEventAt = eventTime
+	} else {
+		session.LastEventAt = now
+	}
 
 	// 記錄首個 user 事件時戳
 	if event.Type == EventTypeUser && session.FirstUserMessageAt.IsZero() {
