@@ -30,4 +30,14 @@ abstract final class ConversationConstants {
   /// 需求：Markdown 內嵌程式碼區塊的圓角半徑
   /// 來源：Bubble borderRadius 常數化（0.2.1-W3-003）
   static const codeBlockBorderRadius = 4.0;
+
+  /// 需求：[0.2.1-W4-003] 空內容 fallback 提示文字
+  /// 約束：使用者看到空框時應顯示提示，而非空白
+  static const emptyContentFallback = '(empty content)';
+
+  /// 需求：[0.2.1-W4-003] 空內容 fallback 文字樣式（斜體 + 降低透明度）
+  static const emptyContentStyle = TextStyle(
+    fontStyle: FontStyle.italic,
+    color: Color(0x99000000),
+  );
 }
