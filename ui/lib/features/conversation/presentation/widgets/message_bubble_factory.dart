@@ -19,12 +19,24 @@ abstract final class MessageBubbleFactory {
   }) {
     return switch (event.type) {
       'user' => UserMessageBubble(event: event, highlightRanges: highlightRanges),
-      'assistant' => AssistantMessageBubble(event: event, highlightRanges: highlightRanges),
+      'assistant' => _buildAssistantOrEmpty(event, highlightRanges),
       'tool_use' => ToolUseBubble(event: event, highlightRanges: highlightRanges),
       'tool_result' => ToolResultBubble(event: event, highlightRanges: highlightRanges),
       'thinking' => _buildThinkingOrEmpty(event, highlightRanges),
       _ => const SizedBox.shrink(),
     };
+  }
+
+  /// 需求：[0.2.1-W4-003] 空文字 assistant 事件不渲染氣泡
+  static Widget _buildAssistantOrEmpty(
+    SessionEvent event,
+    List<HighlightRange>? highlightRanges,
+  ) {
+    if (event.content.text.trim().isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return AssistantMessageBubble(
+        event: event, highlightRanges: highlightRanges);
   }
 
   static Widget _buildThinkingOrEmpty(

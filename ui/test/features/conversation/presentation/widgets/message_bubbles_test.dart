@@ -148,6 +148,33 @@ void main() {
       expect(find.byType(SizedBox), findsOneWidget);
     });
 
+    // TC-22-10: AssistantMessageBubble — 空文字不渲染（0.2.1-W4-003）
+    testWidgets('empty assistant text renders SizedBox.shrink via factory',
+        (tester) async {
+      final event = createAssistantEvent('');
+
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(body: MessageBubbleFactory.build(event)),
+      ));
+
+      expect(find.byType(AssistantMessageBubble), findsNothing);
+      expect(find.byType(SizedBox), findsOneWidget);
+    });
+
+    // TC-22-11: AssistantMessageBubble — 空白文字不渲染（0.2.1-W4-003）
+    testWidgets(
+        'whitespace-only assistant text renders SizedBox.shrink via factory',
+        (tester) async {
+      final event = createAssistantEvent('   \n  ');
+
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(body: MessageBubbleFactory.build(event)),
+      ));
+
+      expect(find.byType(AssistantMessageBubble), findsNothing);
+      expect(find.byType(SizedBox), findsOneWidget);
+    });
+
     // TC-22-09: MessageBubbleFactory — 未知類型 fallback
     testWidgets('unknown event type renders SizedBox.shrink', (tester) async {
       final event = createTestEvent(type: 'unknown_type', text: 'data');
