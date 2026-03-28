@@ -1,4 +1,6 @@
+import 'package:ccsession/core/constants/conversation_constants.dart';
 import 'package:ccsession/features/conversation/presentation/widgets/assistant_message_bubble.dart';
+import 'package:ccsession/features/conversation/presentation/widgets/empty_content_bubble.dart';
 import 'package:ccsession/features/conversation/presentation/widgets/message_bubble_factory.dart';
 import 'package:ccsession/features/conversation/presentation/widgets/thinking_bubble.dart';
 import 'package:ccsession/features/conversation/presentation/widgets/tool_result_bubble.dart';
@@ -11,18 +13,29 @@ import '../../helpers/test_conversation_factory.dart';
 
 void main() {
   group('TG-22: MessageBubble Widgets', () {
-    // TC-22-01: UserMessageBubble — 正確渲染
-    testWidgets('UserMessageBubble renders text aligned right', (tester) async {
+    // TC-22-01: UserMessageBubble — 預設摺疊，展開後顯示完整文字
+    testWidgets('UserMessageBubble renders collapsed, expands to show text',
+        (tester) async {
       final event = createUserEvent('Hello world');
 
       await tester.pumpWidget(MaterialApp(
         home: Scaffold(body: UserMessageBubble(event: event)),
       ));
 
-      expect(find.text('Hello world'), findsOneWidget);
-      expect(find.byType(Align), findsOneWidget);
+      // 預設摺疊：標題預覽可見
+      expect(find.byType(ExpansionTile), findsOneWidget);
 
-      final align = tester.widget<Align>(find.byType(Align));
+      // 展開後顯示完整文字
+      await tester.tap(find.byType(ExpansionTile));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Hello world'), findsWidgets);
+
+      // 靠右對齊
+      final align = tester.widget<Align>(find.ancestor(
+        of: find.byType(Container).first,
+        matching: find.byType(Align),
+      ).first);
       expect(align.alignment, Alignment.centerRight);
     });
 
@@ -135,8 +148,8 @@ void main() {
       expect(find.text('Let me think about this...'), findsOneWidget);
     });
 
-    // TC-22-08: ThinkingBubble — 空文字不渲染
-    testWidgets('empty thinking text renders SizedBox.shrink via factory',
+    // TC-22-08: ThinkingBubble — 空文字顯示 fallback（0.2.1-W4-003）
+    testWidgets('empty thinking text renders EmptyContentBubble via factory',
         (tester) async {
       final event = createThinkingEvent('');
 
@@ -145,7 +158,86 @@ void main() {
       ));
 
       expect(find.byType(ThinkingBubble), findsNothing);
-      expect(find.byType(SizedBox), findsOneWidget);
+      expect(find.byType(EmptyContentBubble), findsOneWidget);
+      expect(
+        find.text('[thinking] ${ConversationConstants.emptyContentFallback}'),
+        findsOneWidget,
+      );
+    });
+
+    // TC-22-10: AssistantMessageBubble — 空文字顯示 fallback（0.2.1-W4-003）
+    testWidgets('empty assistant text renders EmptyContentBubble via factory',
+        (tester) async {
+      final event = createAssistantEvent('');
+
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(body: MessageBubbleFactory.build(event)),
+      ));
+
+      expect(find.byType(AssistantMessageBubble), findsNothing);
+      expect(find.byType(EmptyContentBubble), findsOneWidget);
+      expect(
+        find.text('[assistant] ${ConversationConstants.emptyContentFallback}'),
+        findsOneWidget,
+      );
+    });
+
+    // TC-22-11: AssistantMessageBubble — 空白文字顯示 fallback（0.2.1-W4-003）
+    testWidgets(
+        'whitespace-only assistant text renders EmptyContentBubble via factory',
+        (tester) async {
+      final event = createAssistantEvent('   \n  ');
+
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(body: MessageBubbleFactory.build(event)),
+      ));
+
+      expect(find.byType(AssistantMessageBubble), findsNothing);
+      expect(find.byType(EmptyContentBubble), findsOneWidget);
+    });
+
+    // TC-22-12: UserMessageBubble — 空文字隱藏（0.2.1-W4-003）
+    testWidgets('empty user text renders SizedBox.shrink via factory',
+        (tester) async {
+      final event = createUserEvent('');
+
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(body: MessageBubbleFactory.build(event)),
+      ));
+
+      expect(find.byType(UserMessageBubble), findsNothing);
+      expect(find.byType(EmptyContentBubble), findsNothing);
+      expect(find.byType(SizedBox), findsWidgets);
+    });
+
+    // TC-22-13: ToolUseBubble — 空 toolName 顯示 fallback（0.2.1-W4-003）
+    testWidgets('empty toolName renders EmptyContentBubble via factory',
+        (tester) async {
+      final event = createToolUseEvent('');
+
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(body: MessageBubbleFactory.build(event)),
+      ));
+
+      expect(find.byType(ToolUseBubble), findsNothing);
+      expect(find.byType(EmptyContentBubble), findsOneWidget);
+      expect(
+        find.text('[tool_use] ${ConversationConstants.emptyContentFallback}'),
+        findsOneWidget,
+      );
+    });
+
+    // TC-22-14: ToolResultBubble — 空 output 仍渲染（可展開查看）
+    testWidgets('empty tool result output still renders ToolResultBubble',
+        (tester) async {
+      final event = createToolResultEvent(output: '');
+
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(body: MessageBubbleFactory.build(event)),
+      ));
+
+      // tool_result 始終渲染（ExpansionTile 可展開），空 output 不影響標題
+      expect(find.byType(ToolResultBubble), findsOneWidget);
     });
 
     // TC-22-09: MessageBubbleFactory — 未知類型 fallback

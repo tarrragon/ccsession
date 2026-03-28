@@ -1,8 +1,6 @@
 import 'dart:async';
 
 import 'package:ccsession/core/constants/search_constants.dart';
-import 'package:ccsession/core/models/session_info.dart';
-import 'package:ccsession/features/session_list/presentation/session_group_utils.dart';
 import 'package:ccsession/features/session_list/presentation/session_list_notifier.dart';
 import 'package:ccsession/features/session_list/presentation/session_list_search_state.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
@@ -56,42 +54,6 @@ class SessionListSearchNotifier extends _$SessionListSearchNotifier {
       () {
         state = _currentSearch;
       },
-    );
-  }
-
-  /// 需求：取得篩選後的分組 session 列表
-  /// 約束：空 query（trim 後）回傳完整列表；非空則對四個欄位做 case-insensitive contains
-  /// 約束：分組順序固定 active/idle/completed，每組內按 lastEventAt 降序
-  Map<SessionStatus, List<SessionInfo>> filteredGroupedSessions() {
-    final sessionListState =
-        ref.read(sessionListNotifierProvider).valueOrNull;
-    if (sessionListState == null) return {};
-
-    final sessions = sessionListState.sessions;
-    final trimmedQuery = state.query.trim();
-
-    if (trimmedQuery.isEmpty) {
-      return groupSessionsByStatus(sessions);
-    }
-
-    final normalizedQuery = trimmedQuery.toLowerCase();
-    final filtered = sessions.where(
-      (session) => _matchesQuery(session, normalizedQuery),
-    ).toList();
-
-    return groupSessionsByStatus(filtered);
-  }
-
-  /// 需求：檢查 session 是否匹配查詢字串（任一欄位匹配即可）
-  bool _matchesQuery(SessionInfo session, String normalizedQuery) {
-    final fields = [
-      session.summary,
-      session.projectPath,
-      session.agentName,
-      session.lastMessage,
-    ];
-    return fields.any(
-      (field) => field.toLowerCase().contains(normalizedQuery),
     );
   }
 

@@ -328,6 +328,191 @@ func TestParseLineNonConversationTypes(t *testing.T) {
 	}
 }
 
+// --- TC-1: user type 基本解析 ---
+
+func TestParseLineUserTypeMessage(t *testing.T) {
+	line := []byte(`{
+		"uuid": "u-001",
+		"type": "user",
+		"timestamp": "2026-03-27T10:00:00Z",
+		"message": {
+			"role": "user",
+			"content": "What is TDD?"
+		}
+	}`)
+
+	events, err := ParseLine(line, "sess-1", "/project")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(events) != 1 {
+		t.Fatalf("expected 1 event, got %d", len(events))
+	}
+
+	evt := events[0]
+	assertEqual(t, "Type", evt.Type, EventTypeUser)
+	assertEqual(t, "Content.Text", evt.Content.Text, "What is TDD?")
+	assertEqual(t, "MessageID", evt.MessageID, "u-001")
+	assertEqual(t, "SessionID", evt.SessionID, "sess-1")
+	assertEqualInt(t, "ContentIndex", evt.ContentIndex, ContentIndexNone)
+	assertEqualBool(t, "IsLastContent", evt.IsLastContent, true)
+}
+
+// --- TC-2: human type 向後相容 ---
+
+func TestParseLineHumanTypeBackwardCompat(t *testing.T) {
+	line := []byte(`{
+		"uuid": "h-001",
+		"type": "human",
+		"timestamp": "2026-03-27T10:00:00Z",
+		"message": {
+			"role": "user",
+			"content": "Hello from legacy"
+		}
+	}`)
+
+	events, err := ParseLine(line, "sess-1", "/project")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(events) != 1 {
+		t.Fatalf("expected 1 event, got %d", len(events))
+	}
+
+	assertEqual(t, "Type", events[0].Type, EventTypeUser)
+	assertEqual(t, "Content.Text", events[0].Content.Text, "Hello from legacy")
+}
+
+// --- TC-3: ai type 向後相容 ---
+
+func TestParseLineAiTypeBackwardCompat(t *testing.T) {
+	line := []byte(`{
+		"uuid": "a-001",
+		"type": "ai",
+		"timestamp": "2026-03-27T10:00:00Z",
+		"message": {
+			"role": "assistant",
+			"content": [{"type": "text", "text": "AI response"}]
+		}
+	}`)
+
+	events, err := ParseLine(line, "sess-1", "/project")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(events) != 1 {
+		t.Fatalf("expected 1 event, got %d", len(events))
+	}
+
+	assertEqual(t, "Type", events[0].Type, EventTypeAssistant)
+	assertEqual(t, "Content.Text", events[0].Content.Text, "AI response")
+}
+
+// --- TC-4: user + assistant 對話序列 ---
+
+func TestParseLineUserAndAssistantSequence(t *testing.T) {
+	userLine := []byte(`{
+		"uuid": "seq-1",
+		"type": "user",
+		"timestamp": "2026-03-27T10:00:00Z",
+		"message": {
+			"role": "user",
+			"content": "Question"
+		}
+	}`)
+	assistantLine := []byte(`{
+		"uuid": "seq-2",
+		"type": "assistant",
+		"timestamp": "2026-03-27T10:00:01Z",
+		"message": {
+			"role": "assistant",
+			"content": [{"type": "text", "text": "Answer"}]
+		}
+	}`)
+
+	events1, err := ParseLine(userLine, "sess-1", "/project")
+	if err != nil {
+		t.Fatalf("unexpected error parsing user line: %v", err)
+	}
+	events2, err := ParseLine(assistantLine, "sess-1", "/project")
+	if err != nil {
+		t.Fatalf("unexpected error parsing assistant line: %v", err)
+	}
+
+	assertEqual(t, "user Type", events1[0].Type, EventTypeUser)
+	assertEqual(t, "user Content", events1[0].Content.Text, "Question")
+	assertEqual(t, "assistant Type", events2[0].Type, EventTypeAssistant)
+	assertEqual(t, "assistant Content", events2[0].Content.Text, "Answer")
+}
+
+// --- TC-5: 空 type 過濾 ---
+
+func TestParseLineEmptyType(t *testing.T) {
+	line := []byte(`{
+		"uuid": "e-001",
+		"type": "",
+		"timestamp": "2026-03-27T10:00:00Z",
+		"message": {
+			"role": "user",
+			"content": "test"
+		}
+	}`)
+
+	events, err := ParseLine(line, "sess-1", "/project")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if events != nil {
+		t.Fatalf("expected nil events for empty type, got %d", len(events))
+	}
+}
+
+// --- TC-6: 缺失 type 過濾 ---
+
+func TestParseLineMissingType(t *testing.T) {
+	line := []byte(`{
+		"uuid": "m-001",
+		"timestamp": "2026-03-27T10:00:00Z",
+		"message": {
+			"role": "user",
+			"content": "test"
+		}
+	}`)
+
+	events, err := ParseLine(line, "sess-1", "/project")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if events != nil {
+		t.Fatalf("expected nil events for missing type, got %d", len(events))
+	}
+}
+
+// --- TC-7: user 訊息 array content 格式 ---
+
+func TestParseLineUserWithArrayContent(t *testing.T) {
+	line := []byte(`{
+		"uuid": "ua-001",
+		"type": "user",
+		"timestamp": "2026-03-27T10:00:00Z",
+		"message": {
+			"role": "user",
+			"content": [{"type": "text", "text": "Array content"}]
+		}
+	}`)
+
+	events, err := ParseLine(line, "sess-1", "/project")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(events) != 1 {
+		t.Fatalf("expected 1 event, got %d", len(events))
+	}
+
+	assertEqual(t, "Type", events[0].Type, EventTypeUser)
+	assertEqual(t, "Content.Text", events[0].Content.Text, "Array content")
+}
+
 // --- Test helpers ---
 
 func assertEqual(t *testing.T, field, got, want string) {

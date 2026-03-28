@@ -1,9 +1,16 @@
 /// 需求：從 projectPath 提取專案名稱（最後一段路徑）
 /// 範例：'/Users/foo/Projects/myapp' -> 'myapp'
+/// 範例：'-Users-foo-Projects-myapp' -> 'myapp'（Claude Code dash 格式）
 /// 邊界：空字串 -> ''；'/' -> ''；無斜線 -> 原字串
 String extractProjectName(String projectPath) {
   if (projectPath.isEmpty) {
     return '';
+  }
+
+  // Claude Code dash 格式：以 '-' 開頭且不含 '/'
+  if (projectPath.startsWith('-') && !projectPath.contains('/')) {
+    final segments = projectPath.split('-').where((s) => s.isNotEmpty).toList();
+    return segments.isEmpty ? '' : segments.last;
   }
 
   var path = projectPath;

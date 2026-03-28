@@ -305,6 +305,7 @@ func (d *EventDispatcher) performStatusScan() {
 }
 
 // cleanupDedupTable 清理過期的去重記錄。
+// 若清理後仍超過 MaxDedupTableSize，強制清空整張表作為安全閥。
 func (d *EventDispatcher) cleanupDedupTable() {
 	logger := slog.Default()
 
@@ -327,5 +328,16 @@ func (d *EventDispatcher) cleanupDedupTable() {
 			"layer", "event_dispatcher",
 			"removed", removed,
 			"remaining", len(d.dedupTable))
+	}
+
+	// Safety valve: if table still exceeds hard limit, force clear
+	if len(d.dedupTable) > MaxDedupTableSize {
+		logger.Warn(LogDedupTableSizeLimit,
+			"layer", "event_dispatcher",
+			"size", len(d.dedupTable),
+			"limit", MaxDedupTableSize)
+		// NOTE: 清空後 DedupWindowDuration（5 秒）內可能出現重複事件推送，
+		// 這是有意的 trade-off — 防止 OOM 優先於防止重複。
+		d.dedupTable = make(map[deduplicationKey]EventSource)
 	}
 }

@@ -27,7 +27,7 @@ class ToolResultBubble extends StatelessWidget {
       margin: ConversationConstants.bubbleMargin,
       decoration: BoxDecoration(
         border: Border.all(color: borderColor),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(ConversationConstants.toolBubbleBorderRadius),
       ),
       child: ExpansionTile(
         title: Text(

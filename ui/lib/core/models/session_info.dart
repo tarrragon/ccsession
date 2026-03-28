@@ -1,11 +1,7 @@
 import 'package:equatable/equatable.dart';
-import 'package:json_annotation/json_annotation.dart';
-
-part 'session_info.g.dart';
 
 /// 需求：對應 Go SessionInfo struct（session_registry_models.go）
 /// 約束：JSON key 必須與 Go json tag 完全一致（camelCase）
-@JsonSerializable()
 class SessionInfo extends Equatable {
   const SessionInfo({
     required this.id,
@@ -37,10 +33,46 @@ class SessionInfo extends Equatable {
   final String parentAgentId;
   final String agentName;
 
-  factory SessionInfo.fromJson(Map<String, dynamic> json) =>
-      _$SessionInfoFromJson(json);
+  /// 需求：從 Go WebSocket JSON 反序列化為 SessionInfo
+  /// 約束：可選欄位缺失時使用建構式預設值
+  factory SessionInfo.fromJson(Map<String, dynamic> json) {
+    return SessionInfo(
+      id: json['id'] as String,
+      projectPath: json['projectPath'] as String,
+      summary: json['summary'] as String? ?? '',
+      status: SessionStatus.fromJson(json['status'] as String),
+      firstEventAt: DateTime.parse(json['firstEventAt'] as String),
+      lastEventAt: DateTime.parse(json['lastEventAt'] as String),
+      firstUserMessageAt: json['firstUserMessageAt'] == null
+          ? null
+          : DateTime.parse(json['firstUserMessageAt'] as String),
+      eventCount: json['eventCount'] as int? ?? 0,
+      agentId: json['agentId'] as String? ?? '',
+      agentType: json['agentType'] as String? ?? '',
+      lastMessage: json['lastMessage'] as String? ?? '',
+      parentAgentId: json['parentAgentId'] as String? ?? '',
+      agentName: json['agentName'] as String? ?? '',
+    );
+  }
 
-  Map<String, dynamic> toJson() => _$SessionInfoToJson(this);
+  /// 需求：序列化為 JSON，與 Go json tag 一致
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'projectPath': projectPath,
+      'summary': summary,
+      'status': status.toJson(),
+      'firstEventAt': firstEventAt.toIso8601String(),
+      'lastEventAt': lastEventAt.toIso8601String(),
+      'firstUserMessageAt': firstUserMessageAt?.toIso8601String(),
+      'eventCount': eventCount,
+      'agentId': agentId,
+      'agentType': agentType,
+      'lastMessage': lastMessage,
+      'parentAgentId': parentAgentId,
+      'agentName': agentName,
+    };
+  }
 
   SessionInfo copyWith({
     String? id,
@@ -94,12 +126,15 @@ class SessionInfo extends Equatable {
 
 /// 對應 Go SessionStatus（session_registry_constants.go）
 enum SessionStatus {
-  @JsonValue('active')
   active,
-
-  @JsonValue('idle')
   idle,
+  completed;
 
-  @JsonValue('completed')
-  completed,
+  /// 從 JSON 字串轉換為 enum
+  static SessionStatus fromJson(String value) {
+    return SessionStatus.values.firstWhere((e) => e.name == value);
+  }
+
+  /// 轉換為 JSON 字串
+  String toJson() => name;
 }

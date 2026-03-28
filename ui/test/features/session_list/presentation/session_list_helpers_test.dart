@@ -35,5 +35,26 @@ void main() {
     test('returns input when no slash present', () {
       expect(extractProjectName('myapp'), equals('myapp'));
     });
+
+    // TC-11-07: Claude Code dash 格式路徑
+    test('extracts last segment from dash-separated path', () {
+      expect(
+        extractProjectName('-Users-tarragon-Projects-ccsession'),
+        equals('ccsession'),
+      );
+    });
+
+    // TC-11-08: Claude Code dash 格式（較短路徑）
+    test('extracts last segment from short dash path', () {
+      expect(
+        extractProjectName('-Users-tarragon-Desktop-novel'),
+        equals('novel'),
+      );
+    });
+
+    // TC-11-09: 單一 dash（邊界）
+    test('returns empty string for single dash', () {
+      expect(extractProjectName('-'), equals(''));
+    });
   });
 }

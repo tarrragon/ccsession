@@ -47,7 +47,7 @@ func NewSessionRegistry(timeProvider func() time.Time) *SessionRegistry {
 //   - 若 type == "session_completed" → 強制設定 Status 為 completed
 //   - 其他類型 → 重新計算 Status（呼叫 computeStatus，傳入當前時間）
 //   - 若為首個 user 訊息（FirstUserMessageAt 未設定且 Type == "user"）→ 填入時戳
-//   - 若 EventCount == 0 且 Type == "user" → 填入 Summary（截斷至 MaxSummaryLength）
+//   - 每次 user 事件都覆蓋 Summary（截斷至 MaxSummaryLength）
 func (r *SessionRegistry) UpsertFromSessionEvent(event SessionEvent) {
 	if event.SessionID == "" {
 		return // 忽略空 SessionID
@@ -57,6 +57,14 @@ func (r *SessionRegistry) UpsertFromSessionEvent(event SessionEvent) {
 	defer r.mu.Unlock()
 
 	now := r.now()
+
+	// 若事件帶有實際時間戳（如初始掃描的檔案修改時間），優先使用；
+	// 否則使用當前時間（即時事件）。
+	eventTime := now
+	if !event.Timestamp.IsZero() {
+		eventTime = event.Timestamp
+	}
+
 	session, exists := r.sessions[event.SessionID]
 
 	if !exists {
@@ -65,8 +73,8 @@ func (r *SessionRegistry) UpsertFromSessionEvent(event SessionEvent) {
 			ID:           event.SessionID,
 			ProjectPath:  event.ProjectPath,
 			Status:       SessionStatusActive,
-			FirstEventAt: now,
-			LastEventAt:  now,
+			FirstEventAt: eventTime,
+			LastEventAt:  eventTime,
 			EventCount:   0,
 		}
 		r.sessions[event.SessionID] = session
@@ -74,23 +82,37 @@ func (r *SessionRegistry) UpsertFromSessionEvent(event SessionEvent) {
 
 	// 更新現有或新建的 session
 	session.EventCount++
-	session.LastEventAt = now
+
+	// 即時事件（非初始掃描）：LastEventAt 使用當前時間，
+	// 因為 eventTime 是 JSONL 中記錄的歷史時間，可能遠早於偵測時刻，
+	// 會導致 ScanAndUpdateStatus 用真正的 now 計算時誤判為 idle/completed。
+	// 初始掃描事件：使用 eventTime（檔案修改時間）保持一致性。
+	if event.Type == EventTypeSessionDiscovered {
+		session.LastEventAt = eventTime
+	} else {
+		session.LastEventAt = now
+	}
 
 	// 記錄首個 user 事件時戳
 	if event.Type == EventTypeUser && session.FirstUserMessageAt.IsZero() {
-		session.FirstUserMessageAt = now
+		session.FirstUserMessageAt = eventTime
 	}
 
-	// 若為首個 user 訊息，提取 Summary
-	if session.EventCount == 1 && event.Type == EventTypeUser {
+	// 每次 user 事件覆蓋 Summary 為最新內容
+	if event.Type == EventTypeUser {
 		session.Summary = truncateString(event.Content.Text, MaxSummaryLength)
 	}
 
 	// 若為 session_completed 事件，強制設定狀態
 	if event.Type == EventTypeSessionCompleted {
 		session.Status = SessionStatusCompleted
+	} else if event.Type == EventTypeSessionDiscovered {
+		// 初始掃描事件：使用事件時間（檔案修改時間）作為 now，
+		// 避免因 now - ModTime 過大而誤判 active session 為 idle/completed。
+		// 後續的 ScanAndUpdateStatus 會用真正的 now 重新計算正確狀態。
+		session.Status = r.computeStatus(session, eventTime)
 	} else {
-		// 否則重新計算狀態
+		// 即時事件：使用當前時間重新計算狀態
 		session.Status = r.computeStatus(session, now)
 	}
 }
@@ -258,6 +280,20 @@ func (r *SessionRegistry) ScanAndUpdateStatus() []*SessionInfo {
 		if oldStatus != newStatus {
 			session.Status = newStatus
 			updated = append(updated, copySessionInfo(session))
+
+			// 需求：[0.2.1-W5-002] 當 session 轉為 completed 時，
+			// 裁剪歷史事件至 CompletedSessionMaxEvents，釋放記憶體。
+			if newStatus == SessionStatusCompleted {
+				if events := r.history[session.ID]; len(events) > CompletedSessionMaxEvents {
+					slog.Warn(LogCompletedEventsTrimmed,
+						"layer", "session_registry",
+						"session_id", session.ID,
+						"before", len(events),
+						"after", CompletedSessionMaxEvents,
+					)
+					r.history[session.ID] = events[len(events)-CompletedSessionMaxEvents:]
+				}
+			}
 		}
 	}
 
@@ -306,12 +342,19 @@ func truncateString(s string, maxLen int) string {
 }
 
 // AppendEvent appends a SessionEvent to the history for the given session.
+// 需求：[0.2.1-W5-002] 限制每 session 事件數，防止記憶體無限增長。
+// 超過 MaxEventsPerSession 時淘汰最早的事件。
 func (r *SessionRegistry) AppendEvent(sessionID string, event SessionEvent) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	copied := event
-	r.history[sessionID] = append(r.history[sessionID], &copied)
+	events := append(r.history[sessionID], &copied)
+
+	if len(events) > MaxEventsPerSession {
+		events = events[len(events)-MaxEventsPerSession:]
+	}
+	r.history[sessionID] = events
 }
 
 // GetHistory returns paginated history events for the given session.

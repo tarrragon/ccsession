@@ -26,10 +26,11 @@ const (
 // a message field worth parsing. Other types (progress, system, etc.)
 // are silently skipped.
 var conversationLineTypes = map[string]bool{
-	"human":       true,
-	"ai":          true,
-	"assistant":   true,
-	"tool_result": true,
+	EventTypeUser:       true, // "user" — spec.md 定義的正式 type
+	"human":             true, // 向後相容（舊版 JSONL）
+	"ai":                true, // 向後相容（舊版 JSONL）
+	EventTypeAssistant:  true, // "assistant"
+	EventTypeToolResult: true, // "tool_result"
 }
 
 // JSONL raw field keys
@@ -152,7 +153,7 @@ func parseAssistantMessage(msg map[string]any, sessionID, projectPath, messageID
 		case EventTypeToolUse:
 			evt.Type = EventTypeToolUse
 			evt.Content.ToolName, _ = block[fieldName].(string)
-			evt.Content.ToolInput = block[fieldInput]
+			evt.Content.ToolInput = serializeToolInput(block[fieldInput])
 			evt.Content.ToolUseID, _ = block[fieldID].(string)
 			evt.ToolName = evt.Content.ToolName
 
@@ -234,6 +235,23 @@ func extractMessageText(msg map[string]any) string {
 		}
 	}
 	return ""
+}
+
+// serializeToolInput converts a raw tool input value to a JSON string,
+// truncating to MaxToolInputLength to prevent memory bloat from large inputs.
+func serializeToolInput(v any) string {
+	if v == nil {
+		return ""
+	}
+	b, err := json.Marshal(v)
+	if err != nil {
+		return ""
+	}
+	s := string(b)
+	if len(s) > MaxToolInputLength {
+		s = s[:MaxToolInputLength]
+	}
+	return s
 }
 
 // extractToolResultOutput extracts the output string from a tool_result block.

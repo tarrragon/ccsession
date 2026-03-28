@@ -22,7 +22,7 @@ type SessionEvent struct {
 type EventContent struct {
 	Text      string `json:"text,omitempty"`
 	ToolName  string `json:"toolName,omitempty"`
-	ToolInput any    `json:"toolInput,omitempty"`
+	ToolInput string `json:"toolInput,omitempty"`
 	ToolUseID string `json:"toolUseId,omitempty"`
 	Output    string `json:"output,omitempty"`
 	IsError   bool   `json:"isError,omitempty"`

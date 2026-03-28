@@ -109,7 +109,7 @@ Widget _buildMessageListWithFab(
 
 /// 需求：[0.2.0-W7-004.4] 自動捲動訊息列表
 /// 約束：ConsumerStatefulWidget 管理 ScrollController 生命週期，
-///       新事件到達且 isAutoScrollEnabled 時自動捲動到底部
+///       最新訊息在頂部，新事件到達且 isAutoScrollEnabled 時自動捲動到頂部
 class _AutoScrollMessageList extends ConsumerStatefulWidget {
   const _AutoScrollMessageList({
     required this.state,
@@ -135,9 +135,9 @@ class _AutoScrollMessageListState
     super.dispose();
   }
 
-  /// 需求：[0.2.0-W7-004.4] 監聽 state 變更，自動捲動到底部
-  /// 約束：reverse:true 時 offset 0 = 最新訊息
-  void _scrollToBottomIfEnabled() {
+  /// 需求：[0.2.0-W7-004.4] 監聯 state 變更，自動捲動到最新訊息
+  /// 約束：最新訊息在頂部，offset 0 即為最新
+  void _scrollToTopIfEnabled() {
     if (!widget.state.isAutoScrollEnabled) return;
     if (!_scrollController.hasClients) return;
 
@@ -153,7 +153,7 @@ class _AutoScrollMessageListState
     super.didUpdateWidget(oldWidget);
     if (widget.state.events.length > oldWidget.state.events.length) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        _scrollToBottomIfEnabled();
+        _scrollToTopIfEnabled();
       });
     }
   }
@@ -171,14 +171,14 @@ class _AutoScrollMessageListState
             right: 16,
             bottom: 16,
             child: FloatingActionButton.small(
-              key: const Key('conversation_jump_to_latest'),
+              key: const Key('conversation_scroll_to_top'),
               onPressed: () {
                 ref
                     .read(conversationNotifierProvider(panelIndex).notifier)
                     .setAutoScroll(true);
-                _scrollToBottomIfEnabled();
+                _scrollToTopIfEnabled();
               },
-              child: const Icon(Icons.arrow_downward),
+              child: const Icon(Icons.arrow_upward),
             ),
           ),
       ],
@@ -194,7 +194,6 @@ class _AutoScrollMessageListState
     return ListView.builder(
       key: const Key('conversation_message_list'),
       controller: _scrollController,
-      reverse: true,
       itemCount: itemCount,
       itemBuilder: (context, index) {
         if (hasLoadMore && index == itemCount - 1) {

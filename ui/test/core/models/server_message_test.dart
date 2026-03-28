@@ -138,7 +138,7 @@ void main() {
       const eventData = SessionEventData(sessionId: 's1', agentId: 'a1');
       expect(SessionEventData.fromJson(eventData.toJson()), eventData);
 
-      // SessionStatusChangeData
+      // SessionStatusChangeData（無 lastEventAt）
       const statusData = SessionStatusChangeData(
         sessionId: 's1',
         status: SessionStatus.idle,
@@ -146,6 +146,17 @@ void main() {
       expect(
         SessionStatusChangeData.fromJson(statusData.toJson()),
         statusData,
+      );
+
+      // SessionStatusChangeData（含 lastEventAt）
+      final statusDataWithTime = SessionStatusChangeData(
+        sessionId: 's1',
+        status: SessionStatus.idle,
+        lastEventAt: DateTime.utc(2026, 3, 25, 10, 45),
+      );
+      expect(
+        SessionStatusChangeData.fromJson(statusDataWithTime.toJson()),
+        statusDataWithTime,
       );
 
       // SessionHistoryData
@@ -169,6 +180,62 @@ void main() {
       // ErrorData
       const errorData = ErrorData(code: 'INTERNAL_ERROR');
       expect(ErrorData.fromJson(errorData.toJson()), errorData);
+    });
+  });
+
+  group('TG-W4-002-A: SessionStatusChangeData lastEventAt 解析', () {
+    /// TC-A01: fromJson 包含 lastEventAt
+    test('fromJson parses lastEventAt from ISO8601 string', () {
+      final json = <String, dynamic>{
+        'sessionId': 's1',
+        'status': 'active',
+        'lastEventAt': '2026-03-25T10:45:00.000Z',
+      };
+
+      final result = SessionStatusChangeData.fromJson(json);
+
+      expect(result.sessionId, 's1');
+      expect(result.status, SessionStatus.active);
+      expect(result.lastEventAt, DateTime.utc(2026, 3, 25, 10, 45));
+    });
+
+    /// TC-A02: fromJson 不包含 lastEventAt（向後相容）
+    test('fromJson returns null lastEventAt when field absent', () {
+      final json = <String, dynamic>{
+        'sessionId': 's1',
+        'status': 'idle',
+      };
+
+      final result = SessionStatusChangeData.fromJson(json);
+
+      expect(result.sessionId, 's1');
+      expect(result.status, SessionStatus.idle);
+      expect(result.lastEventAt, isNull);
+    });
+
+    /// TC-A03: toJson 包含 lastEventAt
+    test('toJson includes lastEventAt as ISO8601 when present', () {
+      final data = SessionStatusChangeData(
+        sessionId: 's1',
+        status: SessionStatus.active,
+        lastEventAt: DateTime.utc(2026, 3, 25, 10, 45),
+      );
+
+      final json = data.toJson();
+
+      expect(json['lastEventAt'], '2026-03-25T10:45:00.000Z');
+    });
+
+    /// TC-A04: toJson 不含 lastEventAt 時省略欄位
+    test('toJson omits lastEventAt when null', () {
+      const data = SessionStatusChangeData(
+        sessionId: 's1',
+        status: SessionStatus.idle,
+      );
+
+      final json = data.toJson();
+
+      expect(json.containsKey('lastEventAt'), isFalse);
     });
   });
 }

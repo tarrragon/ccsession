@@ -32,9 +32,19 @@ const MaxSummaryLength = 100
 // 狀態掃描週期（定時觸發狀態機評估）
 const StatusScanInterval = 30 * time.Second
 
+// MaxEventsPerSession 定義每個 session 在記憶體中保留的最大事件數。
+// 超過上限時從最早的事件開始淘汰。
+// 前端透過 WebSocket 即時接收新事件，歷史事件可從 JSONL 重新讀取。
+const MaxEventsPerSession = 500
+
+// CompletedSessionMaxEvents 定義 completed session 保留的最大事件數。
+// completed session 通常不再被前端查看，僅保留少量用於最近歷史查詢。
+const CompletedSessionMaxEvents = 50
+
 // Log messages for session registry
 const (
 	LogSubagentRegistered      = "subagent session registered from transcript path"
 	LogSubagentPathEmpty       = "SubagentStop without transcript path, updating main session only"
 	LogSubagentPathParseError  = "failed to extract session ID from transcript path"
+	LogCompletedEventsTrimmed  = "completed session events trimmed"
 )

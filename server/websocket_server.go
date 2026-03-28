@@ -57,6 +57,7 @@ func (s *WebSocketServer) HandleWS(w http.ResponseWriter, r *http.Request) {
 	client := &Client{
 		conn:          conn,
 		send:          make(chan []byte, ClientSendBufferSize),
+		done:          make(chan struct{}),
 		subscriptions: make(map[string]struct{}),
 	}
 
@@ -133,6 +134,7 @@ func (s *WebSocketServer) readPump(client *Client) {
 	logger := slog.Default()
 	defer s.unregisterClient(client)
 	defer client.conn.Close()
+	defer close(client.done)
 
 	client.conn.SetReadLimit(MaxMessageSize)
 	client.conn.SetReadDeadline(s.now().Add(PongWaitTimeout))
@@ -182,6 +184,8 @@ func (s *WebSocketServer) writePump(client *Client) {
 				slog.Default().Debug(LogWSWriteError, "layer", "ws_server", "error", err)
 				return
 			}
+		case <-client.done:
+			return
 		}
 	}
 }
@@ -218,6 +222,20 @@ func (s *WebSocketServer) handleSubscribeSession(client *Client, msg ClientMessa
 	}
 
 	client.mu.Lock()
+	if _, exists := client.subscriptions[msg.SessionID]; exists {
+		client.mu.Unlock()
+		logger.Debug(LogWSSubscribed, "layer", "ws_server", "sessionID", msg.SessionID, "note", "already subscribed")
+		return
+	}
+	if len(client.subscriptions) >= MaxSubscriptionsPerClient {
+		client.mu.Unlock()
+		logger.Warn(LogWSSubscriptionLimitReached,
+			"layer", "ws_server",
+			"sessionID", msg.SessionID,
+			"limit", MaxSubscriptionsPerClient)
+		s.sendToClient(client, ServerMessage{Type: MsgTypeError, Data: ErrorData{Code: ErrCodeSubscriptionLimit}})
+		return
+	}
 	client.subscriptions[msg.SessionID] = struct{}{}
 	client.mu.Unlock()
 
@@ -354,7 +372,7 @@ func (s *WebSocketServer) processDispatchedEvent(event DispatchedEvent) {
 			Data: buildSessionEventPayload(event),
 		})
 	case ChangeTypeStatusChanged:
-		s.broadcastStatusChange(event.Session.ID, event.Session.Status)
+		s.broadcastStatusChange(event.Session.ID, event.Session.Status, event.Session.LastEventAt)
 		if event.Event != nil {
 			s.pushToSubscribers(event.Session.ID, ServerMessage{
 				Type: MsgTypeSessionEvent,
@@ -415,12 +433,13 @@ func (s *WebSocketServer) pushToSubscribers(sessionID string, msg ServerMessage)
 	}
 }
 
-func (s *WebSocketServer) broadcastStatusChange(sessionID string, status SessionStatus) {
+func (s *WebSocketServer) broadcastStatusChange(sessionID string, status SessionStatus, lastEventAt time.Time) {
 	data, err := marshalMessage(ServerMessage{
 		Type: MsgTypeSessionStatusChange,
 		Data: SessionStatusChangeData{
-			SessionID: sessionID,
-			Status:    status,
+			SessionID:   sessionID,
+			Status:      status,
+			LastEventAt: lastEventAt,
 		},
 	})
 	if err != nil {

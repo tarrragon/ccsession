@@ -22,4 +22,5 @@ const (
 	LogWSSessionNotFound      = "session not found"
 	LogWSMarshalFailed        = "failed to marshal server message"
 	LogWSInvalidBeforeFormat  = "invalid before timestamp format, ignoring filter"
+	LogWSSubscriptionLimitReached = "client subscription limit reached, rejecting subscribe"
 )

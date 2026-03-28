@@ -25,7 +25,8 @@ const (
 	ErrCodeInvalidAction    = "INVALID_ACTION"
 	ErrCodeInvalidParams    = "INVALID_PARAMS"
 	ErrCodeSessionNotFound  = "SESSION_NOT_FOUND"
-	ErrCodeInternalError    = "INTERNAL_ERROR"
+	ErrCodeInternalError        = "INTERNAL_ERROR"
+	ErrCodeSubscriptionLimit    = "SUBSCRIPTION_LIMIT_REACHED"
 )
 
 // WebSocket server configuration
@@ -50,4 +51,8 @@ const (
 
 	// MaxHistoryLimit is the maximum number of history events returned.
 	MaxHistoryLimit = 1000
+
+	// MaxSubscriptionsPerClient is the maximum number of sessions a single client can subscribe to.
+	// Prevents unbounded growth of per-client subscription maps.
+	MaxSubscriptionsPerClient = 100
 )

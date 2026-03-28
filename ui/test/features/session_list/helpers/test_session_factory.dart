@@ -11,6 +11,7 @@ SessionInfo createTestSession({
   DateTime? lastEventAt,
   String lastMessage = '',
   String agentName = 'claude',
+  String agentType = '',
 }) {
   return SessionInfo(
     id: id,
@@ -21,6 +22,7 @@ SessionInfo createTestSession({
     lastEventAt: lastEventAt ?? baseTime,
     lastMessage: lastMessage,
     agentName: agentName,
+    agentType: agentType,
   );
 }
 

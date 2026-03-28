@@ -1,6 +1,5 @@
 import 'package:ccsession/core/constants/session_list_constants.dart';
 import 'package:ccsession/core/models/session_info.dart';
-import 'package:ccsession/features/session_list/presentation/session_list_helpers.dart';
 import 'package:ccsession/features/session_list/presentation/widgets/status_indicator.dart';
 import 'package:flutter/material.dart';
 
@@ -46,9 +45,19 @@ class SessionListTile extends StatelessWidget {
   }
 }
 
+/// 需求：[0.2.1-W2-003] 標題顯示（含 Agent 前綴）
+/// 優先級：agentType 非空時加 [Agent] 前綴 + fallback 文字
+String _sessionTitle(SessionInfo session) {
+  final titleText = _buildTitleText(session);
+  if (session.agentType.isNotEmpty) {
+    return '${SessionListConstants.agentTitlePrefix} $titleText';
+  }
+  return titleText;
+}
+
 /// 需求：摘要 fallback 邏輯
 /// 優先級：summary > lastMessage 前 N 字元 > id 前 8 字元
-String _sessionTitle(SessionInfo session) {
+String _buildTitleText(SessionInfo session) {
   if (session.summary.isNotEmpty) {
     return session.summary;
   }
@@ -67,12 +76,8 @@ String _sessionTitle(SessionInfo session) {
   );
 }
 
-/// 需求：副標題組合專案名稱和 agentName
+/// 需求：[0.2.1-W2-003] 副標題只顯示 agentName
+/// 約束：v0.2 中 agentName 永遠為空字串，v0.3 填充後自動生效
 String _sessionSubtitle(SessionInfo session) {
-  final projectName = extractProjectName(session.projectPath);
-  final parts = <String>[
-    if (projectName.isNotEmpty) projectName,
-    if (session.agentName.isNotEmpty) session.agentName,
-  ];
-  return parts.join(' / ');
+  return session.agentName;
 }

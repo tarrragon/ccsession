@@ -2,6 +2,7 @@ package main
 
 import (
 	"sync"
+	"time"
 
 	"github.com/gorilla/websocket"
 )
@@ -33,8 +34,9 @@ type SessionEventData struct {
 
 // SessionStatusChangeData is the payload for session_status_change messages.
 type SessionStatusChangeData struct {
-	SessionID string        `json:"sessionId"`
-	Status    SessionStatus `json:"status"`
+	SessionID   string        `json:"sessionId"`
+	Status      SessionStatus `json:"status"`
+	LastEventAt time.Time     `json:"lastEventAt"`
 }
 
 // SessionHistoryData is the payload for session_history messages.
@@ -53,6 +55,7 @@ type ErrorData struct {
 type Client struct {
 	conn          *websocket.Conn
 	send          chan []byte
+	done          chan struct{} // closed when readPump exits, signals writePump to stop
 	subscriptions map[string]struct{}
 	mu            sync.RWMutex
 	closeOnce     sync.Once

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:ccsession/core/constants/session_list_constants.dart';
 import 'package:ccsession/core/models/server_message.dart';
 import 'package:equatable/equatable.dart';
 import 'package:flutter/foundation.dart';
@@ -103,20 +104,50 @@ class SessionListNotifier extends _$SessionListNotifier {
   void _handleSessionList(ServerMessage message) {
     final data = SessionListData.fromJson(message.data);
     debugPrint('[SessionList] sessions updated: ${data.sessions.length} total');
-    state = AsyncData(_currentState.copyWith(sessions: data.sessions));
+    final sessions = _trimSessions(data.sessions);
+    state = AsyncData(_currentState.copyWith(sessions: sessions));
   }
 
-  /// 需求：session_status_change 更新單一 session 狀態
+  /// 需求：[0.2.1-W4-002] session_status_change 更新 status 及 lastEventAt
+  /// 約束：lastEventAt 為 null 時保留原值（向後相容舊版 backend）
   /// 邊界：未知 sessionId 靜默忽略
   void _handleStatusChange(ServerMessage message) {
     final data = SessionStatusChangeData.fromJson(message.data);
     final updatedSessions = _currentState.sessions.map((session) {
       if (session.id == data.sessionId) {
-        return session.copyWith(status: data.status);
+        return _applyStatusChange(session, data);
       }
       return session;
     }).toList();
     state = AsyncData(_currentState.copyWith(sessions: updatedSessions));
+  }
+
+  /// 需求：[0.2.1-W4-002] 套用狀態變更，有 lastEventAt 時同時更新
+  SessionInfo _applyStatusChange(
+    SessionInfo session,
+    SessionStatusChangeData data,
+  ) {
+    if (data.lastEventAt != null) {
+      return session.copyWith(
+        status: data.status,
+        lastEventAt: data.lastEventAt,
+      );
+    }
+    return session.copyWith(status: data.status);
+  }
+
+  /// 需求：[0.2.1-W5-004] 裁剪 session 列表至上限，保留最新的 session
+  /// 約束：以 lastEventAt 降序排列後取前 N 筆
+  List<SessionInfo> _trimSessions(List<SessionInfo> sessions) {
+    const max = SessionListConstants.maxDisplaySessions;
+    if (sessions.length <= max) return sessions;
+    final sorted = [...sessions]
+      ..sort((a, b) => (b.lastEventAt ?? DateTime(0))
+          .compareTo(a.lastEventAt ?? DateTime(0)));
+    debugPrint(
+      '[SessionListNotifier] sessions trimmed: ${sessions.length} → $max',
+    );
+    return sorted.sublist(0, max);
   }
 
   /// 需求：使用者點擊 session 時更新選中狀態
@@ -129,6 +160,9 @@ class SessionListNotifier extends _$SessionListNotifier {
   /// 需求：按狀態分組的 session 列表（計算屬性）
   /// 約束：key 順序固定 active/idle/completed，空組不含
   /// 每組內按 lastEventAt 降序排列
+  /// 維護：生產程式碼已遷移至 filteredGroupedSessionsProvider，
+  /// 此 getter 僅供測試直接驗證分組邏輯使用
+  @visibleForTesting
   Map<SessionStatus, List<SessionInfo>> get groupedSessions {
     final currentState = state.valueOrNull;
     if (currentState == null) return {};
