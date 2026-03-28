@@ -93,8 +93,15 @@ class _ProjectTabbedViewState extends ConsumerState<_ProjectTabbedView>
   @override
   Widget build(BuildContext context) {
     final projectGroups = groupSessionsByProject(widget.sessions);
-    final paths = sortedProjectPaths(projectGroups);
+    final activeProjectGroups = _filterActiveProjects(projectGroups);
+    final paths = sortedProjectPaths(activeProjectGroups);
     final tabCount = paths.length;
+
+    if (tabCount == 0) {
+      return const Center(
+        child: Text(SessionListConstants.noActiveSessionsMessage),
+      );
+    }
 
     _rebuildTabControllerIfNeeded(tabCount);
 
@@ -135,6 +142,17 @@ class _ProjectTabbedViewState extends ConsumerState<_ProjectTabbedView>
       length: tabCount,
       vsync: this,
       initialIndex: previousIndex.clamp(0, tabCount - 1),
+    );
+  }
+
+  /// 需求：過濾只保留包含 active session 的專案
+  Map<String, List<SessionInfo>> _filterActiveProjects(
+    Map<String, List<SessionInfo>> groups,
+  ) {
+    return Map.fromEntries(
+      groups.entries.where(
+        (entry) => entry.value.any((s) => s.status == SessionStatus.active),
+      ),
     );
   }
 

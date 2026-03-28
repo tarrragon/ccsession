@@ -45,6 +45,9 @@ abstract final class SessionListConstants {
   /// 無 session 時的提示訊息
   static const noSessionsMessage = 'No sessions';
 
+  /// 無 active session 時的提示訊息
+  static const noActiveSessionsMessage = 'No active sessions';
+
   /// 需求：SessionStatus -> 指示燈顏色對應
   /// 約束：與 spec 4.1 一致
   static Color statusColor(SessionStatus status) {
