@@ -97,8 +97,13 @@ func (r *SessionRegistry) UpsertFromSessionEvent(event SessionEvent) {
 	// 若為 session_completed 事件，強制設定狀態
 	if event.Type == EventTypeSessionCompleted {
 		session.Status = SessionStatusCompleted
+	} else if event.Type == EventTypeSessionDiscovered {
+		// 初始掃描事件：使用事件時間（檔案修改時間）作為 now，
+		// 避免因 now - ModTime 過大而誤判 active session 為 idle/completed。
+		// 後續的 ScanAndUpdateStatus 會用真正的 now 重新計算正確狀態。
+		session.Status = r.computeStatus(session, eventTime)
 	} else {
-		// 否則重新計算狀態
+		// 即時事件：使用當前時間重新計算狀態
 		session.Status = r.computeStatus(session, now)
 	}
 }
