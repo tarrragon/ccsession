@@ -289,5 +289,17 @@ PM 彙整時必須在「衝突決策記錄」中記錄品味否決的處理結�
 
 ---
 
-**Last Updated**: 2026-03-26
-**Version**: 3.10.0 - 複雜度評估表新增「功能職責（SRP）」維度（0.2.0-W3-020）
+## 跨 Wave 優先級規則
+
+| 規則 | 說明 |
+|------|------|
+| 同 Wave 優先 | 同一 Wave 的 Ticket 優先於其他 Wave |
+| 低 Wave 號優先 | Wave 1 的 pending 優先於 Wave 2 的 pending |
+| blockedBy 例外 | 若 Wave 1 被 Wave 2 的 Ticket 阻塞，先處理 Wave 2 的阻塞源 |
+
+跨 Wave 並行：僅在兩個 Wave 的 Ticket 完全無依賴時才允許。
+
+---
+
+**Last Updated**: 2026-03-27
+**Version**: 3.11.0 - 新增跨 Wave 優先級規則（0.2.1-W1-008）
