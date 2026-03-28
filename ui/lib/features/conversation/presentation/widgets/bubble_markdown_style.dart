@@ -11,7 +11,7 @@ MarkdownStyleSheet buildBubbleMarkdownStyleSheet(ThemeData theme) {
     ),
     codeblockDecoration: BoxDecoration(
       color: theme.colorScheme.surfaceContainerHigh,
-      borderRadius: BorderRadius.circular(4),
+      borderRadius: BorderRadius.circular(ConversationConstants.codeBlockBorderRadius),
     ),
     tableBorder: TableBorder.all(
       color: theme.colorScheme.outline.withValues(alpha: 0.3),

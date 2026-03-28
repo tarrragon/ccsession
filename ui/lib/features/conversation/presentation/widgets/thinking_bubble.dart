@@ -30,7 +30,7 @@ class ThinkingBubble extends StatelessWidget {
         border: Border.all(
           color: theme.colorScheme.outline.withValues(alpha: 0.5),
         ),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(ConversationConstants.toolBubbleBorderRadius),
       ),
       child: ExpansionTile(
         title: Text(

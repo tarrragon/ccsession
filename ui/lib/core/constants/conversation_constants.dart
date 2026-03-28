@@ -18,4 +18,16 @@ abstract final class ConversationConstants {
   /// 需求：Bubble 內容區域內距，確保文字與邊框間有一致的留白
   /// 來源：Bubble 魔法數字常數化（0.2.0-W3-027）
   static const bubbleContentPadding = EdgeInsets.all(12);
+
+  /// 需求：訊息 Bubble（使用者/助手）的圓角半徑
+  /// 來源：Bubble borderRadius 常數化（0.2.1-W3-003）
+  static const messageBubbleBorderRadius = 12.0;
+
+  /// 需求：工具相關 Bubble（tool use/tool result/thinking）的圓角半徑
+  /// 來源：Bubble borderRadius 常數化（0.2.1-W3-003）
+  static const toolBubbleBorderRadius = 8.0;
+
+  /// 需求：Markdown 內嵌程式碼區塊的圓角半徑
+  /// 來源：Bubble borderRadius 常數化（0.2.1-W3-003）
+  static const codeBlockBorderRadius = 4.0;
 }

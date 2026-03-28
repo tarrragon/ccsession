@@ -27,7 +27,7 @@ class UserMessageBubble extends StatelessWidget {
         padding: ConversationConstants.bubbleContentPadding,
         decoration: BoxDecoration(
           color: theme.colorScheme.primary.withValues(alpha: 0.15),
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(ConversationConstants.messageBubbleBorderRadius),
         ),
         child: buildHighlightableText(
           text: event.content.text,

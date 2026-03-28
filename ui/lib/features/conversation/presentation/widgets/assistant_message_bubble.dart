@@ -33,7 +33,7 @@ class AssistantMessageBubble extends StatelessWidget {
         padding: ConversationConstants.bubbleContentPadding,
         decoration: BoxDecoration(
           color: theme.colorScheme.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(ConversationConstants.messageBubbleBorderRadius),
         ),
         child: hasHighlight
             ? _buildHighlightFallback(theme)

@@ -27,7 +27,7 @@ class ToolUseBubble extends StatelessWidget {
       margin: ConversationConstants.bubbleMargin,
       decoration: BoxDecoration(
         border: Border.all(color: theme.colorScheme.outline),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(ConversationConstants.toolBubbleBorderRadius),
       ),
       child: ExpansionTile(
         title: buildHighlightableText(
