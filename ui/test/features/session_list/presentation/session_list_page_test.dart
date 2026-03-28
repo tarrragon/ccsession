@@ -460,8 +460,9 @@ void main() {
 
       // Other tab should be last
       final tabBar = tester.widget<TabBar>(find.byType(TabBar));
-      final tabs = tabBar.tabs.cast<Tab>();
-      expect(tabs.last.text, 'Other (1)');
+      final tooltips = tabBar.tabs.cast<Tooltip>();
+      final lastTab = (tooltips.last.child! as ConstrainedBox).child! as Tab;
+      expect((lastTab.child! as Text).data, 'Other (1)');
     });
 
     // TC-35-04: Tab 切換後顯示對應專案的 sessions
@@ -571,12 +572,16 @@ void main() {
       ]));
 
       final tabBar = tester.widget<TabBar>(find.byType(TabBar));
-      final tabs = tabBar.tabs.cast<Tab>();
-      expect(tabs.length, 4);
-      expect(tabs[0].text, 'alpha (1)');
-      expect(tabs[1].text, 'beta (1)');
-      expect(tabs[2].text, 'zoo (1)');
-      expect(tabs[3].text, 'Other (1)');
+      final tooltips = tabBar.tabs.cast<Tooltip>();
+      expect(tooltips.length, 4);
+      String tabText(int i) {
+        final tab = (tooltips[i].child! as ConstrainedBox).child! as Tab;
+        return (tab.child! as Text).data!;
+      }
+      expect(tabText(0), 'alpha (1)');
+      expect(tabText(1), 'beta (1)');
+      expect(tabText(2), 'zoo (1)');
+      expect(tabText(3), 'Other (1)');
     });
 
     // TC-35-07: TabBar 可捲動（isScrollable: true）

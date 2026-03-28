@@ -103,9 +103,10 @@ class _ProjectTabbedViewState extends ConsumerState<_ProjectTabbedView>
         TabBar(
           controller: _tabController,
           isScrollable: true,
+          tabAlignment: TabAlignment.start,
           tabs: [
             for (final path in paths)
-              Tab(text: _buildTabLabel(path, projectGroups[path]!.length)),
+              _buildConstrainedTab(path, projectGroups[path]!.length),
           ],
         ),
         Expanded(
@@ -145,6 +146,30 @@ class _ProjectTabbedViewState extends ConsumerState<_ProjectTabbedView>
         ? SessionListConstants.otherProjectLabel
         : extractProjectName(path);
     return '$name ($count)';
+  }
+
+  /// 需求：[0.2.1-W4-001] 寬度約束的專案頁籤，防止長名稱溢出
+  /// 約束：maxWidth 160px + ellipsis 截斷 + Tooltip 顯示完整路徑
+  Widget _buildConstrainedTab(String path, int count) {
+    final label = _buildTabLabel(path, count);
+    final fullPath = path.isEmpty
+        ? SessionListConstants.otherProjectLabel
+        : path;
+    return Tooltip(
+      message: fullPath,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(
+          maxWidth: SessionListConstants.tabMaxWidth,
+        ),
+        child: Tab(
+          child: Text(
+            label,
+            overflow: TextOverflow.ellipsis,
+            maxLines: 1,
+          ),
+        ),
+      ),
+    );
   }
 }
 

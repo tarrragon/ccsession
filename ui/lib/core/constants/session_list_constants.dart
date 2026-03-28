@@ -30,6 +30,10 @@ abstract final class SessionListConstants {
   /// 狀態指示燈尺寸（直徑，邏輯像素）
   static const statusIndicatorSize = 10.0;
 
+  /// 需求：[0.2.1-W4-001] 專案頁籤最大寬度（邏輯像素）
+  /// 約束：防止長專案名稱佔滿 Sidebar，其他 Tab 被推到不可見區域
+  static const tabMaxWidth = 160.0;
+
   // -- UI 文字常數（待 l10n 系統建立後遷移至 ARB） --
 
   /// 空 projectPath 的 Tab 標籤名稱
