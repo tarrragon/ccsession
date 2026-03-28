@@ -57,6 +57,14 @@ func (r *SessionRegistry) UpsertFromSessionEvent(event SessionEvent) {
 	defer r.mu.Unlock()
 
 	now := r.now()
+
+	// 若事件帶有實際時間戳（如初始掃描的檔案修改時間），優先使用；
+	// 否則使用當前時間（即時事件）。
+	eventTime := now
+	if !event.Timestamp.IsZero() {
+		eventTime = event.Timestamp
+	}
+
 	session, exists := r.sessions[event.SessionID]
 
 	if !exists {
@@ -65,8 +73,8 @@ func (r *SessionRegistry) UpsertFromSessionEvent(event SessionEvent) {
 			ID:           event.SessionID,
 			ProjectPath:  event.ProjectPath,
 			Status:       SessionStatusActive,
-			FirstEventAt: now,
-			LastEventAt:  now,
+			FirstEventAt: eventTime,
+			LastEventAt:  eventTime,
 			EventCount:   0,
 		}
 		r.sessions[event.SessionID] = session
@@ -74,11 +82,11 @@ func (r *SessionRegistry) UpsertFromSessionEvent(event SessionEvent) {
 
 	// 更新現有或新建的 session
 	session.EventCount++
-	session.LastEventAt = now
+	session.LastEventAt = eventTime
 
 	// 記錄首個 user 事件時戳
 	if event.Type == EventTypeUser && session.FirstUserMessageAt.IsZero() {
-		session.FirstUserMessageAt = now
+		session.FirstUserMessageAt = eventTime
 	}
 
 	// 每次 user 事件覆蓋 Summary 為最新內容
