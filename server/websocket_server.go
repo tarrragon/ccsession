@@ -222,6 +222,15 @@ func (s *WebSocketServer) handleSubscribeSession(client *Client, msg ClientMessa
 	}
 
 	client.mu.Lock()
+	if len(client.subscriptions) >= MaxSubscriptionsPerClient {
+		client.mu.Unlock()
+		logger.Warn(LogWSSubscriptionLimitReached,
+			"layer", "ws_server",
+			"sessionID", msg.SessionID,
+			"limit", MaxSubscriptionsPerClient)
+		s.sendToClient(client, ServerMessage{Type: MsgTypeError, Data: ErrorData{Code: ErrCodeSubscriptionLimit}})
+		return
+	}
 	client.subscriptions[msg.SessionID] = struct{}{}
 	client.mu.Unlock()
 

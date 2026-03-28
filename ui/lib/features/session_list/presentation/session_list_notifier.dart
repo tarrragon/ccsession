@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:ccsession/core/constants/session_list_constants.dart';
 import 'package:ccsession/core/models/server_message.dart';
 import 'package:equatable/equatable.dart';
 import 'package:flutter/foundation.dart';
@@ -103,7 +104,8 @@ class SessionListNotifier extends _$SessionListNotifier {
   void _handleSessionList(ServerMessage message) {
     final data = SessionListData.fromJson(message.data);
     debugPrint('[SessionList] sessions updated: ${data.sessions.length} total');
-    state = AsyncData(_currentState.copyWith(sessions: data.sessions));
+    final sessions = _trimSessions(data.sessions);
+    state = AsyncData(_currentState.copyWith(sessions: sessions));
   }
 
   /// 需求：[0.2.1-W4-002] session_status_change 更新 status 及 lastEventAt
@@ -132,6 +134,17 @@ class SessionListNotifier extends _$SessionListNotifier {
       );
     }
     return session.copyWith(status: data.status);
+  }
+
+  /// 需求：[0.2.1-W5-004] 裁剪 session 列表至上限，保留最新的 session
+  /// 約束：以 lastEventAt 降序排列後取前 N 筆
+  List<SessionInfo> _trimSessions(List<SessionInfo> sessions) {
+    const max = SessionListConstants.maxDisplaySessions;
+    if (sessions.length <= max) return sessions;
+    final sorted = [...sessions]
+      ..sort((a, b) => (b.lastEventAt ?? DateTime(0))
+          .compareTo(a.lastEventAt ?? DateTime(0)));
+    return sorted.sublist(0, max);
   }
 
   /// 需求：使用者點擊 session 時更新選中狀態

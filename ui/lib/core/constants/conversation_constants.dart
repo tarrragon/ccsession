@@ -34,6 +34,10 @@ abstract final class ConversationConstants {
   /// 需求：[0.2.1-W4-003] user 訊息預設摺疊，標題預覽最大字元數
   static const userBubblePreviewMaxLength = 50;
 
+  /// 需求：[0.2.1-W5-004] 前端 UI state 中 events 列表的最大保留數量
+  /// 約束：與後端 MaxEventsPerSession (500) 對齊，超過時裁剪舊事件
+  static const maxEventsPerConversation = 1000;
+
   /// 需求：[0.2.1-W4-003] 空內容 fallback 提示文字
   /// 約束：使用者看到空框時應顯示提示，而非空白
   static const emptyContentFallback = '(empty content)';

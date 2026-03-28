@@ -4,6 +4,10 @@ import 'package:flutter/material.dart';
 /// 需求：Session List Sidebar 相關常數
 /// 約束：所有數值和字串集中管理，禁止硬編碼
 abstract final class SessionListConstants {
+  /// 需求：[0.2.1-W5-004] 前端 session 列表最大顯示數量
+  /// 約束：防止 session 數量過多導致 UI 卡頓，超過時只保留最新的
+  static const maxDisplaySessions = 200;
+
   /// 分組標題內距
   static const groupHeaderPadding =
       EdgeInsets.symmetric(horizontal: 16, vertical: 8);

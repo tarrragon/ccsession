@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:ccsession/core/constants/conversation_constants.dart';
 import 'package:ccsession/core/models/connection_state.dart';
 import 'package:ccsession/core/models/server_message.dart';
 import 'package:ccsession/core/models/session_event.dart';
@@ -217,7 +218,7 @@ class ConversationNotifier extends _$ConversationNotifier {
     }
 
     state = AsyncData(current.copyWith(
-      events: newEvents,
+      events: _trimEvents(newEvents),
       hasMore: data.hasMore,
       isLoadingHistory: false,
     ));
@@ -235,7 +236,7 @@ class ConversationNotifier extends _$ConversationNotifier {
 
     final previousCount = _currentState.events.length;
     state = AsyncData(_currentState.copyWith(
-      events: [..._currentState.events, event],
+      events: _trimEvents([..._currentState.events, event]),
     ));
     debugPrint(
       '[Conv] session_event: count $previousCount -> ${_currentState.events.length}, '
@@ -265,6 +266,13 @@ class ConversationNotifier extends _$ConversationNotifier {
     }
     debugPrint('[Conv] incomplete event, fetching history for $currentSessionId');
     ref.read(webSocketServiceProvider).requestSessionHistory(currentSessionId!);
+  }
+
+  /// 需求：[0.2.1-W5-004] 裁剪 events 至上限，保留最新的事件
+  List<SessionEvent> _trimEvents(List<SessionEvent> events) {
+    const max = ConversationConstants.maxEventsPerConversation;
+    if (events.length <= max) return events;
+    return events.sublist(events.length - max);
   }
 
   /// 需求：error 回應處理

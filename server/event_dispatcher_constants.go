@@ -21,6 +21,11 @@ const (
 	DedupWindowDuration  = 5 * time.Second
 	DedupCleanupInterval = 30 * time.Second
 	DispatcherOutChanSize = 200
+
+	// MaxDedupTableSize is the hard upper limit for dedup table entries.
+	// If reached, the table is force-cleaned to prevent unbounded growth
+	// under sustained high event volume within a single dedup window.
+	MaxDedupTableSize = 10000
 )
 
 // Log messages
@@ -36,4 +41,5 @@ const (
 	LogTimestampParseFailed = "failed to parse hook event timestamp"
 	LogSessionEvChClosed    = "session event channel closed"
 	LogHookEvChClosed       = "hook event channel closed"
+	LogDedupTableSizeLimit  = "dedup table size limit reached, force cleaning"
 )
