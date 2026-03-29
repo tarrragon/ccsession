@@ -613,5 +613,84 @@ void main() {
       expect(find.byType(TabBar), findsNothing);
       expect(find.text('No sessions'), findsOneWidget);
     });
+
+    // TC-35-09: [0.2.1-W6-001] idle session 的專案頁籤仍然顯示
+    testWidgets('project tab with only idle sessions remains visible',
+        (tester) async {
+      await tester.pumpWidget(buildSubject());
+      await tester.pump();
+
+      await sendMessage(
+        tester,
+        createSessionListMessage([
+          createTestSession(
+            id: 's1',
+            projectPath: '/a/proj1',
+            status: SessionStatus.idle,
+          ),
+          createTestSession(
+            id: 's2',
+            projectPath: '/b/proj2',
+            status: SessionStatus.active,
+          ),
+        ]),
+      );
+
+      expect(find.text('proj1 (1)'), findsOneWidget);
+      expect(find.text('proj2 (1)'), findsOneWidget);
+    });
+
+    // TC-35-10: [0.2.1-W6-001] 全部 completed 的專案頁籤被隱藏
+    testWidgets('project tab with only completed sessions is hidden',
+        (tester) async {
+      await tester.pumpWidget(buildSubject());
+      await tester.pump();
+
+      await sendMessage(
+        tester,
+        createSessionListMessage([
+          createTestSession(
+            id: 's1',
+            projectPath: '/a/proj1',
+            status: SessionStatus.completed,
+          ),
+          createTestSession(
+            id: 's2',
+            projectPath: '/b/proj2',
+            status: SessionStatus.active,
+          ),
+        ]),
+      );
+
+      expect(find.text('proj1 (1)'), findsNothing);
+      expect(find.text('proj2 (1)'), findsOneWidget);
+    });
+
+    // TC-35-11: [0.2.1-W6-001] 所有 session 都 idle 時頁籤不消失
+    testWidgets('all idle sessions still show all project tabs',
+        (tester) async {
+      await tester.pumpWidget(buildSubject());
+      await tester.pump();
+
+      await sendMessage(
+        tester,
+        createSessionListMessage([
+          createTestSession(
+            id: 's1',
+            projectPath: '/a/proj1',
+            status: SessionStatus.idle,
+          ),
+          createTestSession(
+            id: 's2',
+            projectPath: '/b/proj2',
+            status: SessionStatus.idle,
+          ),
+        ]),
+      );
+
+      expect(find.byType(TabBar), findsOneWidget);
+      expect(find.text('proj1 (1)'), findsOneWidget);
+      expect(find.text('proj2 (1)'), findsOneWidget);
+    });
   });
 }
