@@ -24,6 +24,13 @@ void main() async {
   ));
 }
 
+/// 需求：[0.4.0-W2-007] 設定 ImageCache 記憶體上限
+void _configureImageCache() {
+  PaintingBinding.instance.imageCache
+    ..maximumSizeBytes = _imageCacheMaxSizeBytes
+    ..maximumSize = _imageCacheMaxCount;
+}
+
 /// 需求：應用程式根 Widget，啟動 WebSocket 連線並顯示 DashboardPage
 /// 約束：必須為 ConsumerWidget 以訂閱 connectionStateProvider 觸發連線
 class App extends ConsumerWidget {
