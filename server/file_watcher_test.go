@@ -401,6 +401,106 @@ func TestFileWatcherContextCancel(t *testing.T) {
 	}
 }
 
+func TestFileWatcherScanExistingSubagents(t *testing.T) {
+	claudeHome, projectDir := setupTestClaudeHome(t)
+
+	// Create subagents directory structure:
+	// projects/test-project/parent-session-id/subagents/agent-abc123.jsonl
+	subagentsDir := filepath.Join(projectDir, "parent-session-id", SubagentsDirName)
+	if err := os.MkdirAll(subagentsDir, 0o755); err != nil {
+		t.Fatalf("failed to create subagents dir: %v", err)
+	}
+
+	jsonlPath := filepath.Join(subagentsDir, "agent-abc123.jsonl")
+	line := makeUserJSONL(t, "msg-sub-1", "subagent message")
+	if err := os.WriteFile(jsonlPath, append(line, '\n'), 0o644); err != nil {
+		t.Fatalf("failed to write subagent JSONL: %v", err)
+	}
+
+	ch := make(chan SessionEvent, DefaultEventChannelSize)
+	mockReg := &mockSessionRegisterer{}
+	fw := NewFileWatcher(claudeHome, ch, mockReg)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go func() {
+		if err := fw.Start(ctx); err != nil {
+			t.Errorf("Start returned error: %v", err)
+		}
+	}()
+
+	time.Sleep(500 * time.Millisecond)
+
+	// Should have registered the subagent session
+	found := false
+	for _, evt := range mockReg.events {
+		if evt.SessionID == "agent-abc123" {
+			found = true
+			if evt.ProjectPath != "test-project" {
+				t.Errorf("subagent ProjectPath = %q, want %q", evt.ProjectPath, "test-project")
+			}
+			if evt.Type != EventTypeSessionDiscovered {
+				t.Errorf("subagent event Type = %q, want %q", evt.Type, EventTypeSessionDiscovered)
+			}
+		}
+	}
+	if !found {
+		t.Errorf("subagent session not found in registry events; got %d events", len(mockReg.events))
+	}
+
+	// Verify reader was registered
+	fw.mu.RLock()
+	_, ok := fw.readers[jsonlPath]
+	fw.mu.RUnlock()
+	if !ok {
+		t.Error("expected reader to be registered for subagent JSONL file")
+	}
+}
+
+func TestFileWatcherNewSubagentFile(t *testing.T) {
+	claudeHome, projectDir := setupTestClaudeHome(t)
+
+	// Create the subagents directory before starting
+	subagentsDir := filepath.Join(projectDir, "parent-session-id", SubagentsDirName)
+	if err := os.MkdirAll(subagentsDir, 0o755); err != nil {
+		t.Fatalf("failed to create subagents dir: %v", err)
+	}
+
+	ch := make(chan SessionEvent, DefaultEventChannelSize)
+	fw := NewFileWatcher(claudeHome, ch, nil)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go func() {
+		if err := fw.Start(ctx); err != nil {
+			t.Errorf("Start returned error: %v", err)
+		}
+	}()
+
+	time.Sleep(500 * time.Millisecond)
+
+	// Create a new subagent JSONL file after watcher is running
+	jsonlPath := filepath.Join(subagentsDir, "agent-new.jsonl")
+	line := makeAssistantJSONL(t, "msg-sub-new", "subagent response")
+	if err := os.WriteFile(jsonlPath, append(line, '\n'), 0o644); err != nil {
+		t.Fatalf("failed to write subagent JSONL: %v", err)
+	}
+
+	events := drainEvents(ch, 1, 3*time.Second)
+	if len(events) < 1 {
+		t.Fatal("expected at least 1 event from new subagent file, got 0")
+	}
+
+	if events[0].SessionID != "agent-new" {
+		t.Errorf("SessionID = %q, want %q", events[0].SessionID, "agent-new")
+	}
+	if events[0].ProjectPath != "test-project" {
+		t.Errorf("ProjectPath = %q, want %q", events[0].ProjectPath, "test-project")
+	}
+}
+
 func TestExtractSessionInfo(t *testing.T) {
 	tests := []struct {
 		name            string
@@ -425,6 +525,18 @@ func TestExtractSessionInfo(t *testing.T) {
 			path:            "/tmp/claude/projects/demo/550e8400-e29b-41d4-a716-446655440000.jsonl",
 			wantSessionID:   "550e8400-e29b-41d4-a716-446655440000",
 			wantProjectPath: "demo",
+		},
+		{
+			name:            "subagent path",
+			path:            "/home/user/.claude/projects/my-project/9cd1ad6a/subagents/agent-a7c39e36b49912bd3.jsonl",
+			wantSessionID:   "agent-a7c39e36b49912bd3",
+			wantProjectPath: "my-project",
+		},
+		{
+			name:            "subagent with URL-encoded project",
+			path:            "/home/user/.claude/projects/%2FUsers%2Feric%2Fcode/session-id/subagents/agent-xyz.jsonl",
+			wantSessionID:   "agent-xyz",
+			wantProjectPath: "/Users/eric/code",
 		},
 	}
 

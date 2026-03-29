@@ -21,6 +21,7 @@ const (
 	DefaultEventChannelSize = 100
 	ProjectsDirName         = "projects"
 	JSONLExtension          = ".jsonl"
+	SubagentsDirName        = "subagents"
 	AddFileRetryDelay       = 50 * time.Millisecond
 )
 
