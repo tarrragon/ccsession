@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/http/pprof"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -67,6 +68,7 @@ func main() {
 	mux.HandleFunc("/health", handleHealth)
 	mux.HandleFunc("/ws", wsServer.HandleWS)
 	registerHooksEndpoint(mux, versionConfig, hookEvCh, logger)
+	registerPprofEndpoint(mux, logger)
 
 	// 監聽 shutdown 信號
 	addr := "localhost:" + port
@@ -110,6 +112,20 @@ func registerHooksEndpoint(mux *http.ServeMux, vc VersionConfig, hookEvCh chan<-
 		mux.HandleFunc("/hooks/agent-event", newDisabledHooksHandler(logger))
 		logger.Info(messages.LogHooksRouteDisabled, "layer", "main")
 	}
+}
+
+// registerPprofEndpoint 條件註冊 pprof 端點。
+// 需求：[0.4.0-W2-005] 僅在 CCSESSION_PPROF=1 時啟用，供開發環境記憶體診斷使用。
+func registerPprofEndpoint(mux *http.ServeMux, logger *slog.Logger) {
+	if os.Getenv("CCSESSION_PPROF") != "1" {
+		return
+	}
+	mux.HandleFunc("/debug/pprof/", pprof.Index)
+	mux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+	mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
+	mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+	mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
+	logger.Info(messages.LogPprofEnabled, "layer", "main", "path", "/debug/pprof/")
 }
 
 // runFileWatcher 在 goroutine 中執行 FileWatcher，記錄結束原因。

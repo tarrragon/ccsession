@@ -43,6 +43,7 @@ const (
 	LogServerShutdownDone   = "server shutdown complete"
 	LogHooksRouteRegistered = "HTTP Hooks route registered"
 	LogHooksRouteDisabled   = "HTTP Hooks disabled, degraded handler registered"
+	LogPprofEnabled         = "pprof endpoint enabled"
 	LogFileWatcherStopped   = "file watcher stopped"
 	LogFileWatcherError     = "file watcher error"
 )

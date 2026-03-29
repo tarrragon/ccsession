@@ -85,6 +85,21 @@ Claude Code 的所有對話紀錄以 JSONL 格式即時寫入 `~/.claude/` 目�
 > Backend 必須先啟動，Frontend 會自動連線 `ws://localhost:8765/ws`。
 > Riverpod `.g.dart` 已納入 git，無需額外執行 build_runner。僅在修改 `@riverpod` 標注的類別時需重跑：`(cd ui && dart run build_runner build --delete-conflicting-outputs)`
 
+### 記憶體診斷（pprof）
+
+```bash
+# 啟用 pprof（開發環境）
+CCSESSION_PPROF=1 (cd server && go run .)
+
+# 查看記憶體 profile
+go tool pprof http://localhost:8765/debug/pprof/heap
+
+# 查看 goroutine
+go tool pprof http://localhost:8765/debug/pprof/goroutine
+```
+
+> pprof 預設關閉，僅在設定 `CCSESSION_PPROF=1` 環境變數時啟用。生產環境請勿啟用。
+
 ### Zellij 開發佈局
 
 在 zellij 環境下開發時，使用以下三欄佈局：
