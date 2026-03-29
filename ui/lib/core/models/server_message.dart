@@ -146,6 +146,42 @@ class SessionHistoryData extends Equatable {
   List<Object?> get props => [sessionId, events, hasMore];
 }
 
+/// session_update payload（增量：單一 session upsert）
+/// 需求：[0.4.0-W2-001.1] 對應 Go SessionUpdateData
+class SessionUpdateData extends Equatable {
+  const SessionUpdateData({required this.session});
+
+  final SessionInfo session;
+
+  factory SessionUpdateData.fromJson(Map<String, dynamic> json) {
+    return SessionUpdateData(
+      session: SessionInfo.fromJson(json['session'] as Map<String, dynamic>),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {'session': session.toJson()};
+
+  @override
+  List<Object?> get props => [session];
+}
+
+/// session_remove payload（增量：移除指定 session）
+/// 需求：[0.4.0-W2-001.1] 對應 Go SessionRemoveData
+class SessionRemoveData extends Equatable {
+  const SessionRemoveData({required this.sessionId});
+
+  final String sessionId;
+
+  factory SessionRemoveData.fromJson(Map<String, dynamic> json) {
+    return SessionRemoveData(sessionId: json['sessionId'] as String);
+  }
+
+  Map<String, dynamic> toJson() => {'sessionId': sessionId};
+
+  @override
+  List<Object?> get props => [sessionId];
+}
+
 /// error payload
 class ErrorData extends Equatable {
   const ErrorData({

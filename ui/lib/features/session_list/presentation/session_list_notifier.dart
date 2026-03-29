@@ -86,6 +86,10 @@ class SessionListNotifier extends _$SessionListNotifier {
       switch (message.type) {
         case 'session_list':
           _handleSessionList(message);
+        case 'session_update':
+          _handleSessionUpdate(message);
+        case 'session_remove':
+          _handleSessionRemove(message);
         case 'session_status_change':
           _handleStatusChange(message);
         case 'session_event':
@@ -113,6 +117,38 @@ class SessionListNotifier extends _$SessionListNotifier {
     debugPrint('[SessionList] sessions updated: ${data.sessions.length} total');
     final sessions = _trimSessions(data.sessions);
     state = AsyncData(_currentState.copyWith(sessions: sessions));
+  }
+
+  /// 需求：[0.4.0-W2-001.1] session_update 增量 upsert 單一 session
+  /// 約束：sessionId 已存在則替換，否則新增
+  void _handleSessionUpdate(ServerMessage message) {
+    final data = SessionUpdateData.fromJson(message.data);
+    final currentSessions = _currentState.sessions;
+    final updatedSessions = _upsertSession(currentSessions, data.session);
+    final trimmed = _trimSessions(updatedSessions);
+    state = AsyncData(_currentState.copyWith(sessions: trimmed));
+  }
+
+  /// 需求：[0.4.0-W2-001.1] session_remove 從列表移除指定 session
+  /// 邊界：未知 sessionId 靜默忽略
+  void _handleSessionRemove(ServerMessage message) {
+    final data = SessionRemoveData.fromJson(message.data);
+    final filtered = _currentState.sessions
+        .where((session) => session.id != data.sessionId)
+        .toList();
+    state = AsyncData(_currentState.copyWith(sessions: filtered));
+  }
+
+  /// 需求：[0.4.0-W2-001.1] Upsert session 到列表中
+  List<SessionInfo> _upsertSession(
+    List<SessionInfo> sessions,
+    SessionInfo updated,
+  ) {
+    final index = sessions.indexWhere((s) => s.id == updated.id);
+    if (index >= 0) {
+      return [...sessions]..[index] = updated;
+    }
+    return [...sessions, updated];
   }
 
   /// 需求：[0.2.1-W4-002] session_status_change 更新 status 及 lastEventAt
