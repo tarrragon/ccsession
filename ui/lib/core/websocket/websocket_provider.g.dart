@@ -46,24 +46,5 @@ final connectionStateProvider =
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef ConnectionStateRef = AutoDisposeStreamProviderRef<WsConnectionState>;
-String _$serverMessageHash() => r'9abfa7263aa5f7c0cb279422a237721c0b755e0c';
-
-/// 需求：Server 訊息 stream（原始，供下游 provider 消費）
-///
-/// Copied from [serverMessage].
-@ProviderFor(serverMessage)
-final serverMessageProvider = AutoDisposeStreamProvider<ServerMessage>.internal(
-  serverMessage,
-  name: r'serverMessageProvider',
-  debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
-      ? null
-      : _$serverMessageHash,
-  dependencies: null,
-  allTransitiveDependencies: null,
-);
-
-@Deprecated('Will be removed in 3.0. Use Ref instead')
-// ignore: unused_element
-typedef ServerMessageRef = AutoDisposeStreamProviderRef<ServerMessage>;
 // ignore_for_file: type=lint
 // ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member, deprecated_member_use_from_same_package

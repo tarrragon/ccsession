@@ -1,5 +1,4 @@
 import 'package:ccsession/core/models/connection_state.dart';
-import 'package:ccsession/core/models/server_message.dart';
 import 'package:ccsession/core/websocket/websocket_service.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
@@ -22,9 +21,3 @@ Stream<WsConnectionState> connectionState(ConnectionStateRef ref) {
   return service.connectionStateStream;
 }
 
-/// 需求：Server 訊息 stream（原始，供下游 provider 消費）
-@riverpod
-Stream<ServerMessage> serverMessage(ServerMessageRef ref) {
-  final service = ref.watch(webSocketServiceProvider);
-  return service.messageStream;
-}

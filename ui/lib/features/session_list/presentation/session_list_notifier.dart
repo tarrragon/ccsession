@@ -56,7 +56,7 @@ class SessionListNotifier extends _$SessionListNotifier {
   SessionListState get _currentState =>
       state.valueOrNull ?? const SessionListState();
 
-  /// 需求：初始建構，訂閱 serverMessageProvider 並請求列表
+  /// 需求：初始建構，訂閱 WebSocket 訊息並請求列表
   @override
   Future<SessionListState> build() async {
     final service = ref.watch(webSocketServiceProvider);
