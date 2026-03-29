@@ -54,6 +54,20 @@ void main() {
 
       expect(result, '"just a string"');
     });
+
+    test('unescapes \\n in string values to actual newlines', () {
+      const input = '{"prompt":"## Title\\n\\nContent"}';
+      final result = formatJsonContent(input);
+
+      expect(result, contains('## Title\n\nContent'));
+    });
+
+    test('unescapes \\t in string values to actual tabs', () {
+      const input = '{"code":"line1\\n\\tindented"}';
+      final result = formatJsonContent(input);
+
+      expect(result, contains('line1\n\tindented'));
+    });
   });
 
   group('formatJsonObject', () {
@@ -114,6 +128,22 @@ void main() {
       final result = formatJsonObject(DateTime(2026));
 
       expect(result, isNotEmpty);
+    });
+
+    test('unescapes \\n in Map string values to actual newlines', () {
+      final input = <String, dynamic>{
+        'prompt': '## Title\n\nContent with\nnewlines',
+      };
+      final result = formatJsonObject(input);
+
+      expect(result, contains('## Title\n\nContent with\nnewlines'));
+    });
+
+    test('unescapes \\n in JSON string input to actual newlines', () {
+      const input = '{"prompt":"## Title\\n\\nContent"}';
+      final result = formatJsonObject(input);
+
+      expect(result, contains('## Title\n\nContent'));
     });
   });
 }
