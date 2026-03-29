@@ -173,7 +173,7 @@ func (s *WebSocketServer) writePump(client *Client) {
 			if !ok {
 				return
 			}
-			client.sendBytes -= int64(len(msg))
+			client.sendBytes.Add(-int64(len(msg)))
 			client.conn.SetWriteDeadline(s.now().Add(WriteWaitTimeout))
 			if err := client.conn.WriteMessage(websocket.TextMessage, msg); err != nil {
 				slog.Default().Debug(LogWSWriteError, "layer", "ws_server", "error", err)
@@ -329,10 +329,10 @@ func enqueueUnsafe(client *Client, data []byte) {
 	msgSize := int64(len(data))
 
 	// 檢查記憶體上限：若當前已排隊的 bytes + 新訊息超過上限，丟棄新訊息
-	if client.sendBytes+msgSize > ClientSendBufferMaxBytes {
+	if client.sendBytes.Load()+msgSize > ClientSendBufferMaxBytes {
 		slog.Default().Warn(LogWSSendBufferBytesExceeded,
 			"layer", "ws_server",
-			"queuedBytes", client.sendBytes,
+			"queuedBytes", client.sendBytes.Load(),
 			"msgBytes", msgSize,
 			"limit", ClientSendBufferMaxBytes)
 		return
@@ -340,7 +340,7 @@ func enqueueUnsafe(client *Client, data []byte) {
 
 	select {
 	case client.send <- data:
-		client.sendBytes += msgSize
+		client.sendBytes.Add(msgSize)
 	default:
 		slog.Default().Warn(LogWSSendBufferFull, "layer", "ws_server")
 	}
@@ -356,10 +356,10 @@ func (s *WebSocketServer) sendToClient(client *Client, msg ServerMessage) {
 	msgSize := int64(len(data))
 
 	// 需求：[0.4.0-W2-001.1] 記憶體上限檢查
-	if client.sendBytes+msgSize > ClientSendBufferMaxBytes {
+	if client.sendBytes.Load()+msgSize > ClientSendBufferMaxBytes {
 		slog.Default().Warn(LogWSSendBufferBytesExceeded,
 			"layer", "ws_server",
-			"queuedBytes", client.sendBytes,
+			"queuedBytes", client.sendBytes.Load(),
 			"msgBytes", msgSize,
 			"limit", ClientSendBufferMaxBytes)
 		s.disconnectClient(client)
@@ -368,7 +368,7 @@ func (s *WebSocketServer) sendToClient(client *Client, msg ServerMessage) {
 
 	select {
 	case client.send <- data:
-		client.sendBytes += msgSize
+		client.sendBytes.Add(msgSize)
 	default:
 		slog.Default().Warn(LogWSSendBufferFull, "layer", "ws_server")
 		s.disconnectClient(client)

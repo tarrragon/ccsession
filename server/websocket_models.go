@@ -2,6 +2,7 @@ package main
 
 import (
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -72,5 +73,5 @@ type Client struct {
 	closeOnce     sync.Once
 	// sendBytes tracks the approximate total bytes queued in the send channel.
 	// 需求：[0.4.0-W2-001.1] 基於記憶體大小的 send buffer 限制。
-	sendBytes int64
+	sendBytes atomic.Int64
 }
