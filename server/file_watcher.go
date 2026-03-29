@@ -28,8 +28,9 @@ const (
 	LogWatcherScanError      = "error scanning projects directory"
 	LogWatcherPermissionWarn = "permission denied, skipping file"
 	LogWatcherFsnotifyError  = "fsnotify error"
-	LogWatcherNewDir         = "watching new project directory"
-	LogWatcherEventDropped = "event channel full, dropping event"
+	LogWatcherNewDir           = "watching new project directory"
+	LogWatcherSubagentDir      = "scanning subagents directory"
+	LogWatcherEventDropped     = "event channel full, dropping event"
 )
 
 // SessionRegisterer allows FileWatcher to register sessions directly
@@ -165,9 +166,41 @@ func (fw *FileWatcher) scanExistingFiles(projectsDir string, watcher *fsnotify.W
 			if !f.IsDir() && strings.HasSuffix(f.Name(), JSONLExtension) {
 				fw.addFileSeekEnd(filepath.Join(subDir, f.Name()))
 			}
+			// Check for {sessionId}/subagents/ subdirectory
+			if f.IsDir() {
+				fw.scanSubagentsDir(filepath.Join(subDir, f.Name(), SubagentsDirName), watcher)
+			}
 		}
 	}
 	return nil
+}
+
+// scanSubagentsDir scans a subagents directory for JSONL files and adds
+// a watcher on it. Only scans one level deep (no recursive subagent nesting).
+func (fw *FileWatcher) scanSubagentsDir(subagentsDir string, watcher *fsnotify.Watcher) {
+	files, err := os.ReadDir(subagentsDir)
+	if err != nil {
+		// Not an error — most session dirs won't have a subagents/ subdirectory
+		return
+	}
+
+	fw.logger.Info(LogWatcherSubagentDir,
+		"layer", "file_watcher",
+		"path", subagentsDir)
+
+	if err := watcher.Add(subagentsDir); err != nil {
+		fw.logger.Warn(LogWatcherWatchDirError,
+			"layer", "file_watcher",
+			"path", subagentsDir,
+			"error", err.Error())
+		return
+	}
+
+	for _, f := range files {
+		if !f.IsDir() && strings.HasSuffix(f.Name(), JSONLExtension) {
+			fw.addFileSeekEnd(filepath.Join(subagentsDir, f.Name()))
+		}
+	}
 }
 
 // handleFsEvent processes a single fsnotify event.
@@ -180,16 +213,24 @@ func (fw *FileWatcher) handleFsEvent(event fsnotify.Event, watcher *fsnotify.Wat
 			return
 		}
 		if info.IsDir() {
-			// New project subdirectory: start watching it
-			if err := watcher.Add(path); err != nil {
-				fw.logger.Warn(LogWatcherWatchDirError,
-					"layer", "file_watcher",
-					"path", path,
-					"error", err.Error())
+			dirName := filepath.Base(path)
+			if dirName == SubagentsDirName {
+				// New subagents/ directory: watch it for new JSONL files
+				fw.scanSubagentsDir(path, watcher)
 			} else {
-				fw.logger.Info(LogWatcherNewDir,
-					"layer", "file_watcher",
-					"path", path)
+				// New project or session subdirectory: start watching it
+				if err := watcher.Add(path); err != nil {
+					fw.logger.Warn(LogWatcherWatchDirError,
+						"layer", "file_watcher",
+						"path", path,
+						"error", err.Error())
+				} else {
+					fw.logger.Info(LogWatcherNewDir,
+						"layer", "file_watcher",
+						"path", path)
+				}
+				// Check if this new directory already has a subagents/ subdirectory
+				fw.scanSubagentsDir(filepath.Join(path, SubagentsDirName), watcher)
 			}
 			return
 		}
@@ -429,13 +470,31 @@ func (fw *FileWatcher) readerCount() int {
 }
 
 // extractSessionInfo derives sessionID and projectPath from a JSONL file path.
-// Path format: {claudeHome}/projects/{encoded_project_path}/{session_id}.jsonl
+// Path formats:
+//   - Main session: {claudeHome}/projects/{encoded_project_path}/{session_id}.jsonl
+//   - Subagent:     {claudeHome}/projects/{encoded_project_path}/{parent_session_id}/subagents/{agent_id}.jsonl
 func extractSessionInfo(path string) (sessionID, projectPath string) {
 	base := filepath.Base(path)
 	sessionID = strings.TrimSuffix(base, JSONLExtension)
 
 	dir := filepath.Dir(path)
-	encodedProject := filepath.Base(dir)
+	dirName := filepath.Base(dir)
+
+	// If the parent directory is "subagents", go up two levels to find the project path
+	if dirName == SubagentsDirName {
+		// dir = .../projects/{encoded_project}/{parentSessionId}/subagents
+		// Go up: {parentSessionId} -> {encoded_project}
+		encodedProject := filepath.Base(filepath.Dir(filepath.Dir(dir)))
+		decoded, err := url.PathUnescape(encodedProject)
+		if err != nil {
+			projectPath = encodedProject
+		} else {
+			projectPath = decoded
+		}
+		return sessionID, projectPath
+	}
+
+	encodedProject := dirName
 	decoded, err := url.PathUnescape(encodedProject)
 	if err != nil {
 		projectPath = encodedProject
