@@ -17,7 +17,7 @@ const (
 	MsgTypeSessionStatusChange = "session_status_change"
 	MsgTypeSessionHistory      = "session_history"
 	MsgTypeSessionUpdate       = "session_update"
-	MsgTypeSessionRemove       = "session_remove"
+	MsgTypeSessionRemove       = "session_remove" // 預留：session eviction 廣播（搭配 SessionRemoveData）
 	MsgTypeError               = "error"
 )
 

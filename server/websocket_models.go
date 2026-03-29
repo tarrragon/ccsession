@@ -54,6 +54,10 @@ type SessionUpdateData struct {
 }
 
 // SessionRemoveData is the payload for session_remove messages (incremental).
+// 設計意圖：預留給未來 session eviction/cleanup 場景使用。
+// 當 ScanAndUpdateStatus 驅逐 completed session 時，需通知前端移除對應 UI 元素。
+// Flutter 端已在 W4-008 實作 session_remove 處理邏輯。
+// Go 端將在實作驅逐廣播時使用此結構體搭配 MsgTypeSessionRemove。
 type SessionRemoveData struct {
 	SessionID string `json:"sessionId"`
 }

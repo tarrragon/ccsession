@@ -403,8 +403,11 @@ func (r *SessionRegistry) GetHistory(sessionID string, limit int, before time.Ti
 		}
 	}
 
-	// 非分頁路徑資料已按時間順序 append，無需排序。
-	// 分頁路徑（before 篩選）保留原始順序，同樣已有序。
+	// 不變式：append 順序 = 時間順序。
+	// 依賴來源：AppendEvent 按 file watcher 的逐行讀取順序 append，
+	// 而 JSONL 檔案由 Claude Code CLI 按時間順序寫入，因此 append 順序即時間順序。
+	// 若此不變式被打破（例如亂序插入），非分頁路徑的結果將不正確。
+	// 分頁路徑（before 篩選）額外排序作為防禦性保護。
 	if !before.IsZero() {
 		sort.Slice(filtered, func(i, j int) bool {
 			return filtered[i].Timestamp.Before(filtered[j].Timestamp)

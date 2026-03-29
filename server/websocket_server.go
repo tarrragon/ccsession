@@ -324,8 +324,10 @@ func marshalMessage(msg ServerMessage) ([]byte, error) {
 
 // enqueueUnsafe attempts a non-blocking send on client.send.
 // Caller must hold at least s.mu.RLock; it never closes the channel.
+// Returns true if the message was enqueued, false if dropped (buffer full or memory limit exceeded).
 // 需求：[0.4.0-W2-001.1] 基於記憶體大小的 send buffer 限制。
-func enqueueUnsafe(client *Client, data []byte) {
+// 需求：[0.4.0-W4-009] 統一記憶體超限判定邏輯，sendToClient 委派至此函式。
+func enqueueUnsafe(client *Client, data []byte) bool {
 	msgSize := int64(len(data))
 
 	// 檢查記憶體上限：若當前已排隊的 bytes + 新訊息超過上限，丟棄新訊息
@@ -335,17 +337,23 @@ func enqueueUnsafe(client *Client, data []byte) {
 			"queuedBytes", client.sendBytes.Load(),
 			"msgBytes", msgSize,
 			"limit", ClientSendBufferMaxBytes)
-		return
+		return false
 	}
 
 	select {
 	case client.send <- data:
 		client.sendBytes.Add(msgSize)
+		return true
 	default:
 		slog.Default().Warn(LogWSSendBufferFull, "layer", "ws_server")
+		return false
 	}
 }
 
+// sendToClient marshals and enqueues a message for the client.
+// On enqueue failure (memory limit or buffer full), the client is disconnected
+// because missing incremental updates would leave the client in an inconsistent state.
+// 需求：[0.4.0-W4-009] 委派至 enqueueUnsafe，統一超限判定邏輯。
 func (s *WebSocketServer) sendToClient(client *Client, msg ServerMessage) {
 	data, err := marshalMessage(msg)
 	if err != nil {
@@ -353,24 +361,7 @@ func (s *WebSocketServer) sendToClient(client *Client, msg ServerMessage) {
 		return
 	}
 
-	msgSize := int64(len(data))
-
-	// 需求：[0.4.0-W2-001.1] 記憶體上限檢查
-	if client.sendBytes.Load()+msgSize > ClientSendBufferMaxBytes {
-		slog.Default().Warn(LogWSSendBufferBytesExceeded,
-			"layer", "ws_server",
-			"queuedBytes", client.sendBytes.Load(),
-			"msgBytes", msgSize,
-			"limit", ClientSendBufferMaxBytes)
-		s.disconnectClient(client)
-		return
-	}
-
-	select {
-	case client.send <- data:
-		client.sendBytes.Add(msgSize)
-	default:
-		slog.Default().Warn(LogWSSendBufferFull, "layer", "ws_server")
+	if !enqueueUnsafe(client, data) {
 		s.disconnectClient(client)
 	}
 }
