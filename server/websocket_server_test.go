@@ -681,6 +681,10 @@ func TestBroadcastStatusChange_AllClientsReceive(t *testing.T) {
 		Timestamp:  time.Now(),
 	}
 
+	// W4-010: consume session_update before status_change
+	_ = readServerMessage(t, connA) // session_update
+	_ = readServerMessage(t, connB) // session_update
+
 	msgTypeA, dataA := readServerMessageTyped[SessionStatusChangeData](t, connA)
 	if msgTypeA != MsgTypeSessionStatusChange {
 		t.Fatalf("client A: expected %s, got %s", MsgTypeSessionStatusChange, msgTypeA)
@@ -1382,7 +1386,13 @@ func TestStatusChanged_WithEvent_PushesSessionEvent(t *testing.T) {
 		},
 	}
 
-	// 第一條：status_change 廣播
+	// W4-010: session_update 先於 status_change
+	updateType, _ := readServerMessageTyped[SessionUpdateData](t, conn)
+	if updateType != MsgTypeSessionUpdate {
+		t.Fatalf("expected %s first, got %s", MsgTypeSessionUpdate, updateType)
+	}
+
+	// 第二條：status_change 廣播
 	msgType1, statusData := readServerMessageTyped[SessionStatusChangeData](t, conn)
 	if msgType1 != MsgTypeSessionStatusChange {
 		t.Fatalf("expected %s, got %s", MsgTypeSessionStatusChange, msgType1)
@@ -1391,7 +1401,7 @@ func TestStatusChanged_WithEvent_PushesSessionEvent(t *testing.T) {
 		t.Fatalf("expected status active, got %s", statusData.Status)
 	}
 
-	// 第二條：session_event 推送（因為有 Event）
+	// 第三條：session_event 推送（因為有 Event）
 	msgType2, evData := readServerMessageTyped[SessionEvent](t, conn)
 	if msgType2 != MsgTypeSessionEvent {
 		t.Fatalf("expected %s, got %s", MsgTypeSessionEvent, msgType2)
@@ -1426,6 +1436,12 @@ func TestStatusChanged_WithoutEvent_NoPushSessionEvent(t *testing.T) {
 		Session:    &SessionInfo{ID: "abc-123", Status: SessionStatusCompleted},
 		Timestamp:  time.Now(),
 		Event:      nil,
+	}
+
+	// W4-010: session_update 先於 status_change
+	updateType, _ := readServerMessageTyped[SessionUpdateData](t, conn)
+	if updateType != MsgTypeSessionUpdate {
+		t.Fatalf("expected %s first, got %s", MsgTypeSessionUpdate, updateType)
 	}
 
 	// 應收到 status_change
@@ -1528,6 +1544,12 @@ func TestBroadcastStatusChange_IncludesLastEventAt(t *testing.T) {
 		ChangeType: ChangeTypeStatusChanged,
 		Session:    &SessionInfo{ID: "sess-003", Status: SessionStatusCompleted, LastEventAt: lastEvt},
 		Timestamp:  time.Now(),
+	}
+
+	// W4-010: ChangeTypeStatusChanged now also sends session_update before status_change.
+	updateType, _ := readServerMessageTyped[SessionUpdateData](t, conn)
+	if updateType != MsgTypeSessionUpdate {
+		t.Fatalf("expected %s first, got %s", MsgTypeSessionUpdate, updateType)
 	}
 
 	msgType, data := readServerMessageTyped[SessionStatusChangeData](t, conn)

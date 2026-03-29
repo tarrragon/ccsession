@@ -398,6 +398,10 @@ func (s *WebSocketServer) processDispatchedEvent(event DispatchedEvent) {
 			Data: buildSessionEventPayload(event),
 		})
 	case ChangeTypeStatusChanged:
+		// 需求：[0.2.1-W4-010] status 變更時同時推送完整 session_update，
+		// 確保前端取得 summary 等可能同時變動的欄位。
+		// session_status_change 保留向後相容，供輕量消費端使用。
+		s.broadcastSessionUpdate(event.Session)
 		s.broadcastStatusChange(event.Session.ID, event.Session.Status, event.Session.LastEventAt)
 		if event.Event != nil {
 			s.pushToSubscribers(event.Session.ID, ServerMessage{

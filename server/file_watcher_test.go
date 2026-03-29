@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 )
@@ -61,11 +62,23 @@ func setupTestClaudeHome(t *testing.T) (claudeHome string, projectDir string) {
 
 // mockSessionRegisterer records all UpsertFromSessionEvent calls for test verification.
 type mockSessionRegisterer struct {
+	mu     sync.Mutex
 	events []SessionEvent
 }
 
 func (m *mockSessionRegisterer) UpsertFromSessionEvent(event SessionEvent) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.events = append(m.events, event)
+}
+
+// snapshot returns a copy of recorded events for safe reading from any goroutine.
+func (m *mockSessionRegisterer) snapshot() []SessionEvent {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	cp := make([]SessionEvent, len(m.events))
+	copy(cp, m.events)
+	return cp
 }
 
 // drainEvents collects events from the channel until timeout or count reached.
@@ -145,17 +158,18 @@ func TestFileWatcherScanExisting(t *testing.T) {
 	time.Sleep(500 * time.Millisecond)
 
 	// Initial scan should register session directly via registry (not channel)
-	if len(mockReg.events) != 1 {
-		t.Fatalf("expected 1 registry call from initial scan, got %d", len(mockReg.events))
+	regEvents := mockReg.snapshot()
+	if len(regEvents) != 1 {
+		t.Fatalf("expected 1 registry call from initial scan, got %d", len(regEvents))
 	}
-	if mockReg.events[0].Type != EventTypeSessionDiscovered {
-		t.Errorf("event Type = %q, want %q", mockReg.events[0].Type, EventTypeSessionDiscovered)
+	if regEvents[0].Type != EventTypeSessionDiscovered {
+		t.Errorf("event Type = %q, want %q", regEvents[0].Type, EventTypeSessionDiscovered)
 	}
-	if mockReg.events[0].SessionID != "session-001" {
-		t.Errorf("event SessionID = %q, want %q", mockReg.events[0].SessionID, "session-001")
+	if regEvents[0].SessionID != "session-001" {
+		t.Errorf("event SessionID = %q, want %q", regEvents[0].SessionID, "session-001")
 	}
-	if mockReg.events[0].ProjectPath != "test-project" {
-		t.Errorf("event ProjectPath = %q, want %q", mockReg.events[0].ProjectPath, "test-project")
+	if regEvents[0].ProjectPath != "test-project" {
+		t.Errorf("event ProjectPath = %q, want %q", regEvents[0].ProjectPath, "test-project")
 	}
 
 	// Verify no events were sent to the channel
@@ -433,8 +447,9 @@ func TestFileWatcherScanExistingSubagents(t *testing.T) {
 	time.Sleep(500 * time.Millisecond)
 
 	// Should have registered the subagent session
+	regEvents := mockReg.snapshot()
 	found := false
-	for _, evt := range mockReg.events {
+	for _, evt := range regEvents {
 		if evt.SessionID == "agent-abc123" {
 			found = true
 			if evt.ProjectPath != "test-project" {
@@ -446,7 +461,7 @@ func TestFileWatcherScanExistingSubagents(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Errorf("subagent session not found in registry events; got %d events", len(mockReg.events))
+		t.Errorf("subagent session not found in registry events; got %d events", len(regEvents))
 	}
 
 	// Verify reader was registered
