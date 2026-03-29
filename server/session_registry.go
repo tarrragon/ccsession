@@ -100,7 +100,7 @@ func (r *SessionRegistry) UpsertFromSessionEvent(event SessionEvent) {
 
 	// 每次 user 事件覆蓋 Summary 為最新內容
 	if event.Type == EventTypeUser {
-		session.Summary = truncateString(event.Content.Text, MaxSummaryLength)
+		session.Summary = truncateSummary(event.Content.Text, MaxSummaryLength)
 	}
 
 	// 若為 session_completed 事件，強制設定狀態
@@ -342,8 +342,8 @@ func (r *SessionRegistry) computeStatus(session *SessionInfo, now time.Time) Ses
 	}
 }
 
-// truncateString 將字串截斷至最多 maxLen 字元。
-func truncateString(s string, maxLen int) string {
+// truncateSummary 將字串截斷至最多 maxLen 字元。
+func truncateSummary(s string, maxLen int) string {
 	if len(s) <= maxLen {
 		return s
 	}
