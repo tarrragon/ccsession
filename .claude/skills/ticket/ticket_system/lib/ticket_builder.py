@@ -256,8 +256,63 @@ def get_next_seq(version: str, wave: int) -> int:
     return max_seq + 1
 
 
+def _extract_direct_child_seq(child_id: str, parent_id: str) -> Optional[int]:
+    """從子任務 ID 中提取直接子任務序號。
+
+    只提取直接子任務（深度 = parent_depth + 1），
+    忽略更深層的子任務（如 001.1.1）。
+
+    Args:
+        child_id: 子任務 ID（如 "0.31.0-W5-001.2"）
+        parent_id: 父任務 ID（如 "0.31.0-W5-001"）
+
+    Returns:
+        直接子任務序號，若非直接子任務則返回 None
+    """
+    prefix = parent_id + "."
+    if not child_id.startswith(prefix):
+        return None
+    remainder = child_id[len(prefix):]
+    # 直接子任務的 remainder 不含點號
+    if "." in remainder:
+        return None
+    try:
+        return int(remainder)
+    except ValueError:
+        return None
+
+
+def _scan_child_files_max_seq(tickets_dir: Path, parent_id: str) -> int:
+    """掃描檔案系統中已存在的子 Ticket 檔案，找出最大直接子任務序號。
+
+    這是防止父 Ticket 的 children 欄位未同步時的安全機制，
+    確保不會覆蓋已存在的子 Ticket 檔案。
+
+    Args:
+        tickets_dir: Ticket 檔案目錄
+        parent_id: 父任務 ID
+
+    Returns:
+        最大直接子任務序號，無子 Ticket 檔案時返回 0
+    """
+    if not tickets_dir.exists():
+        return 0
+
+    max_seq = 0
+    # 掃描 {parent_id}.*.md 檔案
+    pattern = f"{parent_id}.*.md"
+    for f in tickets_dir.glob(pattern):
+        seq = _extract_direct_child_seq(f.stem, parent_id)
+        if seq is not None:
+            max_seq = max(max_seq, seq)
+    return max_seq
+
+
 def get_next_child_seq(parent_id: str) -> int:
     """取得下一個子任務序號。
+
+    同時檢查父 Ticket 的 children 欄位和檔案系統中的子 Ticket 檔案，
+    取兩者的最大序號 + 1，確保不會覆蓋已存在的子 Ticket。
 
     Args:
         parent_id: 父 Ticket ID（如 "0.31.0-W5-001"）
@@ -270,51 +325,33 @@ def get_next_child_seq(parent_id: str) -> int:
         >>> get_next_child_seq("0.31.0-W5-001")
         3
 
-        若父 Ticket 無 children：
+        若父 Ticket 無 children 但檔案系統有 0.31.0-W5-001.1.md：
+        >>> get_next_child_seq("0.31.0-W5-001")
+        2
+
+        若父 Ticket 無 children 且無檔案：
         >>> get_next_child_seq("0.31.0-W5-001")
         1
-
-    Implementation:
-        1. 從 parent_id 提取 version
-        2. 載入 parent Ticket（使用 load_ticket）
-        3. 取得 children 欄位
-        4. 解析 children IDs，只計算直接子任務
-        5. 返回 max_seq + 1
-
-    注意:
-        - 只計算直接子任務（深度 = parent_depth + 1）
-        - 如 parent 為 001，child 為 001.1.1，則不計入
-        - 只有 001.1、001.2 會被計入
     """
-    # 從 parent_id 中提取 version（如 0.31.0）
     version = extract_version_from_ticket_id(parent_id)
     if version is None:
         return 1
 
+    # 來源 1：父 Ticket 的 children 欄位
+    max_seq_from_children = 0
     parent = load_ticket(version, parent_id)
-    if not parent:
-        return 1
+    if parent:
+        for child_id in parent.get("children", []):
+            seq = _extract_direct_child_seq(child_id, parent_id)
+            if seq is not None:
+                max_seq_from_children = max(max_seq_from_children, seq)
 
-    children = parent.get("children", [])
-    if not children:
-        return 1
+    # 來源 2：檔案系統中的子 Ticket 檔案
+    tickets_dir = get_tickets_dir(version)
+    max_seq_from_files = _scan_child_files_max_seq(tickets_dir, parent_id)
 
-    # 找出最大的直接子任務序號
-    max_seq = 0
-    for child_id in children:
-        try:
-            # 解析子任務 ID，找出直接子任務
-            # parent: 0.31.0-W4-020, child: 0.31.0-W4-020.1, 0.31.0-W4-020.1.1
-            # 只計算直接子任務（只有一層點）
-            if child_id.startswith(parent_id + "."):
-                remainder = child_id[len(parent_id) + 1:]
-                # 如果 remainder 中沒有點，這是直接子任務
-                if "." not in remainder:
-                    seq = int(remainder)
-                    max_seq = max(max_seq, seq)
-        except (ValueError, IndexError):
-            continue
-
+    # 取兩者最大值，確保不覆蓋
+    max_seq = max(max_seq_from_children, max_seq_from_files)
     return max_seq + 1
 
 
