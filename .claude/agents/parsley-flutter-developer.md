@@ -922,6 +922,33 @@ mcp__serena__replace_symbol_body
 - [ ] **函式行數**：平均符合 5-10 行原則
 - [ ] **需求註解**：業務邏輯函式 100% 包含需求編號
 - [ ] **錯誤處理**：100% 使用預編譯錯誤或專用異常
+- [ ] **Widget 重建效能**：有狀態的 Widget 不因無關資料變更而全體刷新（見下方章節）
+
+### 2.1 Widget 重建與狀態保持（效能意識）
+
+> **來源**：ARCH-010 — 對話列表刷新導致所有 ExpansionTile 展開狀態丟失。
+
+實作涉及狀態變更的 Widget 時，必須考慮：**這個 Widget 的狀態會不會因為無關的資料更新而被重置？**
+
+**常見問題場景**：
+- ListView 新增項目時，既有項目的展開/摺疊、輸入框內容被重置
+- Provider 狀態變更觸發整棵 Widget tree 重建，子 Widget 的本地狀態丟失
+- 動畫進行中因父層重建而中斷
+
+**解決方案選擇（依場景而定）**：
+
+| 方案 | 適用場景 | 範例 |
+|------|---------|------|
+| `ValueKey` | StatefulWidget 在列表中需跨 rebuild 保持 State | `ExpansionTile(key: ValueKey(id))` |
+| `const` Widget | 子樹不依賴變動資料 | `const Padding(...)` |
+| `select` / `where` | 只監聽部分狀態變更 | `ref.watch(provider.select((s) => s.count))` |
+| StatefulWidget 本地狀態 | 狀態僅該 Widget 使用 | `_isExpanded` 欄位 |
+| 外部狀態管理 | 狀態需跨 Widget 或跨頁面共享 | Riverpod Notifier |
+
+**實作時自問**：
+1. 這個 Widget 的父層多久重建一次？
+2. 重建時，哪些子 Widget 的狀態不應該丟失？
+3. 用 Key 就能解決嗎？還是真的需要外部狀態管理？
 
 ### 3. 協作流程合規標準
 - [ ] **Phase 3a 接收確認**：虛擬碼、流程圖、架構決策完整接收
