@@ -27,13 +27,14 @@ const (
 
 // Parser limits
 const (
-	// MaxToolInputLength is the maximum length (in bytes) for serialized tool input.
-	// Inputs exceeding this limit are truncated to prevent memory bloat.
+	// MaxToolInputLength is the truncation point (in bytes) for serialized tool input.
+	// Inputs exceeding this limit are truncated and TruncationSuffix is appended.
+	// Final length may be up to MaxToolInputLength + len(TruncationSuffix).
 	MaxToolInputLength = 2000
 
-	// MaxToolOutputLength is the maximum length (in bytes) for tool result output.
-	// Outputs exceeding this limit are truncated to prevent memory bloat
-	// from large tool results (e.g., file reads, grep results).
+	// MaxToolOutputLength is the truncation point (in bytes) for tool result output.
+	// Outputs exceeding this limit are truncated and TruncationSuffix is appended.
+	// Final length may be up to MaxToolOutputLength + len(TruncationSuffix).
 	MaxToolOutputLength = 10000
 )
 

@@ -254,7 +254,7 @@ func serializeToolInput(v any) string {
 		for n > 0 && !utf8.RuneStart(s[n]) {
 			n--
 		}
-		s = s[:n]
+		s = s[:n] + TruncationSuffix
 	}
 	return s
 }
