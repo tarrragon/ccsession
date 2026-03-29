@@ -112,8 +112,9 @@ func (r *SessionRegistry) UpsertFromSessionEvent(event SessionEvent) {
 		// 後續的 ScanAndUpdateStatus 會用真正的 now 重新計算正確狀態。
 		session.Status = r.computeStatus(session, eventTime)
 	} else {
-		// 即時事件：使用當前時間重新計算狀態
-		session.Status = r.computeStatus(session, now)
+		// 即時事件表示 session 正在活動，直接設為 active，
+		// 繞過 computeStatus 的終態保護（IMP-040）
+		session.Status = SessionStatusActive
 	}
 }
 
