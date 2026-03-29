@@ -94,12 +94,14 @@ Read(docs/work-logs/v0.31.0/tickets/0.31.0-W8-003.md)  # 禁止
 
 > 代理人禁止修改主倉庫的 git 狀態。
 
-| 禁止操作 | 原因 |
-|---------|------|
-| `git checkout` | 修改 .git/HEAD，污染主線程工作目錄 |
-| `git branch` | 在主倉庫建立分支 |
-| `git switch` | 同 checkout |
-| `git commit` | PM 負責提交（PC-024） |
+| 操作 | 規則 | 原因 |
+|------|------|------|
+| `git checkout` | 禁止 | 修改 .git/HEAD，污染主線程工作目錄 |
+| `git branch` | 禁止 | 在主倉庫建立分支 |
+| `git switch` | 禁止 | 同 checkout |
+| `git commit`（Phase 3b+） | 禁止 | PM 負責提交（PC-024） |
+| `git commit`（Phase 1-3a） | 允許 | 代理人可自行提交，但禁止 push |
+| `git push` | 禁止 | PM 負責推送 |
 
 如需在獨立分支工作，PM 會使用 `Agent(isolation: "worktree")` 派發，代理人無需自行建立分支。
 

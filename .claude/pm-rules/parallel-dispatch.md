@@ -143,8 +143,11 @@ PM 派發實作任務前，**必須**確認目標檔案路徑是否在代理人�
 |-----------|--------------|
 | 實作代理人（parsley, fennel, thyme-python） | 強制 |
 | 重構代理人（cinnamon） | 強制 |
+| 測試/格式代理人（pepper, mint） | 強制 |
 | 分析/審核代理人（linux, bay, saffron） | 不需要 |
 | 探索代理人（Explore） | 不需要 |
+
+> **Source of truth**：此表格為 worktree 隔離需求的唯一定義來源。Hook `agent-dispatch-validation-hook.py` 的 `IMPLEMENTATION_AGENTS` 清單必須與此表格同步。
 
 ---
 
