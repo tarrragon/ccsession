@@ -13,12 +13,15 @@ String formatJsonContent(String content) {
 }
 
 /// 需求：[0.2.1-W6-004] 已解析 JSON 物件格式化
-/// 約束：toolInput 是 Object?（通常為 Map），直接 convert 避免 toString() 產生非法 JSON
+/// 約束：toolInput 為 Object?，可能是 Map/List（已解析）或 String（未解析 JSON 字串）
 /// 維護：tool_use_bubble 使用此函式（toolInput 為 Object?）
 String formatJsonObject(Object? value) {
   if (value == null) return '';
   try {
-    return const JsonEncoder.withIndent('  ').convert(value);
+    final object = value is String ? json.decode(value) : value;
+    return const JsonEncoder.withIndent('  ').convert(object);
+  } on FormatException {
+    return value.toString();
   } on JsonUnsupportedObjectError {
     return value.toString();
   }
