@@ -91,7 +91,9 @@ class ConversationNotifier extends _$ConversationNotifier {
   /// 需求：初始建構，訂閱 WebSocket messageStream
   @override
   Future<ConversationState> build(int panelIndex) async {
-    final service = ref.read(webSocketServiceProvider);
+    // 需求：[0.4.0-W2-004] ref.watch 確保 WebSocketService 重建時自動重訂閱
+    // 約束：service 變更時 build() 重新執行，舊 _subscription 自動取消
+    final service = ref.watch(webSocketServiceProvider);
 
     _subscription?.cancel();
     _subscription = service.messageStream.listen(_handleMessage);
@@ -108,9 +110,15 @@ class ConversationNotifier extends _$ConversationNotifier {
       }
     });
 
+    // 需求：[0.4.0-W2-004] 面板 dispose 時向後端發送 unsubscribe
+    // 約束：防止後端持續推送已關閉面板的 session 事件
     ref.onDispose(() {
       _subscription?.cancel();
       _subscription = null;
+      final currentSessionId = state.valueOrNull?.sessionId;
+      if (currentSessionId != null) {
+        service.unsubscribeSession(currentSessionId);
+      }
     });
 
     return const ConversationState();
