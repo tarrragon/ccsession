@@ -744,36 +744,41 @@ func TestScanAndUpdateStatus_DoesNotRevertCompleted(t *testing.T) {
 	}
 }
 
-// TestUpsertFromSessionEvent_DoesNotRevertCompleted 驗證 completed 是終態，
-// 後續非 session_completed 的 SessionEvent 不可將其覆蓋。
-func TestUpsertFromSessionEvent_DoesNotRevertCompleted(t *testing.T) {
+// TestUpsertFromSessionEvent_RevivesCompletedOnRealtimeEvent 驗證即時事件
+// 可將 completed session 復活為 active（IMP-040 修復）。
+func TestUpsertFromSessionEvent_RevivesCompletedOnRealtimeEvent(t *testing.T) {
 	baseTime := time.Date(2026, 3, 25, 12, 0, 0, 0, time.UTC)
 	registry := NewSessionRegistry(func() time.Time { return baseTime })
 
 	// 建立 session
 	registry.UpsertFromSessionEvent(SessionEvent{
-		SessionID: "completed-guard-2",
+		SessionID: "completed-revive",
 		Type:      EventTypeUser,
 		Timestamp: baseTime,
 	})
 
 	// 透過 session_completed 事件設為 completed
 	registry.UpsertFromSessionEvent(SessionEvent{
-		SessionID: "completed-guard-2",
+		SessionID: "completed-revive",
 		Type:      EventTypeSessionCompleted,
 		Timestamp: baseTime,
 	})
 
-	// 送入非 session_completed 的事件
+	session, _ := registry.Get("completed-revive")
+	if session.Status != SessionStatusCompleted {
+		t.Fatalf("precondition: expected completed, got %q", session.Status)
+	}
+
+	// 送入即時事件（模擬新的 JSONL 活動）
 	registry.UpsertFromSessionEvent(SessionEvent{
-		SessionID: "completed-guard-2",
+		SessionID: "completed-revive",
 		Type:      EventTypeAssistant,
 		Timestamp: baseTime,
 	})
 
-	session, _ := registry.Get("completed-guard-2")
-	if session.Status != SessionStatusCompleted {
-		t.Errorf("expected completed to be preserved after assistant event, got %q", session.Status)
+	session, _ = registry.Get("completed-revive")
+	if session.Status != SessionStatusActive {
+		t.Errorf("expected completed session to revive to active after assistant event, got %q", session.Status)
 	}
 }
 
