@@ -1308,9 +1308,9 @@ func TestPushToSubscribers_WithoutSessionEvent_FallsBackToEventData(t *testing.T
 	}
 }
 
-// === TC-37: ChangeTypeNew with SessionEvent sends full event + broadcasts list ===
+// === TC-37: ChangeTypeNew with SessionEvent sends incremental update + full event ===
 
-func TestProcessDispatchedEvent_NewWithEvent_BroadcastsListAndFullEvent(t *testing.T) {
+func TestProcessDispatchedEvent_NewWithEvent_BroadcastsUpdateAndFullEvent(t *testing.T) {
 	q := newMockQuerier(&SessionInfo{ID: "s2", Status: SessionStatusActive, AgentID: "agent-z"})
 	env := setupTestServer(t, q)
 
@@ -1338,10 +1338,10 @@ func TestProcessDispatchedEvent_NewWithEvent_BroadcastsListAndFullEvent(t *testi
 		Event:      fullEvent,
 	}
 
-	// First message: broadcast session_list
-	listType, _ := readServerMessageTyped[SessionListData](t, conn)
-	if listType != MsgTypeSessionList {
-		t.Fatalf("expected %s, got %s", MsgTypeSessionList, listType)
+	// 需求：[0.4.0-W2-001.1] 增量廣播 session_update 取代全量 session_list
+	updateType, _ := readServerMessageTyped[SessionUpdateData](t, conn)
+	if updateType != MsgTypeSessionUpdate {
+		t.Fatalf("expected %s, got %s", MsgTypeSessionUpdate, updateType)
 	}
 
 	// Second message: session_event with full SessionEvent

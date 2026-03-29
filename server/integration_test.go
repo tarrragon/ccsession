@@ -258,7 +258,7 @@ func assistantMessageJSON(sessionID string, ts time.Time, text string) string {
 	)
 }
 
-// === TC-GO-01: JSONL write triggers session_list ===
+// === TC-GO-01: JSONL write triggers session_update (incremental) ===
 
 func TestIntegration_JSONLWriteTriggersSessionList(t *testing.T) {
 	h := setupIntegrationHarness(t, false)
@@ -268,25 +268,19 @@ func TestIntegration_JSONLWriteTriggersSessionList(t *testing.T) {
 	ensureProjectDir(t, h, "/project/path")
 	writeJSONL(t, h, "session-A", "/project/path", userMessageJSON("session-A", ts))
 
-	// Wait for session_list update containing session-A
-	msg := readMsgOfType(t, conn, "session_list", 5*time.Second)
+	// 需求：[0.4.0-W2-001.1] 增量廣播 session_update 取代全量 session_list
+	msg := readMsgOfType(t, conn, MsgTypeSessionUpdate, 5*time.Second)
 
-	var data SessionListData
+	var data SessionUpdateData
 	if err := json.Unmarshal(msg.Data, &data); err != nil {
-		t.Fatalf("failed to unmarshal session_list data: %v", err)
+		t.Fatalf("failed to unmarshal session_update data: %v", err)
 	}
 
-	found := false
-	for _, s := range data.Sessions {
-		if s.ID == "session-A" {
-			found = true
-			if s.Status != SessionStatusActive {
-				t.Errorf("expected status active, got %v", s.Status)
-			}
-		}
+	if data.Session == nil || data.Session.ID != "session-A" {
+		t.Fatal("session-A not found in session_update")
 	}
-	if !found {
-		t.Fatal("session-A not found in session_list")
+	if data.Session.Status != SessionStatusActive {
+		t.Errorf("expected status active, got %v", data.Session.Status)
 	}
 }
 
@@ -305,21 +299,15 @@ func TestIntegration_MalformedJSONDoesNotCrashPipeline(t *testing.T) {
 	time.Sleep(200 * time.Millisecond)
 	writeJSONL(t, h, "session-B", "/project", userMessageJSON("session-B", ts))
 
-	// Should eventually receive session_list with session-B
-	msg := readMsgOfType(t, conn, "session_list", 5*time.Second)
+	// 需求：[0.4.0-W2-001.1] 增量廣播 session_update
+	msg := readMsgOfType(t, conn, MsgTypeSessionUpdate, 5*time.Second)
 
-	var data SessionListData
+	var data SessionUpdateData
 	if err := json.Unmarshal(msg.Data, &data); err != nil {
 		t.Fatalf("failed to unmarshal: %v", err)
 	}
 
-	found := false
-	for _, s := range data.Sessions {
-		if s.ID == "session-B" {
-			found = true
-		}
-	}
-	if !found {
+	if data.Session == nil || data.Session.ID != "session-B" {
 		t.Fatal("session-B not found after malformed JSON")
 	}
 }
@@ -336,7 +324,7 @@ func TestIntegration_SubscribeReceivesSessionEvent(t *testing.T) {
 	ensureProjectDir(t, h, "/project")
 	writeJSONL(t, h, "session-1", "/project", userMessageJSON("session-1", ts))
 	// Wait for session_list acknowledging session-1
-	readMsgOfType(t, conn, "session_list", 5*time.Second)
+	readMsgOfType(t, conn, MsgTypeSessionUpdate, 5*time.Second)
 
 	// Subscribe
 	sendAction(t, conn, "subscribe_session", "session-1")
@@ -372,7 +360,7 @@ func TestIntegration_GetSessionHistory(t *testing.T) {
 	writeJSONL(t, h, "session-1", "/project", userMessageJSON("session-1", ts.Add(2*time.Second)))
 
 	// Wait for events to be processed
-	readMsgOfType(t, conn, "session_list", 5*time.Second)
+	readMsgOfType(t, conn, MsgTypeSessionUpdate, 5*time.Second)
 	// Drain additional session_list broadcasts
 	time.Sleep(500 * time.Millisecond)
 
@@ -424,7 +412,7 @@ func TestIntegration_UnsubscribedClientNoSessionEvent(t *testing.T) {
 	// Create session (no subscribe)
 	ensureProjectDir(t, h, "/project")
 	writeJSONL(t, h, "session-X", "/project", userMessageJSON("session-X", ts))
-	readMsgOfType(t, conn, "session_list", 5*time.Second)
+	readMsgOfType(t, conn, MsgTypeSessionUpdate, 5*time.Second)
 
 	// Append assistant message (produces ChangeTypeUpdated, which only pushes to subscribers)
 	writeJSONL(t, h, "session-X", "/project", assistantMessageJSON("session-X", ts.Add(time.Second), "response"))
@@ -446,7 +434,7 @@ func TestIntegration_StatusChangeOnIdleTimeout(t *testing.T) {
 	// Create active session
 	ensureProjectDir(t, h, "/project")
 	writeJSONL(t, h, "session-1", "/project", userMessageJSON("session-1", ts))
-	readMsgOfType(t, conn, "session_list", 5*time.Second)
+	readMsgOfType(t, conn, MsgTypeSessionUpdate, 5*time.Second)
 
 	// Advance time past ActiveThreshold (2 minutes) to make session idle
 	h.timeProvider.advance(ActiveThreshold + time.Minute)

@@ -23,4 +23,6 @@ const (
 	LogWSMarshalFailed        = "failed to marshal server message"
 	LogWSInvalidBeforeFormat  = "invalid before timestamp format, ignoring filter"
 	LogWSSubscriptionLimitReached = "client subscription limit reached, rejecting subscribe"
+	LogWSSessionUpdateBroadcast   = "broadcasting incremental session update"
+	LogWSSendBufferBytesExceeded  = "client send buffer memory limit exceeded, dropping oldest messages"
 )

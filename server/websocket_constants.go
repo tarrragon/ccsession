@@ -16,6 +16,8 @@ const (
 	MsgTypeSessionEvent        = "session_event"
 	MsgTypeSessionStatusChange = "session_status_change"
 	MsgTypeSessionHistory      = "session_history"
+	MsgTypeSessionUpdate       = "session_update"
+	MsgTypeSessionRemove       = "session_remove"
 	MsgTypeError               = "error"
 )
 
@@ -33,6 +35,10 @@ const (
 const (
 	// ClientSendBufferSize is the buffered channel size for each client's outgoing messages.
 	ClientSendBufferSize = 256
+
+	// ClientSendBufferMaxBytes is the maximum total memory (bytes) for queued outgoing messages per client.
+	// When exceeded, the oldest messages are dropped. 1MB default.
+	ClientSendBufferMaxBytes = 1 * 1024 * 1024
 
 	// MaxMessageSize is the maximum allowed size (bytes) for incoming WebSocket messages.
 	MaxMessageSize = 4096

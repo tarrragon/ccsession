@@ -173,6 +173,7 @@ func (s *WebSocketServer) writePump(client *Client) {
 			if !ok {
 				return
 			}
+			client.sendBytes -= int64(len(msg))
 			client.conn.SetWriteDeadline(s.now().Add(WriteWaitTimeout))
 			if err := client.conn.WriteMessage(websocket.TextMessage, msg); err != nil {
 				slog.Default().Debug(LogWSWriteError, "layer", "ws_server", "error", err)
@@ -323,9 +324,23 @@ func marshalMessage(msg ServerMessage) ([]byte, error) {
 
 // enqueueUnsafe attempts a non-blocking send on client.send.
 // Caller must hold at least s.mu.RLock; it never closes the channel.
+// 需求：[0.4.0-W2-001.1] 基於記憶體大小的 send buffer 限制。
 func enqueueUnsafe(client *Client, data []byte) {
+	msgSize := int64(len(data))
+
+	// 檢查記憶體上限：若當前已排隊的 bytes + 新訊息超過上限，丟棄新訊息
+	if client.sendBytes+msgSize > ClientSendBufferMaxBytes {
+		slog.Default().Warn(LogWSSendBufferBytesExceeded,
+			"layer", "ws_server",
+			"queuedBytes", client.sendBytes,
+			"msgBytes", msgSize,
+			"limit", ClientSendBufferMaxBytes)
+		return
+	}
+
 	select {
 	case client.send <- data:
+		client.sendBytes += msgSize
 	default:
 		slog.Default().Warn(LogWSSendBufferFull, "layer", "ws_server")
 	}
@@ -338,17 +353,36 @@ func (s *WebSocketServer) sendToClient(client *Client, msg ServerMessage) {
 		return
 	}
 
+	msgSize := int64(len(data))
+
+	// 需求：[0.4.0-W2-001.1] 記憶體上限檢查
+	if client.sendBytes+msgSize > ClientSendBufferMaxBytes {
+		slog.Default().Warn(LogWSSendBufferBytesExceeded,
+			"layer", "ws_server",
+			"queuedBytes", client.sendBytes,
+			"msgBytes", msgSize,
+			"limit", ClientSendBufferMaxBytes)
+		s.disconnectClient(client)
+		return
+	}
+
 	select {
 	case client.send <- data:
+		client.sendBytes += msgSize
 	default:
 		slog.Default().Warn(LogWSSendBufferFull, "layer", "ws_server")
-		s.mu.Lock()
-		if _, ok := s.clients[client]; ok {
-			delete(s.clients, client)
-			client.closeOnce.Do(func() { close(client.send) })
-		}
-		s.mu.Unlock()
+		s.disconnectClient(client)
 	}
+}
+
+// disconnectClient removes a client from the server and closes its send channel.
+func (s *WebSocketServer) disconnectClient(client *Client) {
+	s.mu.Lock()
+	if _, ok := s.clients[client]; ok {
+		delete(s.clients, client)
+		client.closeOnce.Do(func() { close(client.send) })
+	}
+	s.mu.Unlock()
 }
 
 // processDispatchedEvent routes a DispatchedEvent to connected clients.
@@ -361,7 +395,8 @@ func (s *WebSocketServer) processDispatchedEvent(event DispatchedEvent) {
 
 	switch event.ChangeType {
 	case ChangeTypeNew:
-		s.broadcastSessionList()
+		// 需求：[0.4.0-W2-001.1] 增量廣播新 session，取代全量 session_list。
+		s.broadcastSessionUpdate(event.Session)
 		s.pushToSubscribers(event.Session.ID, ServerMessage{
 			Type: MsgTypeSessionEvent,
 			Data: buildSessionEventPayload(event),
@@ -395,14 +430,12 @@ func buildSessionEventPayload(event DispatchedEvent) any {
 	}
 }
 
-func (s *WebSocketServer) broadcastSessionList() {
-	sessions := s.querier.List()
-	if sessions == nil {
-		sessions = []*SessionInfo{}
-	}
+// broadcastSessionUpdate sends an incremental session_update to all clients.
+// 需求：[0.4.0-W2-001.1] 增量差異廣播，只推送變更的 session。
+func (s *WebSocketServer) broadcastSessionUpdate(session *SessionInfo) {
 	data, err := marshalMessage(ServerMessage{
-		Type: MsgTypeSessionList,
-		Data: SessionListData{Sessions: sessions},
+		Type: MsgTypeSessionUpdate,
+		Data: SessionUpdateData{Session: session},
 	})
 	if err != nil {
 		return

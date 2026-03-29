@@ -46,6 +46,17 @@ type SessionHistoryData struct {
 	HasMore   bool            `json:"hasMore"`
 }
 
+// SessionUpdateData is the payload for session_update messages (incremental).
+// 需求：[0.4.0-W2-001.1] 增量廣播變更的 session，取代全量 session_list。
+type SessionUpdateData struct {
+	Session *SessionInfo `json:"session"`
+}
+
+// SessionRemoveData is the payload for session_remove messages (incremental).
+type SessionRemoveData struct {
+	SessionID string `json:"sessionId"`
+}
+
 // ErrorData is the payload for error messages.
 type ErrorData struct {
 	Code string `json:"code"`
@@ -59,4 +70,7 @@ type Client struct {
 	subscriptions map[string]struct{}
 	mu            sync.RWMutex
 	closeOnce     sync.Once
+	// sendBytes tracks the approximate total bytes queued in the send channel.
+	// 需求：[0.4.0-W2-001.1] 基於記憶體大小的 send buffer 限制。
+	sendBytes int64
 }
