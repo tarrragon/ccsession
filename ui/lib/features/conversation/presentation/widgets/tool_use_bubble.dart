@@ -42,7 +42,7 @@ class ToolUseBubble extends StatelessWidget {
             Padding(
               padding: ConversationConstants.bubbleContentPadding,
               child: SelectableText(
-                formatJsonObject(toolInput),
+                formatKeyValue(toolInput),
                 style: ConversationConstants.monospaceStyle,
               ),
             ),
