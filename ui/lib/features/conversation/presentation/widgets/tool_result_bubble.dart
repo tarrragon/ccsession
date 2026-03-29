@@ -1,6 +1,7 @@
 import 'package:ccsession/core/constants/conversation_constants.dart';
 import 'package:ccsession/core/constants/search_constants.dart';
 import 'package:ccsession/core/models/session_event.dart';
+import 'package:ccsession/features/conversation/presentation/widgets/json_format_helper.dart';
 import 'package:ccsession/features/conversation/presentation/widgets/search_highlight_utils.dart';
 import 'package:flutter/material.dart';
 
@@ -40,7 +41,7 @@ class ToolResultBubble extends StatelessWidget {
           Padding(
             padding: ConversationConstants.bubbleContentPadding,
             child: buildHighlightableText(
-              text: event.content.output,
+              text: formatJsonContent(event.content.output),
               field: SearchConstants.fieldOutput,
               baseStyle: ConversationConstants.monospaceStyle,
               highlightRanges: highlightRanges,
