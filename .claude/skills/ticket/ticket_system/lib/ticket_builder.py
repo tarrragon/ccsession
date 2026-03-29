@@ -14,6 +14,7 @@ Ticket 建構模組
 使用 TypedDict 減少函式參數數量，提高程式碼可讀性。
 """
 
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, TypedDict
@@ -308,6 +309,25 @@ def _scan_child_files_max_seq(tickets_dir: Path, parent_id: str) -> int:
     return max_seq
 
 
+def _normalize_children(raw: Any) -> List[str]:
+    """將 children 欄位正規化為字串清單。
+
+    防禦性型別處理：children 可能因手動編輯變成字串（換行分隔），
+    或因序列化問題變成非預期型別。
+
+    Args:
+        raw: children 欄位的原始值（list、str 或其他型別）
+
+    Returns:
+        正規化後的子任務 ID 清單
+    """
+    if isinstance(raw, list):
+        return raw
+    if isinstance(raw, str):
+        return [c.strip() for c in raw.split("\n") if c.strip()]
+    return []
+
+
 def get_next_child_seq(parent_id: str) -> int:
     """取得下一個子任務序號。
 
@@ -341,14 +361,7 @@ def get_next_child_seq(parent_id: str) -> int:
     max_seq_from_children = 0
     parent = load_ticket(version, parent_id)
     if parent:
-        raw_children = parent.get("children", [])
-        # 防禦性型別檢查：children 可能因手動編輯變成字串
-        if isinstance(raw_children, str):
-            children_list = [c.strip() for c in raw_children.split("\n") if c.strip()]
-        elif isinstance(raw_children, list):
-            children_list = raw_children
-        else:
-            children_list = []
+        children_list = _normalize_children(parent.get("children", []))
         for child_id in children_list:
             seq = _extract_direct_child_seq(child_id, parent_id)
             if seq is not None:
@@ -360,7 +373,6 @@ def get_next_child_seq(parent_id: str) -> int:
 
     # 不一致時輸出 warning，便於追蹤 update_parent_children 失敗
     if max_seq_from_children != max_seq_from_files and max_seq_from_children > 0 and max_seq_from_files > 0:
-        import sys
         print(
             f"[WARNING] 父 Ticket {parent_id} 的 children 欄位（max_seq={max_seq_from_children}）"
             f"與檔案系統（max_seq={max_seq_from_files}）不一致",
@@ -630,17 +642,12 @@ def update_parent_children(version: str, parent_id: str, child_id: str) -> bool:
     # 防禦性型別檢查：children 可能因手動編輯變成字串
     raw_children = parent.get("children", [])
     if isinstance(raw_children, str):
-        import sys
         print(
             f"[WARNING] 父 Ticket {parent_id} 的 children 欄位為字串而非清單，"
             f"已自動修正",
             file=sys.stderr,
         )
-        children: List[str] = [c.strip() for c in raw_children.split("\n") if c.strip()]
-    elif not isinstance(raw_children, list):
-        children = []
-    else:
-        children = raw_children
+    children: List[str] = _normalize_children(raw_children)
 
     if child_id not in children:
         children.append(child_id)
