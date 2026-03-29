@@ -21,6 +21,9 @@ void _clearImageCacheSafely() {
     // binding 未初始化（純 Riverpod 單元測試環境），靜默跳過
   } on StateError catch (_) {
     // binding 狀態異常，靜默跳過
+  } on Error catch (e) {
+    // 需求：[0.4.0-W5-006] 兜底未預期錯誤，防止冒泡 crash
+    debugPrint('Unexpected error clearing image cache: $e');
   }
 }
 

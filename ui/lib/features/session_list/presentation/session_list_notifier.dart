@@ -11,8 +11,9 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 part 'session_list_notifier.g.dart';
 
-/// Sentinel 值，用於 copyWith 中區分「未傳入」和「明確傳入 null」
-const _sessionListSentinel = Object();
+/// 需求：[0.4.0-W5-007] Sentinel 改用 enum，提升型別安全
+/// 約束：copyWith 參數從 Object? 收窄為具體型別
+enum _Sentinel { value }
 
 /// 需求：Session List Sidebar 的完整 UI 狀態
 /// 約束：不可變（Equatable），包含列表和選擇狀態
@@ -32,11 +33,11 @@ class SessionListState extends Equatable {
   /// 約束：使用 sentinel 物件區分「未傳入」與「傳入 null」
   SessionListState copyWith({
     List<SessionInfo>? sessions,
-    Object? selectedSessionId = _sessionListSentinel,
+    Object? selectedSessionId = _Sentinel.value,
   }) {
     return SessionListState(
       sessions: sessions ?? this.sessions,
-      selectedSessionId: selectedSessionId == _sessionListSentinel
+      selectedSessionId: selectedSessionId == _Sentinel.value
           ? this.selectedSessionId
           : selectedSessionId as String?,
     );

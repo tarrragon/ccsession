@@ -330,11 +330,14 @@ func marshalMessage(msg ServerMessage) ([]byte, error) {
 func enqueueUnsafe(client *Client, data []byte) bool {
 	msgSize := int64(len(data))
 
+	// 需求：[0.4.0-W5-008] Load 結果存入區域變數，檢查和 log 共用同一值
+	queuedBytes := client.sendBytes.Load()
+
 	// 檢查記憶體上限：若當前已排隊的 bytes + 新訊息超過上限，丟棄新訊息
-	if client.sendBytes.Load()+msgSize > ClientSendBufferMaxBytes {
+	if queuedBytes+msgSize > ClientSendBufferMaxBytes {
 		slog.Default().Warn(LogWSSendBufferBytesExceeded,
 			"layer", "ws_server",
-			"queuedBytes", client.sendBytes.Load(),
+			"queuedBytes", queuedBytes,
 			"msgBytes", msgSize,
 			"limit", ClientSendBufferMaxBytes)
 		return false
