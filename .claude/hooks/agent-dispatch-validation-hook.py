@@ -56,6 +56,8 @@ def main() -> int:
     if tool_name != "Agent":
         return 0
 
+    # Claude Code PreToolUse hook 的 tool_input 可能以 JSON 字串或 dict 傳入，
+    # 取決於 Claude Code 版本。雙型別處理確保兩種情況都能正確解析。
     raw_input = input_data.get("tool_input") or "{}"
     if isinstance(raw_input, str):
         try:
