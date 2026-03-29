@@ -403,10 +403,13 @@ func (r *SessionRegistry) GetHistory(sessionID string, limit int, before time.Ti
 		}
 	}
 
-	// Sort by timestamp ascending
-	sort.Slice(filtered, func(i, j int) bool {
-		return filtered[i].Timestamp.Before(filtered[j].Timestamp)
-	})
+	// 非分頁路徑資料已按時間順序 append，無需排序。
+	// 分頁路徑（before 篩選）保留原始順序，同樣已有序。
+	if !before.IsZero() {
+		sort.Slice(filtered, func(i, j int) bool {
+			return filtered[i].Timestamp.Before(filtered[j].Timestamp)
+		})
+	}
 
 	hasMore := len(filtered) > limit
 	if len(filtered) > limit {
