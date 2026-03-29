@@ -1,3 +1,112 @@
+## [1.4.9] - 2026-03-29
+
+### Summary
+fix: 重新啟用 44 個 skip 測試（191→147）; fix: 重構 parseBookElement 採用容錯策略（必要/可選欄位分離）; fix: 移除 overview-page-controller 雙環境偵測，統一使用 CJS require (+4 more)
+
+Changes: 3 fix, 2 docs, 2 chore
+
+- fix: 重新啟用 44 個 skip 測試（191→147）
+- fix: 重構 parseBookElement 採用容錯策略（必要/可選欄位分離）
+- fix: 移除 overview-page-controller 雙環境偵測，統一使用 CJS require
+- docs: 建立資料流架構與已知陷阱參考文件，擴展 docs/ 白名單
+- docs: 記錄 ARCH-010 模組組裝遺漏模式，建立 W4 文件和整合測試 Ticket
+- chore: sync-pull + 還原本地特化（hooks 白名單/block 行為、ARCH-010）
+- chore: 遷移 skip 測試任務到
+
+---
+
+## [1.4.8] - 2026-03-28
+
+### Summary
+docs: 規則系統架構優化 — observability 歸類 + hook-governance 合併
+
+Changes: 1 docs
+
+- docs: 規則系統架構優化 — observability 歸類 + hook-governance 合併
+
+---
+
+## [1.4.7] - 2026-03-28
+
+### Summary
+fix: 多視角審查 P1/P2 修復 7 項; docs: 新增可觀測性設計規則和品質基線要求; docs: 補充 PM 規則 7 個決策空白覆蓋方案
+
+Changes: 1 fix, 2 docs
+
+- fix: 多視角審查 P1/P2 修復 7 項
+- docs: 新增可觀測性設計規則和品質基線要求
+- docs: 補充 PM 規則 7 個決策空白覆蓋方案
+
+---
+
+## [1.4.6] - 2026-03-28
+
+### Summary
+docs: 新增 PC-030 錯誤模式 — Phase 4 未使用程式碼需全專案 grep 驗證; chore: 完成 小型技術債批量清理 (/006/007)
+
+Changes: 1 docs, 1 chore
+
+- docs: 新增 PC-030 錯誤模式 — Phase 4 未使用程式碼需全專案 grep 驗證
+- chore: 完成 小型技術債批量清理 (/006/007)
+
+---
+
+## [1.4.5] - 2026-03-27
+
+### Summary
+docs: 記錄 PC-032 跳過版本發布流程 + PC-033 工作日誌過時阻塞發布
+
+Changes: 1 docs
+
+- docs: 記錄 PC-032 跳過版本發布流程 + PC-033 工作日誌過時阻塞發布
+
+---
+
+## [1.4.4] - 2026-03-27
+
+### Summary
+fix: 遷移 Manager Skill 到 rules/core/pm-role.md（自動載入）
+
+Changes: 1 fix
+
+- fix: 遷移 Manager Skill 到 rules/core/pm-role.md（自動載入）
+
+---
+
+## [1.4.3] - 2026-03-27
+
+### Summary
+fix: 遷移 CQ-001~006 到 .claude/error-patterns/ 並刪除 docs/error-patterns/ 舊目錄; fix: 代理人定義 slash command 引用改為 Read SKILL.md; fix: Manager Skill 精簡為角色行為準則 + PM 規則路由表 (+3 more)
+
+Changes: 4 fix, 2 docs
+
+- fix: 遷移 CQ-001~006 到 .claude/error-patterns/ 並刪除 docs/error-patterns/ 舊目錄
+- fix: 代理人定義 slash command 引用改為 Read SKILL.md
+- fix: Manager Skill 精簡為角色行為準則 + PM 規則路由表
+- fix: worktree merge 子命令 — behind>0 時阻擋合併並列出 main 新 commit，通過時自動執行 git merge
+- docs: 新增 PC-030/PC-031 錯誤模式 + 修正 Ticket
+- docs: W7 tickets、IMP-045 錯誤學習、FileWatcher 技術選型、CLAUDE.md 重啟觀測流程
+
+---
+
+## [1.4.2] - 2026-03-27
+
+### Summary
+fix: pyproject_scanner 排除無 CLI entrypoint 的套件
+
+Changes: 1 fix
+
+- fix: pyproject_scanner 排除無 CLI entrypoint 的套件
+
+---
+
+## [1.4.1] - 2026-03-27
+
+### Summary
+新增 IMP-043/044 錯誤模式和 zellij skill
+
+---
+
 ## [1.4.0] - 2026-03-27
 
 ### Summary
