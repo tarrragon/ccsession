@@ -18,6 +18,8 @@ commit 訊息生成:
   - 自動建議版本遞增幅度（patch/minor/major）
 """
 
+import hashlib
+import json
 import os
 import re
 import shutil
@@ -38,9 +40,35 @@ EXCLUDE_PATTERNS = {
     "pm-status.json",
     "__pycache__",
     ".pytest_cache",
+    "sync-preserve.yaml",
+    ".sync-state.json",
+    # 敏感檔案：避免意外推送憑證和環境變數
+    ".env",
+    ".env.local",
+    ".env.production",
+    "credentials.json",
+    "secrets.yaml",
+    "secrets.json",
+    ".secrets",
+    ".venv",
+    # 目錄層級排除（與 .secrets 對齊）
+    "secrets",
+    "private",
+    ".keys",
 }
 
-EXCLUDE_SUFFIXES = {".pyc"}
+EXCLUDE_SUFFIXES = {".pyc", ".pem", ".key", ".p12", ".pfx", ".jks"}
+
+# 檔案名稱前綴匹配（涵蓋 .env.staging, secrets_prod.json 等變體）
+EXCLUDE_NAME_PREFIXES = {
+    ".env.",    # .env.staging, .env.test, .env.development 等
+    "secret",   # secrets.json, secret_key.txt 等
+}
+
+# 預計算小寫版本，避免每次呼叫 should_exclude 重複計算
+_EXCLUDE_PATTERNS_LOWER = {p.lower() for p in EXCLUDE_PATTERNS}
+_EXCLUDE_SUFFIXES_LOWER = {s.lower() for s in EXCLUDE_SUFFIXES}
+_EXCLUDE_NAME_PREFIXES_LOWER = {p.lower() for p in EXCLUDE_NAME_PREFIXES}
 
 # commit 訊息中需要過濾的專案特定模式
 # 獨立 repo 是跨專案通用框架，commit 訊息禁止包含專案版本號/Wave/Ticket 編號
@@ -101,12 +129,15 @@ def find_project_root() -> Path:
 
 
 def should_exclude(path: Path) -> bool:
-    """Check if a path should be excluded from sync."""
-    if path.name in EXCLUDE_PATTERNS:
+    """Check if a path should be excluded from sync（大小寫不敏感）。"""
+    name_lower = path.name.lower()
+    if name_lower in _EXCLUDE_PATTERNS_LOWER:
         return True
-    if path.suffix in EXCLUDE_SUFFIXES:
+    if path.suffix.lower() in _EXCLUDE_SUFFIXES_LOWER:
         return True
-    return any(part in EXCLUDE_PATTERNS for part in path.parts)
+    if any(name_lower.startswith(prefix) for prefix in _EXCLUDE_NAME_PREFIXES_LOWER):
+        return True
+    return any(part.lower() in _EXCLUDE_PATTERNS_LOWER for part in path.parts)
 
 
 def copy_filtered(src: Path, dst: Path) -> int:
@@ -269,6 +300,18 @@ def generate_commit_summary(categories: dict[str, list[str]], bump_suggestion: s
     return f"{summary_line}\n\n" + "\n".join(body_parts)
 
 
+def extract_version_string(content: str) -> str:
+    """從可能包含多行或註解的 VERSION 檔案內容中提取版本號。
+
+    跳過空行和 # 開頭的註解行，取第一行有效內容並移除 v 前綴。
+    """
+    for line in content.split("\n"):
+        line = line.strip()
+        if line and not line.startswith("#"):
+            return line.lstrip("v")
+    return ""
+
+
 def bump_version(version: str, bump_level: str) -> str:
     """Increment version based on bump level (major/minor/patch)."""
     match = re.match(r"(\d+)\.(\d+)\.(\d+)", version)
@@ -306,7 +349,77 @@ def update_changelog(repo_dir: Path, new_version: str, commit_message: str, old_
     changelog_path.write_text(updated, encoding="utf-8")
 
 
+def _compute_content_hash(claude_dir: Path) -> str:
+    """計算 .claude/ 目錄的內容指紋（前 16 字元）。
+
+    每個檔案產生 "相對路徑:sha256(內容)" 字串，
+    所有字串排序後合併取總 sha256 前 16 字元。
+    """
+    file_hashes: list[str] = []
+    for file_path in sorted(claude_dir.rglob("*")):
+        if not file_path.is_file() or file_path.is_symlink():
+            continue
+        rel = file_path.relative_to(claude_dir)
+        if should_exclude(rel):
+            continue
+        content_hash = hashlib.sha256(file_path.read_bytes()).hexdigest()
+        rel_posix = rel.as_posix()  # 統一使用正斜線，確保跨平台一致
+        file_hashes.append(f"{rel_posix}:{content_hash}")
+
+    combined = "\n".join(file_hashes)
+    return hashlib.sha256(combined.encode("utf-8")).hexdigest()[:16]
+
+
+def clean_stale_files(temp_dir: Path, claude_dir: Path) -> int:
+    """刪除 clone 目錄中存在但本地 .claude/ 沒有的過時檔案。
+
+    排除 .git 目錄、CHANGELOG.md、VERSION 等遠端獨有檔案。
+    回傳已刪除的檔案數量。
+    """
+    CLEAN_EXCLUDE = {".git", "CHANGELOG.md", "VERSION", "README.md", "LICENSE", ".gitignore"}
+    deleted_count = 0
+
+    for file_path in sorted(temp_dir.rglob("*")):
+        if not file_path.is_file():
+            continue
+        rel = file_path.relative_to(temp_dir)
+        # 排除 .git 目錄下的檔案和遠端獨有檔案
+        if any(part in CLEAN_EXCLUDE for part in rel.parts):
+            continue
+        if rel.name in CLEAN_EXCLUDE:
+            continue
+        # 檢查本地 .claude/ 是否有對應檔案
+        local_counterpart = claude_dir / rel
+        if not local_counterpart.exists():
+            print(f"   刪除過時檔案: {rel}")
+            file_path.unlink()
+            deleted_count += 1
+
+    # 清理空目錄（反向排序以支援巢狀目錄）
+    for dir_path in sorted(
+        temp_dir.rglob("*"),
+        key=lambda p: len(p.parts),
+        reverse=True,
+    ):
+        if not dir_path.is_dir():
+            continue
+        if any(part in CLEAN_EXCLUDE for part in dir_path.relative_to(temp_dir).parts):
+            continue
+        try:
+            if not any(dir_path.iterdir()):
+                dir_path.rmdir()
+                deleted_count += 1
+        except OSError:
+            pass
+
+    return deleted_count
+
+
 def main() -> None:
+    # 解析 --clean 參數：啟用時清理遠端過時檔案
+    clean_mode = "--clean" in sys.argv
+    if clean_mode:
+        sys.argv.remove("--clean")
     # commit message is now optional - auto-generated when not provided
     user_message = sys.argv[1] if len(sys.argv) >= 2 else None
 
@@ -334,7 +447,7 @@ def main() -> None:
         print_color("讀取遠端版本號...")
         version_file = temp_dir / "VERSION"
         if version_file.exists():
-            remote_version = version_file.read_text(encoding="utf-8").strip()
+            remote_version = extract_version_string(version_file.read_text(encoding="utf-8"))
             print_color(f"   遠端版本: v{remote_version}", "green")
         else:
             remote_version = "1.0.0"
@@ -368,21 +481,20 @@ def main() -> None:
         changelog_path = temp_dir / "CHANGELOG.md"
         saved_changelog = changelog_path.read_text(encoding="utf-8") if changelog_path.exists() else ""
 
-        # 6. Clean existing content (preserve .git)
-        print_color("清空舊內容...")
-        for item in temp_dir.iterdir():
-            if item.name == ".git":
-                continue
-            if item.is_dir():
-                shutil.rmtree(item)
-            else:
-                item.unlink()
+        # 6. Merge 模式：不清空遠端內容，直接增量覆蓋
+        # 保留遠端獨有的檔案（其他專案推送的內容）
 
-        # 7. Copy .claude/ content with exclusions
+        # 7. Copy .claude/ content with exclusions（覆蓋本地有修改的檔案）
         print_color("複製 .claude 配置檔案...")
         file_count = copy_filtered(claude_dir, temp_dir)
         print_color(f"   已複製 {file_count} 個檔案", "green")
         print_color("   注意: CLAUDE.md 不再同步（專案特定配置）")
+
+        # 7.5. 清理遠端過時檔案（僅 --clean 模式）
+        if clean_mode:
+            print_color("清理遠端過時檔案...")
+            deleted = clean_stale_files(temp_dir, claude_dir)
+            print_color(f"   已清理 {deleted} 個遠端過時檔案", "green")
 
         # 8. Calculate new version (use bump suggestion for auto-generated messages)
         new_version = bump_version(remote_version, bump_suggestion)
@@ -407,8 +519,58 @@ def main() -> None:
 
         run_git(["commit", "-m", commit_msg], cwd=str(temp_dir))
 
+        # 推送前版本衝突檢測：確認遠端版本未被其他人變更
+        print_color("檢查遠端版本是否變更...")
+        fetch_result = run_git(["fetch", "origin"], cwd=str(temp_dir), check=False)
+        if fetch_result.returncode != 0:
+            print_color("警告: fetch 失敗，跳過版本衝突檢測（網路問題？）", "yellow")
+        else:
+            current_remote_result = run_git(
+                ["show", "origin/main:VERSION"], cwd=str(temp_dir), check=False
+            )
+            if current_remote_result.returncode == 0:
+                current_remote = extract_version_string(current_remote_result.stdout)
+                if current_remote != remote_version:
+                    print_color(
+                        f"遠端版本已變更（{remote_version} → {current_remote}），請先 pull 再 push",
+                        "red",
+                    )
+                    sys.exit(1)
+            else:
+                print_color(
+                    f"   警告: 無法讀取遠端 VERSION（{current_remote_result.stderr.strip()}），跳過版本衝突檢測",
+                    "yellow",
+                )
+
         print_color("推送到獨立 repo...")
-        run_git(["push", "origin", "main"], cwd=str(temp_dir))
+        push_result = run_git(
+            ["push", "--force-with-lease", "origin", "main"],
+            cwd=str(temp_dir),
+            check=False,
+        )
+        if push_result.returncode != 0:
+            if "stale info" in push_result.stderr or "rejected" in push_result.stderr:
+                print_color(
+                    "推送被拒絕：遠端已有更新的變更。請先執行 sync-pull 再重試。",
+                    "red",
+                )
+            else:
+                print_color(f"推送失敗: {push_result.stderr}", "red")
+            sys.exit(1)
+
+        # 計算內容指紋並寫入 .sync-state.json
+        content_hash = _compute_content_hash(claude_dir)
+        sync_state = {
+            "last_push_hash": content_hash,
+            "last_push_version": new_version,
+            "last_push_time": datetime.now().isoformat(timespec="seconds"),
+        }
+        sync_state_path = claude_dir / ".sync-state.json"
+        sync_state_path.write_text(
+            json.dumps(sync_state, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        print_color(f"已更新同步狀態 (hash: {content_hash})", "green")
 
         print_color("成功推送 .claude 到獨立 repo！", "green")
         print_color(f"Remote: {REPO_URL}", "green")

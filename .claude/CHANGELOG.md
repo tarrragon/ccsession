@@ -1,3 +1,140 @@
+## [1.9.2] - 2026-03-29
+
+### Summary
+sync .claude configuration
+
+---
+
+## [1.9.1] - 2026-03-29
+
+### Summary
+fix: W4 審查修復 — symlink 防護 + clean 排除補充 + 空目錄清理
+
+Changes: 1 fix
+
+- fix: W4 審查修復 — symlink 防護 + clean 排除補充 + 空目錄清理
+
+---
+
+## [1.9.0] - 2026-03-29
+
+### Summary
+feat: sync W4 完整改善 — 6 個審查技術債全部清零
+
+Changes: 1 feat
+
+- feat: sync W4 完整改善 — 6 個審查技術債全部清零
+
+---
+
+## [1.8.1] - 2026-03-29
+
+### Summary
+fix: sync 審查最終修復 — 路徑格式/大小寫/hash 長度/.gitignore; chore: 完成 + sync-state hash 基線建立
+
+Changes: 1 fix, 1 chore
+
+- fix: sync 審查最終修復 — 路徑格式/大小寫/hash 長度/.gitignore
+- chore: 完成 + sync-state hash 基線建立
+
+---
+
+## [1.8.0] - 2026-03-29
+
+### Summary
+feat: 新增 sync-claude-status 版本+內容 hash 快速比對工具
+
+Changes: 1 feat
+
+- feat: 新增 sync-claude-status 版本+內容 hash 快速比對工具
+
+---
+
+## [1.7.1] - 2026-03-29
+
+### Summary
+sync .claude configuration
+
+---
+
+## [1.7.0] - 2026-03-29
+
+### Summary
+refactor: sync-push VERSION 魯棒性 + 模式匹配改善
+
+Changes: 1 refactor
+
+- refactor: sync-push VERSION 魯棒性 + 模式匹配改善
+
+---
+
+## [1.6.1] - 2026-03-29
+
+### Summary
+fix: W3 審查修復 — filecmp 例外保護 + .env.* 通配符 + 密鑰格式補充
+
+Changes: 1 fix
+
+- fix: W3 審查修復 — filecmp 例外保護 + .env.* 通配符 + 密鑰格式補充
+
+---
+
+## [1.6.0] - 2026-03-29
+
+### Summary
+feat: sync 腳本 W3 改善 — 版本衝突檢測 + preserve 更新提示 + 敏感檔案保護
+
+Changes: 1 feat
+
+- feat: sync 腳本 W3 改善 — 版本衝突檢測 + preserve 更新提示 + 敏感檔案保護
+
+---
+
+## [1.5.1] - 2026-03-29
+
+### Summary
+sync .claude configuration
+
+---
+
+## [1.5.0] - 2026-03-29
+
+### Summary
+feat: sync 腳本改為 merge 機制，新增 sync-preserve.yaml; fix: sync-pull 審查修復 — P0 preserve 保護 + P1 解析/路徑修正
+
+Changes: 1 feat, 1 fix
+
+- feat: sync 腳本改為 merge 機制，新增 sync-preserve.yaml
+- fix: sync-pull 審查修復 — P0 preserve 保護 + P1 解析/路徑修正
+
+---
+
+## [1.4.11] - 2026-03-29
+
+### Summary
+chore: sync-pull + 還原本地特化
+
+Changes: 1 chore
+
+- chore: sync-pull + 還原本地特化
+
+---
+
+## [1.4.10] - 2026-03-29
+
+### Summary
+docs: 決策樹新增效能問題發現後代理人更新規則; docs: 代理人新增效能與資源管理章節 (parsley + fennel); docs: parsley agent 新增 Widget 重建效能意識章節 (+2 more)
+
+Changes: 4 docs, 1 chore
+
+- docs: 決策樹新增效能問題發現後代理人更新規則
+- docs: 代理人新增效能與資源管理章節 (parsley + fennel)
+- docs: parsley agent 新增 Widget 重建效能意識章節
+- docs: Phase 1 加入 ARCH-010 框架內建機制驗證步驟
+- chore: sync-pull .claude 框架 1.4.0 → 1.4.9 + 還原本地新增檔案
+
+---
+
 ## [1.4.9] - 2026-03-29
 
 ### Summary

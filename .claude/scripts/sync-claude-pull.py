@@ -15,12 +15,18 @@
   - .claude/handoff/（本地交接檔案）
 """
 
+import filecmp
 import os
 import shutil
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
+
+try:
+    import yaml
+except ImportError:
+    yaml = None
 
 # ============================================================================
 # Constants
@@ -36,6 +42,9 @@ GIT_HTTP_LOW_SPEED_TIME_SECONDS = "30"
 # Changed files display limit
 MAX_CHANGED_FILES_DISPLAY = 3
 
+# 大檔案比對閾值（超過此大小只比 size，不做全量內容比對）
+_LARGE_FILE_THRESHOLD = 1_048_576  # 1MB
+
 # 遠端 repo 專有：存在於遠端但不需複製到本地
 REMOTE_ONLY = frozenset({".git", "project-templates"})
 
@@ -49,10 +58,58 @@ LOCAL_ONLY = frozenset({
     "__pycache__",
     ".pytest_cache",
     ".venv",
+    "sync-preserve.yaml",  # 各專案的 preserve 清單不同，不可被遠端覆蓋
+    ".sync-state.json",    # 本地同步狀態，不可被遠端覆蓋
 })
 
 # 同步時跳過的所有路徑（合併使用）
 SKIP_DURING_SYNC = REMOTE_ONLY | LOCAL_ONLY
+
+
+def load_preserve_list(claude_dir: Path) -> set[str]:
+    """讀取 sync-preserve.yaml 中的本地特化檔案清單。
+
+    若檔案不存在或無法解析，回傳空集合（向下相容）。
+
+    參數:
+        claude_dir: .claude 目錄路徑
+
+    傳回:
+        set[str]: 需要保留的相對路徑集合（相對於 .claude/）
+    """
+    preserve_file = claude_dir / "sync-preserve.yaml"
+    if not preserve_file.exists():
+        return set()
+
+    content = preserve_file.read_text(encoding="utf-8")
+
+    # 嘗試使用 PyYAML，若未安裝則用簡易解析
+    if yaml is not None:
+        try:
+            data = yaml.safe_load(content)
+            if isinstance(data, dict) and isinstance(data.get("preserve"), list):
+                return set(data["preserve"])
+        except Exception:
+            pass
+        return set()
+
+    # 簡易 fallback 解析：讀取 "- path" 格式的行
+    paths: set[str] = set()
+    in_preserve = False
+    for line in content.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("#") or not stripped:
+            continue
+        if stripped == "preserve:":
+            in_preserve = True
+            continue
+        if in_preserve and stripped.startswith("- "):
+            paths.add(stripped[2:].strip())
+        elif stripped and not stripped.startswith("#"):
+            # 只有非空、非註解的行才關閉 preserve 區塊
+            in_preserve = False
+        # 空行和註解行不影響 in_preserve 狀態
+    return paths
 
 
 def print_color(msg: str, color: str = "yellow") -> None:
@@ -176,15 +233,40 @@ def clone_repo(temp_dir: Path) -> None:
         sys.exit(1)
 
 
-def sync_directory(src: Path, dst: Path) -> int:
+def _files_differ(src: Path, dst: Path) -> bool:
+    """比對兩個檔案是否不同。大檔案用 size 快速判斷，小檔案做完整內容比對。"""
+    # 拒絕比對符號連結，視為不同以確保安全
+    if src.is_symlink() or dst.is_symlink():
+        return True
+    src_stat = src.stat()
+    dst_stat = dst.stat()
+    # 大小不同一定不同
+    if src_stat.st_size != dst_stat.st_size:
+        return True
+    # 大檔案：大小相同就視為相同（避免全量比對）
+    if src_stat.st_size > _LARGE_FILE_THRESHOLD:
+        return False
+    # 小檔案：完整內容比對
+    return not filecmp.cmp(str(src), str(dst), shallow=False)
+
+
+def sync_directory(
+    src: Path,
+    dst: Path,
+    preserve: set[str] | None = None,
+    prefix: Path = Path(),
+) -> int:
     """增量同步來源目錄到目標目錄。
 
     遞迴地同步檔案和目錄，跳過排除清單中的項目和符號連結。
     對於已存在的目錄進行增量同步，對於新目錄則整體複製。
+    在 preserve 清單中的檔案不會被覆蓋。
 
     參數:
         src: 來源目錄路徑
         dst: 目標目錄路徑
+        preserve: 需要保留的本地特化檔案相對路徑集合
+        prefix: 目前遞迴的相對路徑前綴
 
     傳回:
         int: 更新或複製的檔案總數
@@ -192,8 +274,11 @@ def sync_directory(src: Path, dst: Path) -> int:
     說明:
         - 跳過 SKIP_DURING_SYNC 清單中的目錄和檔案
         - 跳過所有符號連結
+        - 跳過 preserve 清單中的本地特化檔案
         - 保留檔案的修改時間戳（使用 shutil.copy2）
     """
+    if preserve is None:
+        preserve = set()
     count = 0
     for item in src.iterdir():
         if item.name in SKIP_DURING_SYNC:
@@ -201,15 +286,29 @@ def sync_directory(src: Path, dst: Path) -> int:
         if item.is_symlink():
             continue
 
+        rel = prefix / item.name
         dest_item = dst / item.name
         if item.is_dir():
             if dest_item.exists():
-                count += sync_directory(item, dest_item)
+                count += sync_directory(item, dest_item, preserve, rel)
             else:
                 shutil.copytree(item, dest_item, symlinks=False,
                                 ignore=shutil.ignore_patterns(*SKIP_DURING_SYNC))
                 count += sum(1 for f in dest_item.rglob("*") if f.is_file())
         else:
+            rel_str = str(rel).replace("\\", "/")
+            if rel_str in preserve:
+                if not dest_item.exists():
+                    print_color(f"   本地特化檔案不存在（可能已刪除）: {rel_str}", "yellow")
+                else:
+                    try:
+                        if _files_differ(item, dest_item):
+                            print_color(f"   本地特化檔案有遠端更新可用: {rel_str}", "yellow")
+                        else:
+                            print_color(f"   保留本地特化檔案: {rel_str}", "green")
+                    except (FileNotFoundError, OSError):
+                        print_color(f"   警告: 無法比對檔案 {rel_str}", "yellow")
+                continue
             dest_item.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(item, dest_item)
             count += 1
@@ -243,17 +342,27 @@ def collect_remote_files(src: Path, prefix: Path = Path()) -> set[Path]:
     return files
 
 
-def cleanup_stale_files(claude_dir: Path, remote_files: set[Path]) -> list[str]:
-    """Remove local files that no longer exist in the remote repo.
+def cleanup_stale_files(
+    claude_dir: Path,
+    remote_files: set[Path],
+    preserve: set[str] | None = None,
+) -> list[str]:
+    """移除本地有但遠端 repo 中不存在的過時檔案。
 
-    Returns a list of removed file paths (relative to claude_dir).
+    在 preserve 清單中的檔案不會被刪除。
+
+    傳回:
+        list[str]: 已移除的檔案路徑清單（相對於 claude_dir）
     """
+    if preserve is None:
+        preserve = set()
     removed: list[str] = []
 
     def _walk(directory: Path, prefix: Path = Path()) -> None:
         """遞迴走訪目錄，移除不存在於遠端 repo 中的過時檔案。
 
-        跳過排除清單中的項目和符號連結。對於空目錄在清理後自動刪除。
+        跳過排除清單中的項目、符號連結和 preserve 清單中的檔案。
+        對於空目錄在清理後自動刪除。
 
         參數:
             directory: 目前走訪的目錄路徑
@@ -274,6 +383,10 @@ def cleanup_stale_files(claude_dir: Path, remote_files: set[Path]) -> list[str]:
                     item.rmdir()
                     removed.append(f"{rel}/ (empty dir)")
             elif rel not in remote_files:
+                rel_str = str(rel).replace("\\", "/")
+                if rel_str in preserve:
+                    print_color(f"   保留本地特化檔案: {rel_str}", "green")
+                    continue
                 item.unlink()
                 removed.append(str(rel))
 
@@ -357,14 +470,23 @@ def _sync_with_backup(project_root: Path, temp_dir: Path) -> Path:
     if flutter_md.exists():
         shutil.copy2(flutter_md, backup_dir / "FLUTTER.md")
 
+    # 載入本地特化檔案清單
+    preserve = load_preserve_list(claude_dir)
+    if preserve:
+        print_color(f"   載入 {len(preserve)} 個本地特化檔案路徑", "green")
+        for rel_path in sorted(preserve):
+            full_path = claude_dir / rel_path
+            if not full_path.exists():
+                print_color(f"   警告: preserve 清單中的檔案不存在: {rel_path}", "yellow")
+
     # 同步 .claude 目錄
     print_color("更新 .claude 資料夾...")
     remote_files = collect_remote_files(temp_dir)
-    file_count = sync_directory(temp_dir, claude_dir)
+    file_count = sync_directory(temp_dir, claude_dir, preserve)
     print_color(f"   已更新 {file_count} 個檔案", "green")
 
     # 清理過時檔案
-    removed = cleanup_stale_files(claude_dir, remote_files)
+    removed = cleanup_stale_files(claude_dir, remote_files, preserve)
     if removed:
         print_color(f"   已清理 {len(removed)} 個過時檔案:", "green")
         for r in removed:
