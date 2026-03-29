@@ -153,6 +153,14 @@ void main() {
       expect(result, isNotEmpty);
     });
 
+    test('unescapes \\n in truncated JSON fallback path', () {
+      // 模擬 Go 端截斷導致的不完整 JSON，含字面 \n
+      const truncatedJson = '{"prompt":"## Instructions\\n\\nDo this and';
+      final result = formatJsonObject(truncatedJson);
+
+      expect(result, contains('## Instructions\n\nDo this and'));
+    });
+
     test('unescapes \\n in Map string values to actual newlines', () {
       final input = <String, dynamic>{
         'prompt': '## Title\n\nContent with\nnewlines',
@@ -227,6 +235,26 @@ void main() {
         final result = formatKeyValue(input);
 
         expect(result, contains('items: [1,2,3]'));
+      });
+
+      test('A8: 巢狀 Map 值含換行 — compact JSON 經 unescape 顯示', () {
+        final input = <String, dynamic>{
+          'meta': <String, dynamic>{'desc': 'line1\nline2'},
+        };
+        final result = formatKeyValue(input);
+
+        // json.encode 產生 \\n，unescapeForDisplay 還原為實際換行
+        expect(result, contains('meta: {"desc":"line1\nline2"}'));
+      });
+
+      test('A9: 長文 prompt 值含 \\n — 換行正確渲染', () {
+        final input = <String, dynamic>{
+          'prompt': '## Title\\n\\nParagraph one.\\n\\nParagraph two.',
+        };
+        final result = formatKeyValue(input);
+
+        expect(result, contains('prompt: ## Title\n\nParagraph one.'));
+        expect(result, contains('Paragraph two.'));
       });
 
       test('A7: String 型別輸入（JSON 字串）— 解碼為 Map 後格式化', () {

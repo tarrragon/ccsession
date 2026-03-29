@@ -23,9 +23,9 @@ String formatJsonObject(Object? value) {
     final prettyJson = const JsonEncoder.withIndent('  ').convert(object);
     return unescapeForDisplay(prettyJson);
   } on FormatException {
-    return value.toString();
+    return unescapeForDisplay(value.toString());
   } on JsonUnsupportedObjectError {
-    return value.toString();
+    return unescapeForDisplay(value.toString());
   }
 }
 
@@ -81,7 +81,7 @@ String _formatMapEntries(Map<dynamic, dynamic> map) {
 String _formatSingleEntry(dynamic key, dynamic val) {
   if (val == null) return '$key: (empty)';
   if (val is Map || val is List) {
-    return '$key: ${json.encode(val)}';
+    return '$key: ${unescapeForDisplay(json.encode(val))}';
   }
   final display = unescapeForDisplay(val.toString());
   if (display.isEmpty) return '$key:';
