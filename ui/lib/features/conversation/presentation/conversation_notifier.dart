@@ -17,8 +17,10 @@ part 'conversation_notifier.g.dart';
 void _clearImageCacheSafely() {
   try {
     PaintingBinding.instance.imageCache.clear();
-  } on Object catch (_) {
+  } on FlutterError catch (_) {
     // binding 未初始化（純 Riverpod 單元測試環境），靜默跳過
+  } on StateError catch (_) {
+    // binding 狀態異常，靜默跳過
   }
 }
 
@@ -196,7 +198,10 @@ class ConversationNotifier extends _$ConversationNotifier {
     state = AsyncData(current.copyWith(isLoadingHistory: true));
 
     final before = current.events.first.timestamp?.toIso8601String();
-    if (before == null) return;
+    if (before == null) {
+      state = AsyncData(current.copyWith(isLoadingHistory: false));
+      return;
+    }
     ref.read(webSocketServiceProvider).requestSessionHistory(
           current.sessionId!,
           before: before,
