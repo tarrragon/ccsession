@@ -337,18 +337,35 @@ def get_next_child_seq(parent_id: str) -> int:
     if version is None:
         return 1
 
-    # 來源 1：父 Ticket 的 children 欄位
+    # 來源 1：父 Ticket 的 children 欄位（single source of truth）
     max_seq_from_children = 0
     parent = load_ticket(version, parent_id)
     if parent:
-        for child_id in parent.get("children", []):
+        raw_children = parent.get("children", [])
+        # 防禦性型別檢查：children 可能因手動編輯變成字串
+        if isinstance(raw_children, str):
+            children_list = [c.strip() for c in raw_children.split("\n") if c.strip()]
+        elif isinstance(raw_children, list):
+            children_list = raw_children
+        else:
+            children_list = []
+        for child_id in children_list:
             seq = _extract_direct_child_seq(child_id, parent_id)
             if seq is not None:
                 max_seq_from_children = max(max_seq_from_children, seq)
 
-    # 來源 2：檔案系統中的子 Ticket 檔案
+    # 來源 2：檔案系統掃描（fallback 安全機制，防止覆蓋已存在的子 Ticket）
     tickets_dir = get_tickets_dir(version)
     max_seq_from_files = _scan_child_files_max_seq(tickets_dir, parent_id)
+
+    # 不一致時輸出 warning，便於追蹤 update_parent_children 失敗
+    if max_seq_from_children != max_seq_from_files and max_seq_from_children > 0 and max_seq_from_files > 0:
+        import sys
+        print(
+            f"[WARNING] 父 Ticket {parent_id} 的 children 欄位（max_seq={max_seq_from_children}）"
+            f"與檔案系統（max_seq={max_seq_from_files}）不一致",
+            file=sys.stderr,
+        )
 
     # 取兩者最大值，確保不覆蓋
     max_seq = max(max_seq_from_children, max_seq_from_files)
@@ -568,8 +585,11 @@ def create_ticket_body(what: str, who: str) -> str:
 def update_parent_children(version: str, parent_id: str, child_id: str) -> bool:
     """更新父 Ticket 的 children 欄位。
 
+    version 參數為向後相容保留，實際使用從 parent_id 提取的版本號。
+    這確保跨版本建立子 Ticket 時不會因版本不符而找不到父 Ticket。
+
     Args:
-        version: 版本號（如 "0.31.0"）
+        version: 版本號（向後相容保留，實際不使用）
         parent_id: 父 Ticket ID（如 "0.31.0-W5-001"）
         child_id: 子 Ticket ID（如 "0.31.0-W5-001.1"）
 
@@ -577,13 +597,14 @@ def update_parent_children(version: str, parent_id: str, child_id: str) -> bool:
         bool: 成功更新返回 True，失敗返回 False
 
     Implementation:
-        1. 載入 parent Ticket（使用 load_ticket）
-        2. 若 parent 不存在，返回 False
-        3. 取得 children 欄位（預設為空清單）
-        4. 若 child_id 不在 children 中，加入
-        5. 更新 parent["children"]
-        6. 儲存 parent Ticket（使用 save_ticket）
-        7. 返回 True
+        1. 從 parent_id 提取版本號（不依賴 version 參數）
+        2. 載入 parent Ticket（使用 load_ticket）
+        3. 若 parent 不存在，返回 False
+        4. 取得 children 欄位，確保為 list 型別
+        5. 若 child_id 不在 children 中，加入
+        6. 更新 parent["children"]
+        7. 儲存 parent Ticket（使用 save_ticket）
+        8. 返回 True
 
     Examples:
         >>> update_parent_children("0.31.0", "0.31.0-W5-001", "0.31.0-W5-001.1")
@@ -596,16 +617,36 @@ def update_parent_children(version: str, parent_id: str, child_id: str) -> bool:
         - 修改父 Ticket 檔案
         - 更新 parent["children"] 清單
     """
-    parent: Optional[Dict[str, Any]] = load_ticket(version, parent_id)
+    # 從 parent_id 提取版本，避免 version 參數與 parent_id 版本不一致
+    # （根因：create 命令傳入 current_version，但 parent 可能屬於不同版本）
+    resolved_version: Optional[str] = extract_version_from_ticket_id(parent_id)
+    if resolved_version is None:
+        return False
+
+    parent: Optional[Dict[str, Any]] = load_ticket(resolved_version, parent_id)
     if not parent:
         return False
 
-    children: List[str] = parent.get("children", [])
+    # 防禦性型別檢查：children 可能因手動編輯變成字串
+    raw_children = parent.get("children", [])
+    if isinstance(raw_children, str):
+        import sys
+        print(
+            f"[WARNING] 父 Ticket {parent_id} 的 children 欄位為字串而非清單，"
+            f"已自動修正",
+            file=sys.stderr,
+        )
+        children: List[str] = [c.strip() for c in raw_children.split("\n") if c.strip()]
+    elif not isinstance(raw_children, list):
+        children = []
+    else:
+        children = raw_children
+
     if child_id not in children:
         children.append(child_id)
         parent["children"] = children
 
-        parent_path: Path = Path(parent.get("_path", get_ticket_path(version, parent_id)))
+        parent_path: Path = Path(parent.get("_path", get_ticket_path(resolved_version, parent_id)))
         save_ticket(parent, parent_path)
 
     return True
