@@ -9,6 +9,8 @@ int _counter = 0;
 SessionEvent createTestEvent({
   String type = 'user',
   String sessionId = 'session-1',
+  String messageId = '',
+  int contentIndex = -1,
   String text = '',
   String toolName = '',
   Object? toolInput,
@@ -21,6 +23,8 @@ SessionEvent createTestEvent({
   return SessionEvent(
     sessionId: sessionId,
     type: type,
+    messageId: messageId,
+    contentIndex: contentIndex,
     timestamp: timestamp ?? _baseTime.add(Duration(seconds: _counter)),
     content: EventContent(
       text: text,
@@ -48,12 +52,16 @@ SessionEvent createToolUseEvent(
   String toolName, {
   Object? input,
   String sessionId = 'session-1',
+  String messageId = '',
+  int contentIndex = -1,
 }) {
   return createTestEvent(
     type: 'tool_use',
     toolName: toolName,
     toolInput: input,
     sessionId: sessionId,
+    messageId: messageId,
+    contentIndex: contentIndex,
   );
 }
 
@@ -61,12 +69,16 @@ SessionEvent createToolResultEvent({
   String output = '',
   bool isError = false,
   String sessionId = 'session-1',
+  String messageId = '',
+  int contentIndex = -1,
 }) {
   return createTestEvent(
     type: 'tool_result',
     output: output,
     isError: isError,
     sessionId: sessionId,
+    messageId: messageId,
+    contentIndex: contentIndex,
   );
 }
 

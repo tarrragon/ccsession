@@ -8,14 +8,17 @@ import 'package:flutter/material.dart';
 /// 需求：工具呼叫 Bubble（Phase 1 3.3）
 /// 約束：顯示 toolName，toolInput 為 null 時 graceful handling
 /// 維護：highlightRanges 依 field='toolName' 過濾，防止 RangeError（0.2.0-W2-011）
+/// 維護：[0.2.1-W7-003] ValueKey 保持展開狀態跨 rebuild 穩定
 class ToolUseBubble extends StatelessWidget {
   const ToolUseBubble({
     required this.event,
+    required this.eventKey,
     this.highlightRanges,
     super.key,
   });
 
   final SessionEvent event;
+  final String eventKey;
   final List<HighlightRange>? highlightRanges;
 
   @override
@@ -28,9 +31,11 @@ class ToolUseBubble extends StatelessWidget {
       margin: ConversationConstants.bubbleMargin,
       decoration: BoxDecoration(
         border: Border.all(color: theme.colorScheme.outline),
-        borderRadius: BorderRadius.circular(ConversationConstants.toolBubbleBorderRadius),
+        borderRadius: BorderRadius.circular(
+            ConversationConstants.toolBubbleBorderRadius),
       ),
       child: ExpansionTile(
+        key: ValueKey(eventKey),
         title: buildHighlightableText(
           text: toolName,
           field: SearchConstants.fieldToolName,
@@ -50,5 +55,4 @@ class ToolUseBubble extends StatelessWidget {
       ),
     );
   }
-
 }

@@ -26,7 +26,7 @@ final selectedSessionIdProvider = AutoDisposeProvider<String?>.internal(
 // ignore: unused_element
 typedef SelectedSessionIdRef = AutoDisposeProviderRef<String?>;
 String _$sessionListNotifierHash() =>
-    r'fbf63f1c1eef3eafb7eca89d88c7bb1405b982cb';
+    r'af443af8dce03e5a52c9d6fa6d948ee7ca2f5edd';
 
 /// 需求：管理 session 列表狀態，消費 WebSocket 訊息
 /// 約束：使用 @riverpod code generation

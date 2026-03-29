@@ -7,7 +7,7 @@ part of 'session_group_ui_notifier.dart';
 // **************************************************************************
 
 String _$sessionGroupUiNotifierHash() =>
-    r'317d4dbc5741b3effa34aec4690e8f429ec2929b';
+    r'c08e04a39ec93d62eef025c0663aef818a4d6dfd';
 
 /// Copied from Dart SDK
 class _SystemHash {

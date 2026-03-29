@@ -1,4 +1,3 @@
-import 'package:ccsession/core/constants/conversation_constants.dart';
 import 'package:ccsession/core/models/session_event.dart';
 import 'package:ccsession/features/conversation/presentation/widgets/assistant_message_bubble.dart';
 import 'package:ccsession/features/conversation/presentation/widgets/empty_content_bubble.dart';
@@ -13,6 +12,7 @@ import 'package:flutter/material.dart';
 /// 約束：空內容顯示 fallback 提示文字，未知類型回傳 SizedBox.shrink
 /// 維護：highlightRanges 為 optional，搜尋功能注入高亮範圍（0.2.0-W2-005.2）
 /// 維護：[0.2.1-W4-003] user 空內容隱藏（SizedBox.shrink），其他類型顯示 fallback
+/// 維護：[0.2.1-W7-003] Tool 氣泡加 eventKey，透過 ValueKey 保持展開狀態穩定
 abstract final class MessageBubbleFactory {
   /// 需求：建構對應類型的 Bubble Widget
   /// 約束：各類型空內容顯示 EmptyContentBubble，highlightRanges 傳入各 Bubble
@@ -24,12 +24,16 @@ abstract final class MessageBubbleFactory {
       'user' => _buildUserOrFallback(event, highlightRanges),
       'assistant' => _buildAssistantOrFallback(event, highlightRanges),
       'tool_use' => _buildToolUseOrFallback(event, highlightRanges),
-      'tool_result' => ToolResultBubble(
-          event: event, highlightRanges: highlightRanges),
+      'tool_result' => _buildToolResultOrFallback(event, highlightRanges),
       'thinking' => _buildThinkingOrFallback(event, highlightRanges),
       _ => const SizedBox.shrink(),
     };
   }
+
+  /// 需求：[0.2.1-W7-003] 產生穩定的事件識別 key
+  /// 約束：格式為 "${messageId}_${contentIndex}"，用於 ValueKey 保持 State
+  static String _buildEventKey(SessionEvent event) =>
+      '${event.messageId}_${event.contentIndex}';
 
   /// 需求：[0.2.1-W4-003] 空文字 user 事件隱藏（自動繼續時的空 prompt）
   static Widget _buildUserOrFallback(
@@ -59,6 +63,7 @@ abstract final class MessageBubbleFactory {
   }
 
   /// 需求：[0.2.1-W4-003] 空 toolName 的 tool_use 事件顯示 fallback
+  /// 維護：[0.2.1-W7-003] eventKey 透過 ValueKey 保持展開狀態
   static Widget _buildToolUseOrFallback(
     SessionEvent event,
     List<HighlightRange>? highlightRanges,
@@ -66,7 +71,23 @@ abstract final class MessageBubbleFactory {
     if (event.content.toolName.trim().isEmpty) {
       return const EmptyContentBubble(eventType: 'tool_use');
     }
-    return ToolUseBubble(event: event, highlightRanges: highlightRanges);
+    return ToolUseBubble(
+      event: event,
+      eventKey: _buildEventKey(event),
+      highlightRanges: highlightRanges,
+    );
+  }
+
+  /// 需求：[0.2.1-W7-003] tool_result 加 eventKey 保持展開狀態
+  static Widget _buildToolResultOrFallback(
+    SessionEvent event,
+    List<HighlightRange>? highlightRanges,
+  ) {
+    return ToolResultBubble(
+      event: event,
+      eventKey: _buildEventKey(event),
+      highlightRanges: highlightRanges,
+    );
   }
 
   /// 需求：[0.2.1-W4-003] 空文字 thinking 事件顯示 fallback

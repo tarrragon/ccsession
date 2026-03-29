@@ -60,7 +60,8 @@ void main() {
       final event = createToolUseEvent('Read', input: {'path': '/file.dart'});
 
       await tester.pumpWidget(MaterialApp(
-        home: Scaffold(body: ToolUseBubble(event: event)),
+        home: Scaffold(
+            body: ToolUseBubble(event: event, eventKey: 'msg1_0')),
       ));
 
       expect(find.text('Read'), findsOneWidget);
@@ -72,7 +73,8 @@ void main() {
       final event = createToolUseEvent('ListFiles');
 
       await tester.pumpWidget(MaterialApp(
-        home: Scaffold(body: ToolUseBubble(event: event)),
+        home: Scaffold(
+            body: ToolUseBubble(event: event, eventKey: 'msg2_0')),
       ));
 
       expect(find.text('ListFiles'), findsOneWidget);
@@ -84,7 +86,8 @@ void main() {
       final event = createToolResultEvent(output: 'file contents here');
 
       await tester.pumpWidget(MaterialApp(
-        home: Scaffold(body: ToolResultBubble(event: event)),
+        home: Scaffold(
+            body: ToolResultBubble(event: event, eventKey: 'msg3_0')),
       ));
 
       // Expand the tile to see the content
@@ -113,7 +116,8 @@ void main() {
       );
 
       await tester.pumpWidget(MaterialApp(
-        home: Scaffold(body: ToolResultBubble(event: event)),
+        home: Scaffold(
+            body: ToolResultBubble(event: event, eventKey: 'msg4_0')),
       ));
 
       // Expand the tile to see the content

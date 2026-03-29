@@ -178,6 +178,7 @@ void main() {
           home: Scaffold(
             body: ToolUseBubble(
               event: event,
+              eventKey: 'test_0',
               highlightRanges: const [
                 (start: 0, end: 4, isCurrent: false, field: 'toolName'),
               ],
