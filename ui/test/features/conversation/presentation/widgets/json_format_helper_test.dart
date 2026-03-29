@@ -89,10 +89,19 @@ void main() {
       expect(result, '');
     });
 
-    test('formats string value', () {
+    test('formats JSON string value by decoding first', () {
+      const input = '{"file_path":"/path","limit":35}';
+      final result = formatJsonObject(input);
+
+      expect(result, contains('"file_path": "/path"'));
+      expect(result, contains('"limit": 35'));
+      expect(result, contains('\n'));
+    });
+
+    test('returns plain string for non-JSON string', () {
       final result = formatJsonObject('hello');
 
-      expect(result, '"hello"');
+      expect(result, 'hello');
     });
 
     test('formats numeric value', () {
