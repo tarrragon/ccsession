@@ -7,9 +7,20 @@ import 'package:ccsession/core/models/session_event.dart';
 import 'package:ccsession/core/websocket/websocket_provider.dart';
 import 'package:equatable/equatable.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/painting.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 part 'conversation_notifier.g.dart';
+
+/// 需求：[0.4.0-W2-007] 安全清理 imageCache，釋放記憶體
+/// 約束：單元測試環境中 PaintingBinding 可能未初始化，需 try-catch 保護
+void _clearImageCacheSafely() {
+  try {
+    PaintingBinding.instance.imageCache.clear();
+  } on Object catch (_) {
+    // binding 未初始化（純 Riverpod 單元測試環境），靜默跳過
+  }
+}
 
 /// Sentinel 值，用於 copyWith 中區分「未傳入」和「明確傳入 null」
 const _sentinel = Object();
@@ -138,6 +149,9 @@ class ConversationNotifier extends _$ConversationNotifier {
       service.unsubscribeSession(oldSessionId);
     }
 
+    // 需求：[0.4.0-W2-007] session 切換時清理 imageCache，釋放記憶體
+    _clearImageCacheSafely();
+
     state = AsyncData(_currentState.copyWith(
       sessionId: sessionId,
       events: [],
@@ -158,6 +172,9 @@ class ConversationNotifier extends _$ConversationNotifier {
     if (currentSessionId != null) {
       service.unsubscribeSession(currentSessionId);
     }
+
+    // 需求：[0.4.0-W2-007] 離開 session 時清理 imageCache，釋放記憶體
+    _clearImageCacheSafely();
 
     state = AsyncData(const ConversationState());
   }
