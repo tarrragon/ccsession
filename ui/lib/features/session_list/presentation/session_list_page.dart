@@ -145,13 +145,14 @@ class _ProjectTabbedViewState extends ConsumerState<_ProjectTabbedView>
     );
   }
 
-  /// 需求：過濾只保留包含 active session 的專案
+  /// 需求：[0.2.1-W6-001] 過濾只保留包含非 completed session 的專案
+  /// 約束：active 和 idle 狀態的專案頁籤都應顯示，僅全部 completed 時隱藏
   Map<String, List<SessionInfo>> _filterActiveProjects(
     Map<String, List<SessionInfo>> groups,
   ) {
     return Map.fromEntries(
       groups.entries.where(
-        (entry) => entry.value.any((s) => s.status == SessionStatus.active),
+        (entry) => entry.value.any((s) => s.status != SessionStatus.completed),
       ),
     );
   }
