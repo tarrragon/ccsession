@@ -55,4 +55,56 @@ void main() {
       expect(result, '"just a string"');
     });
   });
+
+  group('formatJsonObject', () {
+    test('formats Map object with indentation', () {
+      final input = <String, dynamic>{'name': 'test', 'value': 42};
+      final result = formatJsonObject(input);
+
+      expect(result, contains('"name": "test"'));
+      expect(result, contains('"value": 42'));
+      expect(result, contains('\n'));
+    });
+
+    test('formats nested Map object', () {
+      final input = <String, dynamic>{
+        'outer': <String, dynamic>{'inner': 'value'},
+      };
+      final result = formatJsonObject(input);
+
+      expect(result, contains('  "outer"'));
+      expect(result, contains('    "inner"'));
+    });
+
+    test('formats List object', () {
+      final input = <int>[1, 2, 3];
+      final result = formatJsonObject(input);
+
+      expect(result, '[\n  1,\n  2,\n  3\n]');
+    });
+
+    test('returns empty string for null', () {
+      final result = formatJsonObject(null);
+
+      expect(result, '');
+    });
+
+    test('formats string value', () {
+      final result = formatJsonObject('hello');
+
+      expect(result, '"hello"');
+    });
+
+    test('formats numeric value', () {
+      final result = formatJsonObject(42);
+
+      expect(result, '42');
+    });
+
+    test('returns toString for unsupported object', () {
+      final result = formatJsonObject(DateTime(2026));
+
+      expect(result, isNotEmpty);
+    });
+  });
 }
