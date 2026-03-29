@@ -5,8 +5,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+/// 需求：[0.4.0-W2-007] ImageCache 記憶體上限常數
+const int _imageCacheMaxSizeBytes = 50 << 20; // 50 MB
+const int _imageCacheMaxCount = 200;
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  _configureImageCache();
   final prefs = await SharedPreferences.getInstance();
 
   runApp(ProviderScope(

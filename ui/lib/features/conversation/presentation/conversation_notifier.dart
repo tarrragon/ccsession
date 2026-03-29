@@ -117,7 +117,11 @@ class ConversationNotifier extends _$ConversationNotifier {
       _subscription = null;
       final currentSessionId = state.valueOrNull?.sessionId;
       if (currentSessionId != null) {
-        service.unsubscribeSession(currentSessionId);
+        try {
+          service.unsubscribeSession(currentSessionId);
+        } on Object catch (_) {
+          // dispose 時網路可能已斷，靜默處理
+        }
       }
     });
 

@@ -52,7 +52,7 @@ class SessionListNotifier extends _$SessionListNotifier {
   /// 需求：初始建構，訂閱 serverMessageProvider 並請求列表
   @override
   Future<SessionListState> build() async {
-    final service = ref.read(webSocketServiceProvider);
+    final service = ref.watch(webSocketServiceProvider);
 
     // 訂閱 message stream
     _subscription?.cancel();

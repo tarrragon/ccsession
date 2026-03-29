@@ -16,10 +16,6 @@ import (
 	"github.com/anthropics/ccsession-monitor/messages"
 )
 
-// MemoryLimitBytes is the soft memory limit for the Go runtime GC.
-// 需求：[0.4.0-W2-003] 限制記憶體使用，防止長時間運行時記憶體無限增長。
-const MemoryLimitBytes = 512 * 1024 * 1024 // 512MB
-
 func main() {
 	// 設定 Go runtime 記憶體軟上限，促使 GC 更積極回收
 	debug.SetMemoryLimit(MemoryLimitBytes)

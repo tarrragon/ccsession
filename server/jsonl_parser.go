@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"time"
+	"unicode/utf8"
 )
 
 // Parser log messages
@@ -249,7 +250,11 @@ func serializeToolInput(v any) string {
 	}
 	s := string(b)
 	if len(s) > MaxToolInputLength {
-		s = s[:MaxToolInputLength]
+		n := MaxToolInputLength
+		for n > 0 && !utf8.RuneStart(s[n]) {
+			n--
+		}
+		s = s[:n]
 	}
 	return s
 }
@@ -270,10 +275,15 @@ func extractToolResultOutput(block map[string]any) string {
 	return ""
 }
 
-// truncateToolOutput truncates tool result output to MaxToolOutputLength.
+// truncateToolOutput truncates tool result output to MaxToolOutputLength,
+// using rune-safe boundary detection to avoid splitting multi-byte characters.
 func truncateToolOutput(output string) string {
-	if len(output) > MaxToolOutputLength {
-		return output[:MaxToolOutputLength] + TruncationSuffix
+	if len(output) <= MaxToolOutputLength {
+		return output
 	}
-	return output
+	n := MaxToolOutputLength
+	for n > 0 && !utf8.RuneStart(output[n]) {
+		n--
+	}
+	return output[:n] + TruncationSuffix
 }
