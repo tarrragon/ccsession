@@ -14,10 +14,19 @@
 | **框架版本** | Flutter 3.41 |
 | **專案目標** | 解決 CLI 環境下同時運行多個 Claude Code agent/subagent 時，難以同時監控所有 session 進度與內容的 UX 問題 |
 
+### 重要：本專案與 Claude Code CLI 的區分
+
+> **本專案是一個獨立的 GUI 應用程式**，不是 Claude Code CLI 本身。
+>
+> - **Claude Code CLI**：Anthropic 官方的命令列工具，用戶在終端中與 Claude 互動
+> - **本專案（ccsession）**：我們自己開發的**獨立桌面/行動應用**，用於即時監控 Claude Code 的所有 session
+>
+> 當用戶提到 UI 問題、畫面顯示異常、排版錯誤時，指的是**本專案的 Flutter 前端 UI**，不是 Claude Code CLI 的終端顯示。本專案的 UI 程式碼在 `ui/` 目錄下，我們有完全的控制權。
+
 ### 架構概述
 
 - **Go Backend**：監控本地 JSONL 檔案變更、解析對話內容、提供 WebSocket server
-- **Flutter Frontend**：即時 UI 呈現，支援 macOS / Windows / Linux / 行動裝置
+- **Flutter Frontend**：本專案自己的 GUI，即時呈現 Claude Code session 的對話內容，支援 macOS / Windows / Linux / 行動裝置
 
 ### 資料夾結構
 

@@ -9,7 +9,10 @@ void main() {
       return MaterialApp(
         home: Scaffold(
           body: SingleChildScrollView(
-            child: ToolUseBubble(event: event),
+            child: ToolUseBubble(
+              event: event,
+              eventKey: 'test_0',
+            ),
           ),
         ),
       );
