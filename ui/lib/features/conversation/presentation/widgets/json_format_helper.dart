@@ -29,8 +29,14 @@ String formatJsonObject(Object? value) {
   }
 }
 
-/// 需求：[0.2.1-W6-004] UI 顯示用跳脫字元還原
-/// 約束：將 JSON 字串值中的 \n \t 還原為實際換行和 Tab，提升可讀性
+/// 需求：[0.2.1-W6-005] UI 顯示用跳脫字元還原
+/// 約束：將 JSON 字串值中的跳脫序列還原為實際字元，提升可讀性
+/// 維護：替換順序重要 — 先處理 \\\\ 再處理其他，避免雙重替換
 String _unescapeForDisplay(String prettyJson) {
-  return prettyJson.replaceAll('\\n', '\n').replaceAll('\\t', '\t');
+  return prettyJson
+      .replaceAll('\\\\', '\x00')
+      .replaceAll('\\"', '"')
+      .replaceAll('\\n', '\n')
+      .replaceAll('\\t', '\t')
+      .replaceAll('\x00', '\\');
 }
