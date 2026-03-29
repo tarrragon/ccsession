@@ -6,15 +6,15 @@ import (
 	"log/slog"
 	"time"
 	"unicode/utf8"
+
+	"github.com/anthropics/ccsession-monitor/messages"
 )
 
-// Parser log messages
+// Parser log messages (parser-specific, not duplicated in messages package)
 const (
-	LogParseLineCalled   = "parsing JSONL line"
-	LogContentBlock      = "processing content block"
-	LogUnknownRoleType   = "unknown role type in JSONL line"
-	LogUnknownContentType = "unknown content type in assistant block"
-	LogInvalidTimestamp   = "invalid timestamp format"
+	LogParseLineCalled = "parsing JSONL line"
+	LogContentBlock    = "processing content block"
+	LogUnknownRoleType = "unknown role type in JSONL line"
 )
 
 // Parser hint messages
@@ -99,7 +99,7 @@ func parseTimestamp(v any) time.Time {
 	}
 	t, err := time.Parse(time.RFC3339Nano, s)
 	if err != nil {
-		slog.Warn(LogInvalidTimestamp,
+		slog.Warn(messages.LogInvalidTimestamp,
 			"layer", "jsonl_parser",
 			"value", s)
 		return time.Time{}
@@ -156,7 +156,6 @@ func parseAssistantMessage(msg map[string]any, sessionID, projectPath, messageID
 			evt.Content.ToolName, _ = block[fieldName].(string)
 			evt.Content.ToolInput = serializeToolInput(block[fieldInput])
 			evt.Content.ToolUseID, _ = block[fieldID].(string)
-			evt.ToolName = evt.Content.ToolName
 
 		case EventTypeThinking:
 			evt.Type = EventTypeThinking
@@ -171,7 +170,7 @@ func parseAssistantMessage(msg map[string]any, sessionID, projectPath, messageID
 			}
 
 		default:
-			slog.Warn(LogUnknownContentType,
+			slog.Warn(messages.LogUnknownContentType,
 				"layer", "jsonl_parser",
 				"contentType", blockType,
 				"hint", HintUnknownContent)

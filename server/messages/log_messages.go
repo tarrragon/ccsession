@@ -48,6 +48,12 @@ const (
 	LogFileWatcherError     = "file watcher error"
 )
 
+// Main layer error messages
+const (
+	LogServerFailed    = "server failed"
+	LogHomeDirError    = "cannot determine home directory"
+)
+
 // Shared utility messages
 const (
 	LogContextError = "context cancelled or cancelled with error"

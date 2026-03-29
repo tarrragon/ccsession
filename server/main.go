@@ -74,7 +74,7 @@ func main() {
 
 	logger.Info(messages.LogServerStarting, "layer", "main", "addr", addr)
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		logger.Error("server failed", "layer", "main", "error", err)
+		logger.Error(messages.LogServerFailed, "layer", "main", "error", err)
 		os.Exit(1)
 	}
 }
@@ -87,7 +87,7 @@ func resolveClaudeHome() string {
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
-		slog.Error("cannot determine home directory", "layer", "main", "error", err)
+		slog.Error(messages.LogHomeDirError, "layer", "main", "error", err)
 		os.Exit(1)
 	}
 	return filepath.Join(home, DefaultClaudeHomeSubdir)

@@ -14,7 +14,6 @@ type SessionEvent struct {
 	ContentIndex  int          `json:"contentIndex"`
 	IsLastContent bool         `json:"isLastContent"`
 	Content       EventContent `json:"content"`
-	ToolName      string       `json:"toolName,omitempty"`
 }
 
 // EventContent holds the payload for each content block type.

@@ -96,7 +96,6 @@ func TestParseLineAssistantMultipleContent(t *testing.T) {
 	assertEqual(t, "events[1].Type", events[1].Type, EventTypeToolUse)
 	assertEqual(t, "events[1].Content.ToolName", events[1].Content.ToolName, "Read")
 	assertEqual(t, "events[1].Content.ToolUseID", events[1].Content.ToolUseID, "tu-1")
-	assertEqual(t, "events[1].ToolName", events[1].ToolName, "Read")
 }
 
 func TestParseLineToolResult(t *testing.T) {
