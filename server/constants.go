@@ -30,7 +30,15 @@ const (
 	// MaxToolInputLength is the maximum length (in bytes) for serialized tool input.
 	// Inputs exceeding this limit are truncated to prevent memory bloat.
 	MaxToolInputLength = 2000
+
+	// MaxToolOutputLength is the maximum length (in bytes) for tool result output.
+	// Outputs exceeding this limit are truncated to prevent memory bloat
+	// from large tool results (e.g., file reads, grep results).
+	MaxToolOutputLength = 10000
 )
+
+// TruncationSuffix is appended when content exceeds length limits.
+const TruncationSuffix = "...[truncated]"
 
 // Main server configuration
 const (

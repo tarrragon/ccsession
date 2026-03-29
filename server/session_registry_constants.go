@@ -41,10 +41,15 @@ const MaxEventsPerSession = 500
 // completed session 通常不再被前端查看，僅保留少量用於最近歷史查詢。
 const CompletedSessionMaxEvents = 50
 
+// CompletedSessionEvictionTimeout 定義 completed session 在記憶體中保留的最長時間。
+// 超過此時間後，session 從 registry 和 history 中移除，釋放記憶體。
+const CompletedSessionEvictionTimeout = 2 * time.Hour
+
 // Log messages for session registry
 const (
 	LogSubagentRegistered      = "subagent session registered from transcript path"
 	LogSubagentPathEmpty       = "SubagentStop without transcript path, updating main session only"
 	LogSubagentPathParseError  = "failed to extract session ID from transcript path"
 	LogCompletedEventsTrimmed  = "completed session events trimmed"
+	LogSessionEvicted          = "completed session evicted from memory"
 )

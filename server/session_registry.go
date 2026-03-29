@@ -274,7 +274,18 @@ func (r *SessionRegistry) ScanAndUpdateStatus() []*SessionInfo {
 	now := r.now()
 	updated := make([]*SessionInfo, 0)
 
-	for _, session := range r.sessions {
+	for id, session := range r.sessions {
+		// 需求：[0.4.0-W2-003] completed session 超過 eviction timeout 後從記憶體移除
+		if session.Status == SessionStatusCompleted && now.Sub(session.LastEventAt) > CompletedSessionEvictionTimeout {
+			slog.Info(LogSessionEvicted,
+				"layer", "session_registry",
+				"session_id", id,
+				"lastEventAt", session.LastEventAt)
+			delete(r.sessions, id)
+			delete(r.history, id)
+			continue
+		}
+
 		oldStatus := session.Status
 		newStatus := r.computeStatus(session, now)
 
@@ -284,6 +295,7 @@ func (r *SessionRegistry) ScanAndUpdateStatus() []*SessionInfo {
 
 			// 需求：[0.2.1-W5-002] 當 session 轉為 completed 時，
 			// 裁剪歷史事件至 CompletedSessionMaxEvents，釋放記憶體。
+			// 需求：[0.4.0-W2-003] 使用 copy-to-new-slice 確保舊 backing array 可被 GC。
 			if newStatus == SessionStatusCompleted {
 				if events := r.history[session.ID]; len(events) > CompletedSessionMaxEvents {
 					slog.Warn(LogCompletedEventsTrimmed,
@@ -292,7 +304,9 @@ func (r *SessionRegistry) ScanAndUpdateStatus() []*SessionInfo {
 						"before", len(events),
 						"after", CompletedSessionMaxEvents,
 					)
-					r.history[session.ID] = events[len(events)-CompletedSessionMaxEvents:]
+					trimmed := make([]*SessionEvent, CompletedSessionMaxEvents)
+					copy(trimmed, events[len(events)-CompletedSessionMaxEvents:])
+					r.history[session.ID] = trimmed
 				}
 			}
 		}
@@ -352,8 +366,11 @@ func (r *SessionRegistry) AppendEvent(sessionID string, event SessionEvent) {
 	copied := event
 	events := append(r.history[sessionID], &copied)
 
+	// 需求：[0.4.0-W2-003] 使用 copy-to-new-slice 確保舊 backing array 可被 GC。
 	if len(events) > MaxEventsPerSession {
-		events = events[len(events)-MaxEventsPerSession:]
+		trimmed := make([]*SessionEvent, MaxEventsPerSession)
+		copy(trimmed, events[len(events)-MaxEventsPerSession:])
+		events = trimmed
 	}
 	r.history[sessionID] = events
 }

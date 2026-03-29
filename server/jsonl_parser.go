@@ -258,14 +258,22 @@ func serializeToolInput(v any) string {
 // The content field may be a string or an array of content blocks.
 func extractToolResultOutput(block map[string]any) string {
 	if s, ok := block[fieldContent].(string); ok {
-		return s
+		return truncateToolOutput(s)
 	}
 	if arr, ok := block[fieldContent].([]any); ok && len(arr) > 0 {
 		if inner, ok := arr[0].(map[string]any); ok {
 			if text, ok := inner[fieldText].(string); ok {
-				return text
+				return truncateToolOutput(text)
 			}
 		}
 	}
 	return ""
+}
+
+// truncateToolOutput truncates tool result output to MaxToolOutputLength.
+func truncateToolOutput(output string) string {
+	if len(output) > MaxToolOutputLength {
+		return output[:MaxToolOutputLength] + TruncationSuffix
+	}
+	return output
 }
