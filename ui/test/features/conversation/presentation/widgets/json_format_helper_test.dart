@@ -68,6 +68,27 @@ void main() {
 
       expect(result, contains('line1\n\tindented'));
     });
+
+    test('unescapes \\" in string values to actual quotes', () {
+      const input = '{"text":"He said \\"hello\\""}';
+      final result = formatJsonContent(input);
+
+      expect(result, contains('He said "hello"'));
+    });
+
+    test('unescapes \\\\ in string values to actual backslash', () {
+      const input = '{"path":"C:\\\\Users\\\\file"}';
+      final result = formatJsonContent(input);
+
+      expect(result, contains('C:\\Users\\file'));
+    });
+
+    test('handles mixed escape sequences in correct order', () {
+      const input = '{"text":"line1\\npath\\\\dir\\\\file\\tand \\"quoted\\""}';
+      final result = formatJsonContent(input);
+
+      expect(result, contains('line1\npath\\dir\\file\tand "quoted"'));
+    });
   });
 
   group('formatJsonObject', () {
