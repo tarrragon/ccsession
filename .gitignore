@@ -40,6 +40,7 @@ ui/**/.gradle/
 
 #Flutter generate
 *.g.dart
+*.lock
 
 # Dart web build artifacts
 *.dart.js
@@ -80,6 +81,10 @@ server/go.work.sum
 .claude/tool-results/
 .claude/handoff/archive/
 .claude/handoff/pending/
+.claude/skills/*/build/
+.claude/dispatch-active.json
+.claude/hook-state/*
+.claude/logs/*
 
 # Python cache and bytecode
 __pycache__/
@@ -100,8 +105,5 @@ htmlcov/
 *.egg-info/
 dist/
 
-# .claude log
-.claude/skills/*/build/
-.claude/dispatch-active.json
-.claude/hook-state/*
-.claude/logs/*
+
+
