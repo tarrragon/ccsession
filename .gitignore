@@ -38,6 +38,9 @@ ui/build/
 ui/**/.gradle/
 /coverage/
 
+#Flutter generate
+*.g.dart
+
 # Dart web build artifacts
 *.dart.js
 *.info.json
@@ -96,4 +99,9 @@ htmlcov/
 # Python build artifacts
 *.egg-info/
 dist/
+
+# .claude log
 .claude/skills/*/build/
+.claude/dispatch-active.json
+.claude/hook-state/*
+.claude/logs/*
