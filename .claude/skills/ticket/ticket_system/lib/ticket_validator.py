@@ -139,7 +139,7 @@ def validate_ticket_fields(
     """
     # Guard Clause：未指定欄位時使用預設值
     if required_fields is None:
-        # 預設必填欄位：最基本的識別和狀態信息
+        # 預設必填欄位：最基本的識別和狀態資訊
         required_fields = ["id", "status"]
 
     missing_fields = []
@@ -313,12 +313,19 @@ def _is_placeholder(text: str) -> bool:
     """
     判斷文字是否為佔位符。
 
-    支援多種佔位符格式：
-    - HTML 註解：<!-- To be filled by executing agent -->
-    - 待填寫標記：(pending), TBD, TODO, N/A
-    - 空白或僅有換行
+    判斷策略（W17-032 修復後）：
+    1. 先剝除所有 HTML 註解（包含 body schema 範本的 `<!-- Schema[...]: ... -->`
+       指引、`<!-- To be filled by executing agent -->` 等），再看剩餘內容。
+    2. 剩餘內容為空 → placeholder（例如整段只有 HTML 註解）。
+    3. 剩餘內容含英文佔位符 `(pending)/TBD/TODO/N/A` → placeholder。
+    4. 剩餘內容扣掉所有「（待填寫：...）/（必填：...）」後為空 → placeholder。
+    5. 否則非 placeholder（視為已有實質內容）。
 
-    這個函式與 acceptance_auditor.py 中的 _is_placeholder 功能一致，
+    W17-032 修復重點：原本 `<!--.*?-->` 命中即回 True，會誤判
+    「body schema 範本的 Schema 標註註解 + 實質內容」為 placeholder，
+    導致 body-check 在 complete 階段阻擋合法 ticket。
+
+    此函式與 acceptance_auditor.py 中的同名函式功能一致，
     用於統一驗證邏輯。
 
     Args:
@@ -336,12 +343,25 @@ def _is_placeholder(text: str) -> bool:
     if not stripped:
         return True
 
-    # HTML 註解（包括 "To be filled by executing agent"）
-    if re.search(r"<!--.*?-->", stripped, re.DOTALL):
+    # 剝除所有 HTML 註解後檢視剩餘實質內容
+    # （W17-032：body schema 範本固定含 Schema 標註註解，不應誤判為 placeholder）
+    content_no_html = re.sub(r"<!--.*?-->", "", stripped, flags=re.DOTALL).strip()
+    if not content_no_html:
         return True
 
-    # 待填寫標記
-    if re.search(r"\(pending\)|TBD|TODO|N/A", stripped, re.IGNORECASE):
+    # 待填寫標記（含英文/中文佔位符）— 對剝除 HTML 註解後的內容檢查
+    # - 英文：(pending), TBD, TODO, N/A
+    # - 中文：（待填寫：...）、（必填：...）——template 預設佔位符
+    if re.search(r"\(pending\)|TBD|TODO|N/A", content_no_html, re.IGNORECASE):
+        return True
+    if re.search(r"（待填寫[：:][^）]*）|（必填[：:][^）]*）", content_no_html):
+        return True
+
+    # 判定「整段只由中文佔位符組成」：移除所有已知中文佔位符 + 空白後為空
+    no_cn_placeholders = re.sub(
+        r"（(?:待填寫|必填)[：:][^）]*）", "", content_no_html
+    ).strip()
+    if not no_cn_placeholders:
         return True
 
     return False
@@ -430,6 +450,86 @@ def validate_execution_log(
 
     is_filled = len(unfilled_sections) == 0
     return is_filled, unfilled_sections
+
+
+# Type-aware body schema（對齊 .claude/pm-rules/ticket-body-schema.md）
+# 每個 type 列出 "必填" 章節；選填/免填不列入（不阻擋 complete）。
+_TYPE_REQUIRED_SECTIONS: Dict[str, List[str]] = {
+    "ANA": ["Problem Analysis", "Solution"],
+    "IMP": ["Test Results"],
+    "DOC": [],
+    # 其他 type（TST/ADJ/RES/INV）沒定義 schema → 回退到通用檢查
+}
+
+
+def validate_execution_log_by_type(
+    ticket_type: str,
+    body: str,
+) -> Tuple[bool, List[str]]:
+    """
+    依 type-aware schema 驗證 Ticket body 必填章節（W17-016.3）。
+
+    對照 `.claude/pm-rules/ticket-body-schema.md`：
+    - ANA: Problem Analysis + Solution 必填
+    - IMP: Test Results 必填
+    - DOC: 無強制 body 章節（僅 Completion Info 由別處驗證）
+
+    每個必填章節需：
+    1. 標題存在（## 或 ### 層級）
+    2. 內容非 placeholder（含 `（待填寫：...）` 中文佔位符）
+
+    Args:
+        ticket_type: Ticket type（ANA/IMP/DOC/...）
+        body: Ticket body 文字
+
+    Returns:
+        (passed, unfilled_sections)
+        - passed=True 表示所有必填章節已填寫
+        - unfilled_sections 列出未填寫的章節名稱
+    """
+    required = _TYPE_REQUIRED_SECTIONS.get(ticket_type)
+    if required is None:
+        # 未知 type：回退到原始 validate_execution_log 的通用三章節
+        return validate_execution_log("", body)
+    if not required:
+        # 顯式無必填章節（DOC）→ 直接通過
+        return True, []
+
+    # Guard Clause：無 body
+    if not body or not isinstance(body, str):
+        return False, list(required)
+
+    unfilled: List[str] = []
+    for section in required:
+        header_patterns = [f"### {section}", f"## {section}"]
+        section_start = -1
+        for pattern in header_patterns:
+            idx = body.find(pattern)
+            if idx != -1:
+                section_start = idx
+                break
+
+        if section_start == -1:
+            unfilled.append(section)
+            continue
+
+        content_start = body.find("\n", section_start)
+        if content_start == -1:
+            unfilled.append(section)
+            continue
+        content_start += 1
+
+        next_section_idx = len(body)
+        for marker in ["## ", "### "]:
+            idx = body.find(marker, content_start)
+            if idx != -1 and idx < next_section_idx:
+                next_section_idx = idx
+
+        section_content = body[content_start:next_section_idx].strip()
+        if _is_placeholder(section_content):
+            unfilled.append(section)
+
+    return len(unfilled) == 0, unfilled
 
 
 def validate_acceptance_criteria(

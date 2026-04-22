@@ -30,6 +30,7 @@ GITIGNORE_REQUIRED_RULES = [
     ".claude/worktrees",
     ".claude/tool-results",
     ".claude/handoff",
+    ".claude/dispatch-active",
     "__pycache__",
 ]
 
@@ -109,6 +110,8 @@ class GitignoreCheckInfo:
     """包含 __pycache__/ 規則."""
     all_required_complete: bool
     """所有必須規則都存在."""
+    has_dispatch_active_rule: bool = True
+    """包含 .claude/dispatch-active 規則."""
     missing_rules: list[str] = field(default_factory=list)
     """缺失的規則清單."""
 
@@ -384,28 +387,63 @@ def check_claude_md(project_root: Path) -> FrameworkFileInfo:
     )
 
 
+def check_tech_stack_section(project_root: Path) -> FrameworkFileInfo:
+    """檢查 CLAUDE.md 是否包含技術選型 section.
+
+    根據 W1-017 重構，所有專案設定統一在 CLAUDE.md 的「技術選型與架構決策」section。
+    本函式驗證 CLAUDE.md 是否包含相關內容。
+
+    Args:
+        project_root: 專案根目錄。
+
+    Returns:
+        FrameworkFileInfo: 技術選型 section 的檢查結果。
+    """
+    claude_md = project_root / "CLAUDE.md"
+
+    # 檢查 CLAUDE.md 是否存在
+    if not claude_md.exists():
+        return FrameworkFileInfo(
+            name="CLAUDE.md 技術選型",
+            exists=False,
+            path=None,
+        )
+
+    # 讀取檔案內容並搜尋技術選型 section
+    try:
+        content = claude_md.read_text(encoding="utf-8")
+        # 搜尋技術選型相關標題
+        has_tech_section = "技術選型" in content
+        return FrameworkFileInfo(
+            name="CLAUDE.md 技術選型",
+            exists=has_tech_section,
+            path=claude_md if has_tech_section else None,
+        )
+    except (OSError, UnicodeDecodeError):
+        # 檔案存在但無法讀取
+        return FrameworkFileInfo(
+            name="CLAUDE.md 技術選型",
+            exists=False,
+            path=None,
+        )
+
+
 def check_language_template(
     project_root: Path, language: str
 ) -> FrameworkFileInfo:
     """檢查語言特定模板是否存在.
+
+    已棄用（根據 W1-017，模板統一改至 CLAUDE.md）。
+    此函式保留為向後相容，但始終返回不存在。
 
     Args:
         project_root: 專案根目錄。
         language: 專案語言 ('flutter', 'go', 'nodejs', 'python', 'unknown')。
 
     Returns:
-        FrameworkFileInfo: 模板檔的檢查結果。
+        FrameworkFileInfo: 模板檔的檢查結果（始終不存在）。
     """
-    # 目前只有 Flutter 模板
-    if language == "flutter":
-        template_file = project_root / ".claude" / "project-templates" / "FLUTTER.md"
-        return FrameworkFileInfo(
-            name="FLUTTER.md",
-            exists=template_file.exists(),
-            path=template_file if template_file.exists() else None,
-        )
-
-    # 其他語言暫無模板
+    # 所有語言的獨立模板已廢止，改用 CLAUDE.md 技術選型 section
     return FrameworkFileInfo(
         name=f"{language.upper()}.md",
         exists=False,
@@ -637,6 +675,7 @@ def check_gitignore_completeness(project_root: Path) -> GitignoreCheckInfo:
     has_worktrees = _has_gitignore_rule(content, ".claude/worktrees")
     has_tool_results = _has_gitignore_rule(content, ".claude/tool-results")
     has_handoff = _has_gitignore_rule(content, ".claude/handoff")
+    has_dispatch_active = _has_gitignore_rule(content, ".claude/dispatch-active")
     has_pycache = _has_gitignore_rule(content, "__pycache__")
 
     # 彙整缺失的規則
@@ -651,6 +690,8 @@ def check_gitignore_completeness(project_root: Path) -> GitignoreCheckInfo:
         missing.append(".claude/tool-results/")
     if not has_handoff:
         missing.append(".claude/handoff/")
+    if not has_dispatch_active:
+        missing.append(".claude/dispatch-active.json")
     if not has_pycache:
         missing.append("__pycache__/")
 
@@ -661,6 +702,7 @@ def check_gitignore_completeness(project_root: Path) -> GitignoreCheckInfo:
         has_worktrees_rule=has_worktrees,
         has_tool_results_rule=has_tool_results,
         has_handoff_rule=has_handoff,
+        has_dispatch_active_rule=has_dispatch_active,
         has_pycache_rule=has_pycache,
         all_required_complete=len(missing) == 0,
         missing_rules=missing,
@@ -923,7 +965,7 @@ def check_language_standards(
 ) -> LanguageStandardCheckInfo:
     """檢查語言特定的開發規範文件.
 
-    根據偵測到的語言，驗證對應規範檔是否存在。
+    根據 W1-017 重構，獨立語言規範檔已廢止。所有技術選型和開發規範統一在 CLAUDE.md。
     此檢查為 [SHOULD] 優先級（推薦但非必須）。
 
     Args:
@@ -933,42 +975,15 @@ def check_language_standards(
     Returns:
         LanguageStandardCheckInfo: 規範檔檢查結果。
     """
-    templates_dir = project_root / ".claude" / "project-templates"
-
-    # 語言與規範檔的對應關係
-    language_mapping = {
-        "flutter": "FLUTTER.md",
-        "go": "GO.md",
-        "nodejs": "NODEJS.md",
-        "python": "PYTHON.md",
-    }
-
-    expected_file = language_mapping.get(detected_language, f"{detected_language.upper()}.md")
-
-    # 掃描可用的規範檔
-    available = []
-    if templates_dir.exists() and templates_dir.is_dir():
-        try:
-            for file in templates_dir.iterdir():
-                if file.suffix == ".md" and file.is_file():
-                    available.append(file.name)
-        except OSError:
-            pass
-
-    # 檢查期望的規範檔
-    expected_path = templates_dir / expected_file if templates_dir.exists() else None
-    file_exists = expected_path and expected_path.exists()
-
-    # 識別缺失的規範檔
-    missing = []
-    if detected_language != "unknown" and not file_exists:
-        missing.append(expected_file)
+    # 獨立語言規範檔已廢止，所有設定改至 CLAUDE.md
+    # 此檢查將始終回傳「規範已移至 CLAUDE.md」
+    expected_file = "（已移至 CLAUDE.md 技術選型 section）"
 
     return LanguageStandardCheckInfo(
         detected_language=detected_language,
         expected_standard_file=expected_file,
-        exists=file_exists,
-        path=expected_path if file_exists else None,
-        standard_files_available=sorted(available),
-        missing_standards=missing,
+        exists=True,  # 規範存在於 CLAUDE.md 中
+        path=None,
+        standard_files_available=[],
+        missing_standards=[],
     )

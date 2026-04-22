@@ -10,6 +10,7 @@ Ticket 建構模組
   - create_ticket_frontmatter(): 建立 Ticket frontmatter
   - create_ticket_body(): 建立 Ticket body
   - update_parent_children(): 更新父 Ticket 的 children
+  - update_source_spawned_tickets(): 更新 source Ticket 的 spawned_tickets（PC-073）
 
 使用 TypedDict 減少函式參數數量，提高程式碼可讀性。
 """
@@ -101,10 +102,11 @@ class TicketConfig(TypedDict, total=False):
     how_task_type: str          # Task Type（Implementation/Analysis/etc.）
     how_strategy: str           # 實作策略
 
-    # 關係資訊（3 個欄位）
+    # 關係資訊（4 個欄位）
     parent_id: Optional[str]    # 父 Ticket ID（子任務才有）
     blocked_by: Optional[List[str]]  # 依賴的 Ticket IDs
     related_to: Optional[List[str]]  # 相關的 Ticket IDs（多對多關聯）
+    source_ticket: Optional[str]  # 衍生來源 Ticket ID（spawned 關係，與 parent_id 互斥）
 
     # TDD 資訊（2 個欄位）
     tdd_phase: Optional[str]    # 當前 TDD 階段（phase1/phase2/phase3a/phase3b/phase4）
@@ -408,7 +410,7 @@ def create_ticket_frontmatter(config: TicketConfig) -> Dict[str, Any]:
         - blockedBy: config.get("blocked_by") or []
         - relatedTo: config.get("related_to") or []（多對多關聯）
         - spawned_tickets: []（空清單）
-        - source_ticket: None
+        - source_ticket: config.get("source_ticket")（可選；衍生關係）
         - dispatch_reason: ""（空字串）
         - decision_tree_path: config.get("decision_tree_path")（決策樹路徑，可選）
         - who: {"current": config["who"], "history": {}}
@@ -471,7 +473,7 @@ def create_ticket_frontmatter(config: TicketConfig) -> Dict[str, Any]:
         "blockedBy": config.get("blocked_by") or [],
         "relatedTo": config.get("related_to") or [],
         "spawned_tickets": [],
-        "source_ticket": None,
+        "source_ticket": config.get("source_ticket"),
         "dispatch_reason": "",
         "decision_tree_path": config.get("decision_tree_path"),
         "who": {"current": config["who"], "history": {}},
@@ -495,12 +497,82 @@ def create_ticket_frontmatter(config: TicketConfig) -> Dict[str, Any]:
     }
 
 
-def create_ticket_body(what: str, who: str) -> str:
+def _ana_reproduction_section(ticket_type: str) -> str:
+    """產生 ANA Ticket 專屬的「重現實驗結果」章節。
+
+    當 ticket_type == 'ANA' 時回傳完整章節（前後含空行），否則回傳空字串。
+    此章節為 PC-063 防護措施 1：強制 ANA Ticket 完成 Reality Test 才允許列方案，
+    防止基於未驗證假設過早收斂方案。
+    """
+    if ticket_type != "ANA":
+        return ""
+    return """
+## 重現實驗結果
+
+### 實驗方法
+
+（必填：如何重現問題？用什麼指令/測試？本章節為 ANA Ticket 強制章節——PC-063 防護措施）
+
+### 實驗執行
+
+（必填：實驗執行過程記錄，包含輸入、步驟、觀察到的實際行為）
+
+### 實驗發現
+
+（必填：實驗結論——已驗證的事實 vs 仍未驗證的假設。僅在完成實驗後才允許列候選方案。）
+
+---
+"""
+
+
+def _schema_marker(ticket_type: str, section: str) -> str:
+    """回傳 Schema 標註註解（type-aware body schema）。
+
+    依 .claude/pm-rules/ticket-body-schema.md 映射章節填寫要求。未知 type 或
+    未定義章節回傳空字串（向後相容）。
+
+    Args:
+        ticket_type: Ticket 類型（ANA/IMP/DOC 等）
+        section: 章節名稱（Problem Analysis/Solution/Test Results/Completion Info）
+
+    Returns:
+        HTML 註解標註字串（含前綴換行）或空字串
+    """
+    schema = {
+        "ANA": {
+            "Problem Analysis": "必填",
+            "Solution": "必填",
+            "Test Results": "選填（ANA 若有實驗輸出才填；無實驗可留 placeholder）",
+            "Completion Info": "必填",
+        },
+        "IMP": {
+            "Problem Analysis": "選填（小型 IMP 可留 placeholder；大型 IMP 建議填寫）",
+            "Solution": "選填",
+            "Test Results": "必填（至少記錄執行指令與通過數或 commit SHA）",
+            "Completion Info": "必填",
+        },
+        "DOC": {
+            "Problem Analysis": "選填（若 DOC 起因於缺陷或盤點結論可填）",
+            "Solution": "免填（DOC 類型以變更摘要取代）",
+            "Test Results": "免填（DOC 類型無需測試）",
+            "Completion Info": "必填（需附變更摘要：哪些文件/章節更新）",
+        },
+    }
+    note = schema.get(ticket_type, {}).get(section)
+    if not note:
+        return ""
+    return f"\n<!-- Schema[{ticket_type}/{section}]: {note}（.claude/pm-rules/ticket-body-schema.md） -->"
+
+
+def create_ticket_body(what: str, who: str, ticket_type: str = "") -> str:
     """建立 Ticket body。
 
     Args:
         what: 任務描述（來自 frontmatter["what"]）
         who: 執行代理人（來自 frontmatter["who"]["current"]）
+        ticket_type: Ticket 類型（如 'ANA'、'IMP'、'DOC' 等）。當為 'ANA' 時，
+            body 會在 Problem Analysis 後插入「重現實驗結果」必填章節
+            （PC-063 防護措施 1：強制 ANA Ticket 完成 Reality Test 才列方案）。
 
     Returns:
         Ticket body 字串（Markdown 格式）
@@ -543,6 +615,10 @@ def create_ticket_body(what: str, who: str) -> str:
         >>> "實作功能 X" in body
         True
     """
+    pa_marker = _schema_marker(ticket_type, "Problem Analysis")
+    sol_marker = _schema_marker(ticket_type, "Solution")
+    tr_marker = _schema_marker(ticket_type, "Test Results")
+    ci_marker = _schema_marker(ticket_type, "Completion Info")
     return f"""# Execution Log
 
 ## Task Summary
@@ -551,7 +627,7 @@ def create_ticket_body(what: str, who: str) -> str:
 
 ---
 
-## Problem Analysis
+## Problem Analysis{pa_marker}
 
 ### 問題根因
 
@@ -573,20 +649,49 @@ def create_ticket_body(what: str, who: str) -> str:
 -->
 
 ---
-
-## Solution
-
-<!-- To be filled by executing agent -->
-
----
-
-## Test Results
+{_ana_reproduction_section(ticket_type)}
+## Solution{sol_marker}
 
 <!-- To be filled by executing agent -->
 
 ---
 
-## Completion Info
+## Test Results{tr_marker}
+
+<!-- To be filled by executing agent -->
+
+---
+
+## NeedsContext
+
+<!-- 代理人回報資料缺口時追加於此（W17-010 協議）。子項建議 template：
+- **缺失項**:（具體指出需要的 context 是什麼）
+- **觸發位置**:（檔案:行號 或 決策點）
+- **影響**:（缺料導致無法完成哪些 acceptance）
+- **建議補料**:（PM 可採取的補充動作）
+- **重派成本**:（若需重派所需 token/context 估算）
+-->
+
+---
+
+## Exit Status
+
+<!-- 代理人結束時以 YAML 格式回報（W17-010 schema）：
+```yaml
+status: success        # 枚舉: success|needs_context|blocked|partial_success|failed
+reason: ""             # 狀態原因說明
+confidence: 1.0        # 0.0-1.0 信心度
+acceptance_met: []     # 已完成的 acceptance index 列表
+acceptance_unmet: []   # 未完成的 acceptance index 列表
+artifacts: []          # 產出檔案路徑列表
+context_dependencies: []  # 依賴的 context 來源
+estimated_recovery_effort: ""  # 若 needs_context/blocked，預估補料成本
+```
+對應 exit code: success=0, partial_success=0, needs_context=2, blocked=2, failed=1 -->
+
+---
+
+## Completion Info{ci_marker}
 
 **Completion Time**: (pending)
 **Executing Agent**: {who}
@@ -655,5 +760,76 @@ def update_parent_children(version: str, parent_id: str, child_id: str) -> bool:
 
         parent_path: Path = Path(parent.get("_path", get_ticket_path(resolved_version, parent_id)))
         save_ticket(parent, parent_path)
+
+    return True
+
+
+def update_source_spawned_tickets(source_ticket_id: str, new_ticket_id: str) -> bool:
+    """更新 source Ticket 的 spawned_tickets 欄位（append + 去重）。
+
+    鏡像 update_parent_children 的結構，差異僅在欄位名（children → spawned_tickets）。
+    本函式對應 PC-073 CLI 能力缺口修補：spawned 關係代表衍生項獨立交付，
+    不會阻擋 source 的 complete。
+
+    Args:
+        source_ticket_id: source Ticket ID（如 "0.18.0-W12-002"）
+        new_ticket_id: 新建立的衍生 Ticket ID（如 "0.18.0-W12-006"）
+
+    Returns:
+        bool: 成功更新返回 True；source 不存在、版本解析失敗或儲存失敗返回 False。
+
+    Implementation:
+        1. 從 source_ticket_id 提取版本號
+        2. 載入 source Ticket
+        3. 若 source 不存在，返回 False
+        4. 取得 spawned_tickets 欄位，確保為 list 型別（防禦性：字串→list）
+        5. 若 new_ticket_id 不在清單中，append
+        6. 儲存 source Ticket（失敗捕獲 IOError/OSError 並返回 False，不向外傳播）
+        7. 返回 True
+
+    Side Effects:
+        - 修改 source Ticket 檔案
+        - 更新 source["spawned_tickets"] 清單
+
+    Examples:
+        >>> update_source_spawned_tickets("0.18.0-W12-002", "0.18.0-W12-006")
+        True
+
+        >>> update_source_spawned_tickets("invalid-id", "0.18.0-W12-006")
+        False
+    """
+    # 從 source_ticket_id 提取版本（對齊 update_parent_children 的跨版本處理）
+    resolved_version: Optional[str] = extract_version_from_ticket_id(source_ticket_id)
+    if resolved_version is None:
+        return False
+
+    source: Optional[Dict[str, Any]] = load_ticket(resolved_version, source_ticket_id)
+    if not source:
+        return False
+
+    # 防禦性型別檢查：spawned_tickets 可能因手動編輯變成字串
+    raw_spawned = source.get("spawned_tickets", [])
+    if isinstance(raw_spawned, str):
+        print(
+            f"[WARNING] Source Ticket {source_ticket_id} 的 spawned_tickets 欄位為字串而非清單，"
+            f"已自動修正",
+            file=sys.stderr,
+        )
+    # 重用 _normalize_children（語義上為「將任意輸入正規化為 list[str]」，
+    # 無 children 特化邏輯；pepper Phase 3a §2 決策不改名）
+    spawned: List[str] = _normalize_children(raw_spawned)
+
+    if new_ticket_id not in spawned:
+        spawned.append(new_ticket_id)
+        source["spawned_tickets"] = spawned
+
+        source_path: Path = Path(
+            source.get("_path", get_ticket_path(resolved_version, source_ticket_id))
+        )
+        # save_ticket 失敗時回傳 False（不 propagate exception；對齊 CLI 層不回滾設計）
+        try:
+            save_ticket(source, source_path)
+        except (IOError, OSError):
+            return False
 
     return True

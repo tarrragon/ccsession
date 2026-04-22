@@ -1,4 +1,8 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --quiet --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = []
+# ///
 """
 Project Init 環境檢查 Hook
 
@@ -39,6 +43,8 @@ def run_project_init_check(project_root: Path, logger) -> tuple[bool, str]:
             ["project-init", "check"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=30,
             cwd=str(project_root)
         )

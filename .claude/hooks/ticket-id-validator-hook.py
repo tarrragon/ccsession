@@ -161,14 +161,16 @@ def get_directory_version(file_path: str, logger) -> Optional[str]:
     """
     path = Path(file_path)
 
-    # 模式 1: docs/work-logs/v{version}/tickets/{id}.md
+    # 模式 1: docs/work-logs/v{major}/v{major}.{minor}/v{version}/tickets/{id}.md
+    # 階層結構中可能有多個版本目錄（如 v0/v0.31/v0.31.1），取最深層的
     if "docs/work-logs/" in str(path):
-        parts = path.parts
-        for i, part in enumerate(parts):
+        deepest_version = None
+        for part in path.parts:
             if part.startswith("v") and part[1:].replace(".", "").isdigit():
-                version = part[1:]  # 移除 'v' 前綴
-                logger.debug(f"從目錄提取版本: {version}")
-                return version
+                deepest_version = part[1:]  # 移除 'v' 前綴
+        if deepest_version:
+            logger.debug(f"從目錄提取版本: {deepest_version}")
+            return deepest_version
 
     # 模式 2: .claude/tickets/{id}.md
     # 此模式中無法從目錄提取版本，需要從 ID 中提取
@@ -250,7 +252,7 @@ def validate_ticket_id_format(ticket_id: str, logger) -> Tuple[bool, str, bool]:
     驗證 Ticket ID 格式（支援寬鬆驗證）
 
     標準 ID：執行完整驗證（格式 + 波次範圍檢查）
-    帶後綴 ID：執行寬鬆驗證（只檢查格式，提示後綴信息，不阻止）
+    帶後綴 ID：執行寬鬆驗證（只檢查格式，提示後綴資訊，不阻止）
 
     Args:
         ticket_id: Ticket ID
@@ -259,7 +261,7 @@ def validate_ticket_id_format(ticket_id: str, logger) -> Tuple[bool, str, bool]:
     Returns:
         tuple - (is_valid, message, has_suffix)
             - is_valid: 格式是否正確
-            - message: 訊息（錯誤或信息提示）
+            - message: 訊息（錯誤或資訊提示）
             - has_suffix: 是否含有後綴（用於區分完整驗證和寬鬆驗證）
     """
     if not ticket_id:
@@ -369,7 +371,7 @@ def validate_ticket_id(file_path: str, ticket_id: str, logger) -> Tuple[bool, st
     完整的 Ticket ID 驗證（支援寬鬆驗證）
 
     標準 ID：執行完整驗證（格式 + 版本一致性檢查）
-    帶後綴 ID：執行寬鬆驗證（只檢查格式，提示信息，不阻止）
+    帶後綴 ID：執行寬鬆驗證（只檢查格式，提示資訊，不阻止）
 
     Args:
         file_path: 檔案路徑
@@ -379,7 +381,7 @@ def validate_ticket_id(file_path: str, ticket_id: str, logger) -> Tuple[bool, st
     Returns:
         tuple - (is_valid, message)
             - is_valid: Ticket ID 是否有效
-            - message: 錯誤或信息訊息
+            - message: 錯誤或資訊訊息
     """
     # 步驟 1: 驗證格式（返回 has_suffix 標誌）
     is_valid, format_msg, has_suffix = validate_ticket_id_format(ticket_id, logger)

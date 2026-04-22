@@ -120,11 +120,22 @@ def _scan_worklog_directories() -> Optional[str]:
     # 版本號格式正則
     version_pattern = re.compile(r"^v\d+\.\d+\.\d+$")
 
-    # 蒐集版本目錄
-    versions = [
-        d.name for d in work_logs.iterdir()
-        if d.is_dir() and version_pattern.match(d.name)
-    ]
+    # 蒐集版本目錄（支援階層結構和舊式平行結構）
+    versions = []
+    # 新式階層：docs/work-logs/v{major}/v{major}.{minor}/v{version}/
+    for major_dir in work_logs.iterdir():
+        if not major_dir.is_dir() or not major_dir.name.startswith("v"):
+            continue
+        for minor_dir in major_dir.iterdir():
+            if not minor_dir.is_dir() or not minor_dir.name.startswith("v"):
+                continue
+            for patch_dir in minor_dir.iterdir():
+                if patch_dir.is_dir() and version_pattern.match(patch_dir.name):
+                    versions.append(patch_dir.name)
+    # 舊式平行：docs/work-logs/v{version}/（向後相容）
+    for d in work_logs.iterdir():
+        if d.is_dir() and version_pattern.match(d.name) and d.name not in versions:
+            versions.append(d.name)
 
     if not versions:
         logger.warning("無法在 work-logs 目錄中找到版本目錄，請確保 docs/work-logs/v*/tickets 目錄存在")
@@ -249,6 +260,55 @@ def require_version(explicit_version: Optional[str] = None) -> str:
         raise ValueError("無法偵測版本，請使用 --version 指定")
 
     return version
+
+
+def validate_version_registered(version: str) -> tuple[bool, str]:
+    """
+    驗證版本是否在 todolist.yaml 中註冊且狀態為 active。
+
+    Args:
+        version: 版本號（無 v 前綴，如 "0.17.4"）
+
+    Returns:
+        tuple[bool, str]: (是否通過驗證, 錯誤訊息)
+        - todolist.yaml 不存在 → (True, "") — 向後相容
+        - 版本已註冊且 active → (True, "")
+        - 版本未註冊 → (False, 錯誤訊息)
+        - 版本已註冊但非 active → (False, 錯誤訊息)
+    """
+    from .messages import ErrorMessages
+
+    root = get_project_root()
+    todolist_path = root / "docs" / "todolist.yaml"
+
+    if not todolist_path.exists():
+        return (True, "")
+
+    try:
+        import yaml
+        with open(todolist_path, encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+    except Exception as e:
+        logger.warning(
+            f"validate_version_registered: 解析 todolist.yaml 失敗 "
+            f"({type(e).__name__}: {e})，跳過驗證"
+        )
+        return (True, "")
+
+    versions_list = data.get("versions", [])
+    for entry in versions_list:
+        entry_version = str(entry.get("version", ""))
+        if entry_version == version:
+            status = entry.get("status", "")
+            if status == "active":
+                return (True, "")
+            error_msg = ErrorMessages.VERSION_NOT_ACTIVE.format(
+                version=version, status=status
+            )
+            return (False, error_msg)
+
+    error_msg = ErrorMessages.VERSION_NOT_REGISTERED.format(version=version)
+    return (False, error_msg)
 
 
 if __name__ == "__main__":

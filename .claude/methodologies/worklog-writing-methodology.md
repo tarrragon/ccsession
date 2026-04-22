@@ -1,8 +1,9 @@
 # 工作日誌撰寫方法論
 
-**版本**: v1.0.0
+**版本**: v2.0.0
 **建立日期**: 2026-01-10
-**核心原則**: 工具相容性優先，純文字狀態標記
+**最後更新**: 2026-03-31
+**核心原則**: 工具相容性優先，純文字狀態標記，進度即時記錄
 
 ---
 
@@ -36,8 +37,8 @@ byte index 2 is not a char boundary; it is inside '⏳' (bytes 0..3) of `⏳ |`
 ```markdown
 | Ticket ID | 狀態 |
 |-----------|------|
-| W1-001    | ⏳   |  <!-- 禁止：會導致 CLI crash -->
-| W1-002    | 🔄   |  <!-- 禁止 -->
+| Wn-001    | ⏳   |  <!-- 禁止：會導致 CLI crash -->
+| Wn-002    | 🔄   |  <!-- 禁止 -->
 ```
 
 ### 允許項目
@@ -49,10 +50,10 @@ byte index 2 is not a char boundary; it is inside '⏳' (bytes 0..3) of `⏳ |`
 ```markdown
 | Ticket ID | 狀態 |
 |-----------|------|
-| W1-001    | 待處理 |  <!-- 正確：純文字 -->
-| W1-002    | 進行中 |  <!-- 正確 -->
+| Wn-001    | 待處理 |  <!-- 正確：純文字 -->
+| Wn-002    | 進行中 |  <!-- 正確 -->
 
-#### W1-001 分析結果：已完成
+#### Wn-001 分析結果：已完成
 
 上述 Ticket 已於 2026-01-10 完成。  <!-- 表格外可用 emoji -->
 ```
@@ -82,7 +83,7 @@ byte index 2 is not a char boundary; it is inside '⏳' (bytes 0..3) of `⏳ |`
 
 **範例**：
 ```markdown
-#### W2-001 分析結果：已完成
+#### Wn-001 分析結果（下一 Wave）：已完成
 
 **核心發現**：
 - 測試卡住問題不存在，所有 14 個測試 100% 通過
@@ -91,7 +92,76 @@ byte index 2 is not a char boundary; it is inside '⏳' (bytes 0..3) of `⏳ |`
 
 ---
 
-## 第三原則：標準結構
+## 第三原則：進度即時記錄
+
+> **來源**：Legacy Code 步驟 4 執行中發現 worklog 完全未更新的歷史教訓，PC-033 僅被動防護。
+> **審查結論**：這是規範問題，用規範解決。
+
+### Worklog 雙職責
+
+| 區段 | 職責 | 更新頻率 |
+|------|------|---------|
+| 版本目標 + Ticket 索引 | 企劃（靜態） | 版本開始、範圍變更時 |
+| **進度追蹤** | 進度記錄（動態） | 每個重要事件發生時 |
+
+進度追蹤記錄的是**決策和里程碑**，不是執行細節（細節在 ticket）。
+
+### 需記錄到 worklog 的 5 類事件
+
+| 事件類型 | 觸發條件 | 記錄格式 |
+|---------|---------|---------|
+| Ticket 完成 | ticket track complete | `{日期}: {id} 完成 -- {摘要}` |
+| 任務拆分 | 建立子 Ticket 或拆分 | `{日期}: {parent} 拆分 -- {child1}, {child2}` |
+| 額外發現 | 執行中建立非計畫 Ticket | `{日期}: 新增 {id} -- {原因摘要}` |
+| UC/功能推進 | 一組相關 Ticket 完成 | `{日期}: UC-XX 步驟 Y 完成 -- {結果摘要}` |
+| 阻塞/風險 | 發現阻塞或設計問題 | `{日期}: {id} 阻塞 -- {原因}` |
+
+### 更新時機
+
+| 時機 | 動作 |
+|------|------|
+| ticket track complete 後 | 追加一行進度到 worklog |
+| 建立新 Ticket 後 | 追加一行進度到 worklog |
+| 任務拆分決策後 | 追加一行進度到 worklog |
+| session 結束前（handoff） | 確認本次 session 的進度已記錄 |
+
+### 進度追蹤區段格式（bullet list）
+
+```markdown
+## 進度追蹤
+
+- {日期}: UC-08 修復完成 -- {commit-hash}，失敗 259->141
+- {日期}: UC-04 {ticket-id} 完成 -- 3/5 Widget 測試修復（14 個）
+- {日期}: {ticket-id} 拆分 -- {子 ticket-id}（複雜 Provider）、{子 ticket-id}（UI 規範）
+- {日期}: {ticket-id} 完成 -- Worklog 進度同步機制分析
+```
+
+> 使用 bullet list 而非 table：更易追加、diff 友好、條目超過 20 行後仍可讀。
+
+### 密集衝刺後的敘事式摘要（合法替代格式）
+
+> **來源**：完成大量 Ticket 但 worklog 缺少逐筆 bullet list 進度記錄的歷史教訓。
+
+當 session 中密集完成多個 Ticket（如 Wave 收尾、批量修復），逐筆 bullet list 可能不切實際。此時允許使用**敘事式摘要**替代：
+
+```markdown
+### {日期}：{主題}衝刺
+
+- {ticket-range} 可觀測性修復：全域錯誤處理、靜默失敗路徑消除、日誌覆蓋
+- {ticket-range} 審查結論全部修復：AppLogger 遷移、ErrorHandler 防護
+- {ticket-range} 完成：jsonDecode 回退、Timer/Stream 審計、AppLogger 實例化
+```
+
+**敘事式摘要要求**：
+- 必須涵蓋所有完成的 Ticket ID（可用範圍表示如 W{n}-{start}~{end}）
+- 必須包含關鍵成果摘要
+- 應在 session 結束前或 handoff 時補寫
+
+**優先級**：逐筆 bullet list > 敘事式摘要 > 無記錄。日常開發用 bullet list，密集衝刺後用敘事式摘要。
+
+---
+
+## 第四原則：標準結構
 
 ### 工作日誌必要章節
 
@@ -108,6 +178,12 @@ byte index 2 is not a char boundary; it is inside '⏳' (bytes 0..3) of `⏳ |`
 ## 版本目標
 
 [簡要描述本版本要達成的目標]
+
+---
+
+## 進度追蹤
+
+- YYYY-MM-DD: [事件] -- [摘要]
 
 ---
 
@@ -136,11 +212,11 @@ byte index 2 is not a char boundary; it is inside '⏳' (bytes 0..3) of `⏳ |`
 
 | 欄位 | 說明 | 範例 |
 |------|------|------|
-| Ticket ID | 版本號-階段-序號 | `0.25.0-W1-001` |
+| Ticket ID | 版本號-階段-序號 | `{version}-W1-001` |
 | Action | 動詞（Analyze/Design/Fix/Implement） | `Analyze` |
 | Target | 修改目標 | `Widget 測試基礎設施` |
 | Agent | 執行代理人 | `sage-test-architect` |
-| Dependencies | 依賴的其他 Ticket | `W2-001` |
+| Dependencies | 依賴的其他 Ticket | `Wn-001`（格式說明） |
 | 狀態 | 純文字狀態 | `待處理` |
 
 ---

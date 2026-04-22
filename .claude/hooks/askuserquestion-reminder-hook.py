@@ -1,4 +1,8 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --quiet --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = []
+# ///
 """
 AskUserQuestion Reminder Hook - 多任務派發提醒
 
@@ -21,7 +25,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 try:
-    from hook_utils import setup_hook_logging, is_subagent_environment
+    from hook_utils import setup_hook_logging, is_subagent_environment, read_json_from_stdin
     from lib.hook_messages import AskUserQuestionMessages
 except ImportError as e:
     print(f"[Hook Import Error] {Path(__file__).name}: {e}", file=sys.stderr)
@@ -39,7 +43,9 @@ def main() -> int:
         logger.info("AskUserQuestion Reminder Hook 啟動")
 
         # 讀取輸入
-        input_data = json.load(sys.stdin)
+        input_data = read_json_from_stdin(logger)
+        if not input_data:
+            return 0
 
         # 偵測 subagent 環境：agent_id 僅在 subagent 中出現
         if is_subagent_environment(input_data):

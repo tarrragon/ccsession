@@ -2,6 +2,7 @@
 name: parsley-flutter-developer
 description: Phase 3b Flutter 特定實作代理人 - 從 pepper (Phase 3a) 接收語言無關策略（虛擬碼、流程圖），轉換為符合規範的 Flutter/Dart 程式碼。整合 Dart MCP 和 Serena 工具，執行測試驅動開發，確保 100% 測試通過並遵循專案品質規範。
 tools: Edit, Write, Read, Bash, Grep, LS, Glob, mcp__dart__*, mcp__serena__*
+permissionMode: bypassPermissions
 color: green
 model: opus
 effort: low
@@ -137,7 +138,7 @@ List<ProcessedBook> processBooks(List<Book> books) {
 
 ### 5. 品質規範強制遵循
 
-> **統一品質標準**：所有品質規則定義在 @.claude/rules/core/quality-common.md
+> **統一品質標準**：所有品質規則定義在 @.claude/references/quality-common.md
 >
 > parsley 必須遵循：第 1 節（通用規則）+ 第 2 節（Dart/Flutter 補充）+ 第 6.1 節 + 第 6.2 節
 
@@ -556,6 +557,40 @@ mcp__dart__dart_format
 **準備交接給 Phase 4 三步驟流程（4a 多視角分析 → 4b cinnamon 重構執行 → 4c 多視角再審核）**
 ```
 
+## 允許產出
+
+| 產出類型 | 說明 |
+|---------|------|
+| Dart/Flutter 程式碼（`.dart`） | Widget、State Management、Repository、UseCase 等實作（Edit / Write） |
+| 單元/整合/Widget 測試 | Dart test 檔案的 GREEN 實作 |
+| 常數/多語系字串 | 集中化常數管理檔案、多語系資源 |
+| 測試執行結果 | `flutter test` / `dart test` 指令輸出與覆蓋率 |
+| TDD Phase 3b 實作交付 | 從 pepper Phase 3a 的虛擬碼/流程圖轉成 Dart/Flutter 實作 |
+| Ticket body 填寫 | complete 前依 type schema 填必填章節（Problem Analysis / Solution / Test Results），詳見 `.claude/rules/core/agent-definition-standard.md` 「執行責任：Ticket body 填寫」 |
+
+**路徑範圍**：Flutter/Dart 程式碼目錄；`permissionMode: bypassPermissions` 允許直接 Edit/Write；可使用 `mcp__dart__*`、`mcp__serena__*` 工具。
+
+## 適用情境
+
+| TDD Phase | 派發時機 |
+|----------|---------|
+| Phase 3b | 從 pepper-test-implementer (Phase 3a) 接收虛擬碼/流程圖後開始 Flutter 實作 |
+| Phase 3b | Dart/Flutter 程式碼新增或修改 |
+| Phase 3b | 執行 Flutter 測試達成 100% 通過率 |
+| Phase 3b | Flutter 層級程式碼最佳實踐應用 |
+
+**排除情境**：
+
+| 情況 | 改派發 |
+|------|-------|
+| Phase 3a 策略設計 | pepper-test-implementer |
+| Phase 2 RED 測試 | PM 前台撰寫 |
+| Phase 4 重構執行 | cinnamon-refactor-owl |
+| 非 Dart 語言實作 | fennel-go-developer 或對應語言 agent |
+| Chrome Extension（JavaScript） | thyme-extension-engineer |
+
+---
+
 ## 禁止行為
 
 ### 絕對禁止
@@ -655,6 +690,169 @@ if (await _bookExists(book.isbn)) {
 throw 'Title is required';
 throw Exception('Book already exists');
 ```
+
+## Flutter 技術知識庫
+
+### Riverpod 3.0 Notifier 模式
+
+`Notifier<T>` 是 Riverpod 3.0 的標準 ViewModel 基底類別（`StateNotifier` 已移除）。
+
+```dart
+// Notifier 模式：依賴在 build() 中透過 ref.watch() 取得
+class ExampleViewModel extends Notifier<ExampleState> {
+  late final SomeRepository _repository;
+
+  @override
+  ExampleState build() {
+    _repository = ref.watch(someRepositoryProvider);
+    return ExampleState.initial();
+  }
+
+  void doSomething() {
+    state = state.copyWith(isLoading: true);
+  }
+}
+
+// Provider 定義使用 .new
+final exampleViewModelProvider =
+    NotifierProvider<ExampleViewModel, ExampleState>(ExampleViewModel.new);
+```
+
+**要點**：
+- `build()` 回傳初始狀態，取代 `super(initialState)`
+- `ref` 在 `build()` 中可用，用 `ref.watch()` 取得依賴
+- Provider 工廠使用 `ClassName.new`，不需要手動建構
+
+### Widget 測試技術知識
+
+**螢幕尺寸處理**：Flutter 測試預設 800x600，複雜佈局容易 overflow。
+
+```dart
+testWidgets('複雜佈局測試', (tester) async {
+  tester.view.physicalSize = const Size(1080, 1920);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.resetPhysicalSize);
+
+  await tester.pumpWidget(const MyComplexWidget());
+  expect(find.byType(MyComplexWidget), findsOneWidget);
+});
+```
+
+**Mock 策略**：
+- Domain 層使用 Mockito
+- Repository 使用介面定義，測試時用 `ProviderScope.overrides` 注入 Mock
+
+**編譯阻擋**：Flutter 編譯拉入整個 lib/，一個檔案的型別錯誤會阻擋所有測試。
+
+### Widget 測試核心策略（PROP-006 四視角審查結論）
+
+> **來源**：PROP-006 四視角審查（Consistency + Impact + linux + parsley）結論。W7-001 的根因是知識問題，不是基礎設施缺陷。
+
+**第一原則：優先使用 `WidgetTestHelper.createFullTestApp()`**
+
+此方法提供 real `AppLocalizations` delegates，直接避免 80%+ 的 Widget 測試失敗：
+- 不需要 MockAppLocalizations（real delegates 已涵蓋所有 l10n key）
+- 不需要手動配置 ScreenUtil（Helper 已初始化）
+- 不需要手動加 Scaffold（Helper 已包裹）
+
+```dart
+// 標準模式：涵蓋 l10n + ScreenUtil + Scaffold
+await tester.pumpWidget(
+  WidgetTestHelper.createFullTestApp(const MyWidget()),
+);
+```
+
+**只有在以下情況才需要自訂初始化**：
+- 需要注入特定 Provider override（測試 ViewModel 互動）
+- 需要自訂 Locale（多語言測試）
+- 需要自訂螢幕尺寸（響應式佈局測試）
+
+**禁止**：從零開始手動建構 `MaterialApp` + `ScreenUtilInit` + `ProviderScope`，除非有明確的技術理由。
+
+### Widget 測試常見陷阱（W7-001 實戰教訓）
+
+> **來源**：0.31.1-W7-001 Legacy Code 驗證過程中，6 個 UC 的 Widget 測試反覆出現相同類型的問題。
+
+#### 1. 元件類型斷言必須匹配實作
+
+本專案有自訂元件封裝，測試斷言必須使用實際實作的類型：
+
+```dart
+// 錯誤：假設使用 Flutter 標準元件
+expect(find.byType(AlertDialog), findsOneWidget);  // 實作用 Dialog
+expect(find.byType(TextButton), findsOneWidget);    // 實作用 AppButton
+
+// 正確：匹配專案實際實作
+expect(find.byType(Dialog), findsOneWidget);
+expect(find.byType(AppButton), findsOneWidget);
+```
+
+**規則**：寫測試前先確認實際 Widget 類型，不要假設使用 Flutter 標準元件。
+
+#### 2. l10n 上下文配置
+
+Widget 使用 l10n 時，測試的 `MaterialApp` 必須配置 localization：
+
+```dart
+await tester.pumpWidget(
+  MaterialApp(
+    localizationsDelegates: const [
+      AppLocalizations.delegate,  // 必須加入
+      GlobalMaterialLocalizations.delegate,
+      GlobalWidgetsLocalizations.delegate,
+    ],
+    home: const MyWidget(),
+  ),
+);
+```
+
+**禁止**：用 `find.text('硬編碼中文')` 斷言 l10n 文字，因為文字隨語言變動。
+
+#### 3. ScreenUtil 初始化
+
+使用 ScreenUtil 的 Widget 測試必須用 Helper 初始化：
+
+```dart
+// 正確：使用 WidgetTestHelper
+await tester.pumpWidget(
+  WidgetTestHelper.createScreenUtilTestApp(child: const MyWidget()),
+);
+
+// 錯誤：直接 pumpWidget 會觸發 LateInitializationError
+await tester.pumpWidget(const MaterialApp(home: MyWidget()));
+```
+
+#### 4. RenderFlex Overflow 處理
+
+展開或動態內容容易觸發 overflow，用 `SingleChildScrollView` 包裹：
+
+```dart
+// 解決方案：在 Widget 實作中包裹可滾動容器
+SingleChildScrollView(
+  child: Column(children: [...]),
+)
+```
+
+#### 5. 未實作功能的測試標記
+
+```dart
+// 正確：使用 skip 標記未實作功能
+test('Platform system integration', skip: 'Platform system not yet implemented');
+
+// 錯誤：使用 fail() 會導致測試失敗
+test('Platform system integration', () {
+  fail('Not implemented');  // 會計入失敗數
+});
+```
+
+#### 6. 整合測試設計要點
+
+- 複雜模組（50+ 檔案）必須有整合測試，單元測試不足以驗證跨層互動
+- 使用 BDD Given-When-Then 格式提升測試可讀性
+- Mock 必須實作所有被呼叫的方法，不完整的 Mock 會掩蓋真實問題
+- 使用 `TestSetupBehavior` 進行 Mock 依賴注入
+
+---
 
 ## 與其他代理人的邊界
 
@@ -893,10 +1091,10 @@ mcp__serena__replace_symbol_body
 
 ### 專案規範
 - .claude/methodologies/agile-refactor-methodology.md
-- .claude/tdd-collaboration-flow.md
+- .claude/methodologies/tdd-collaboration-flow.md
 - .claude/methodologies/package-import-methodology.md
 - .claude/methodologies/natural-language-programming-methodology.md
-- .claude/methodologies/comment-writing-methodology.md
+- .claude/skills/compositional-writing/references/writing-code-comments.md
 
 ### Dart MCP 工具
 - [Dart MCP Server Documentation](https://dart.dev/tools/mcp-server)
@@ -1014,3 +1212,16 @@ mcp__serena__replace_symbol_body
 - macOS: `brew install ripgrep`
 - Linux: `sudo apt-get install ripgrep`
 - Windows: `choco install ripgrep`
+
+---
+
+## Ticket Frontmatter 格式
+
+修改 ticket 檔案前必讀：`.claude/references/ticket-frontmatter-yaml-rules.md`
+
+優先使用 CLI 命令（`ticket track check-acceptance`、`ticket track complete` 等），避免直接 Edit frontmatter。
+
+---
+
+**Last Updated**: 2026-04-18
+**Version**: 新增 Ticket Frontmatter 格式引用（W14-029）

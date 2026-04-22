@@ -27,7 +27,7 @@ from typing import Any, List, NamedTuple, Optional, Tuple, Union
 from .hook_base import get_project_root
 
 # ============================================================================
-# 快取變數（模組級，用於 W39-002 效能改善）
+# 快取變數（模組級，用於效能改善）
 # ============================================================================
 
 _error_pattern_mtime_cache: dict[str, float] = {}
@@ -193,14 +193,17 @@ def _parse_nested_line(
 def _parse_yaml_lines(frontmatter_text: str) -> dict:
     """解析 YAML frontmatter 文本（逐行）
 
-    支援列表項目：當遇到 "key:" 後跟著 "  - item" 格式的行時，
-    會將這些項目累積到該鍵底下（以換行符分隔）。
+    支援列表項目：
+    - 頂層 block-style 列表：`children:\n- id` 或 `children:\n  - id`
+      → 回傳 list[str]
+    - 頂層 flow-style 列表：`children: [a, b]` → 回傳 list[str]
+    - 嵌套列表項目：`history:\n  user: a\n    - item` → 累積到嵌套鍵
 
     Args:
         frontmatter_text: frontmatter 內容（已去除---標記）
 
     Returns:
-        dict: 解析出的 key-value 對
+        dict: 解析出的 key-value 對（列表欄位回傳 list）
     """
     result = {}
     current_key = None
@@ -209,6 +212,16 @@ def _parse_yaml_lines(frontmatter_text: str) -> dict:
 
     for line in frontmatter_text.split('\n'):
         if _skip_empty_or_comment(line):
+            continue
+
+        # 頂層 block-style 列表項目（無縮排 "- item"）
+        # 例如：children:\n- 0.1.0-W1-001.1
+        if line.startswith('- ') and current_key and multiline_marker is None:
+            item = line[2:].strip().strip("'\"")
+            if item:
+                if not isinstance(result.get(current_key), list):
+                    result[current_key] = []
+                result[current_key].append(item)
             continue
 
         # 判斷行的縮排層級
@@ -237,6 +250,24 @@ def _parse_yaml_lines(frontmatter_text: str) -> dict:
                 nested_dict[current_nested_key] += "\n" + item_content if nested_dict[current_nested_key] else item_content
             continue
         elif line.startswith('  '):
+            # 頂層 block-style 列表項目（2 空白縮排 "  - item"）
+            # 只在無 multiline_marker 且無 current_nested_key 時觸發
+            # （避免吃掉嵌套 dict 裡的列表）
+            stripped = line.strip()
+            if (
+                stripped.startswith('- ')
+                and current_key
+                and multiline_marker is None
+                and current_nested_key is None
+                and not isinstance(result.get(current_key), dict)
+            ):
+                item = stripped[2:].strip().strip("'\"")
+                if item:
+                    if not isinstance(result.get(current_key), list):
+                        result[current_key] = []
+                    result[current_key].append(item)
+                continue
+
             # 2 格：嵌套鍵值對、多行標記或列表項目
             nested_result = _parse_nested_line(line, current_key, multiline_marker, current_nested_key)
             multiline_marker = nested_result.multiline_marker
@@ -301,8 +332,28 @@ def _parse_top_level_pair(line: str, result: dict) -> Tuple[Optional[str], Optio
         result[key] = ""
         return key, value
 
+    # Flow-style 列表：`key: [a, b]` 或 `key: []`
+    if value.startswith('[') and value.endswith(']'):
+        inner = value[1:-1].strip()
+        if not inner:
+            result[key] = []
+        else:
+            items = []
+            for item in inner.split(','):
+                cleaned = item.strip().strip("'\"")
+                if cleaned:
+                    items.append(cleaned)
+            result[key] = items
+        return key, None
+
+    # 空值（例如 `children:`）：初始化為空字串，
+    # 後續若偵測到 block-style 列表會改為 list（見 _parse_yaml_lines）
+    if not value:
+        result[key] = ""
+        return key, None
+
     # 移除引號
-    value_clean = value.strip("'\"") if value else ""
+    value_clean = value.strip("'\"")
     result[key] = value_clean
     return key, None
 
@@ -543,30 +594,54 @@ def scan_ticket_files_by_version(
 ) -> List[Path]:
     """掃描特定版本的 Ticket 檔案
 
+    支援兩種目錄結構：
+    - 舊結構：docs/work-logs/v{version}/tickets/
+    - 新結構（三層階層）：docs/work-logs/v{major}/v{major}.{minor}/v{version}/tickets/
+
     Args:
         project_root: 專案根目錄
-        version: 版本號（如 "0.1.0"）
+        version: 版本號（如 "0.31.1"）
         logger: 可選日誌物件
 
     Returns:
         Ticket 檔案路徑清單
     """
-    tickets_dir = project_root / "docs" / "work-logs" / "v{}".format(version) / "tickets"
+    # Strategy 1: 舊結構（直接路徑）
+    flat_dir = project_root / "docs" / "work-logs" / "v{}".format(version) / "tickets"
+    if flat_dir.exists():
+        try:
+            ticket_files = list(flat_dir.glob("*.md"))
+            if logger:
+                logger.debug("從版本 v{} 找到 {} 個 Ticket 檔案 (flat)".format(version, len(ticket_files)))
+            return ticket_files
+        except (OSError, PermissionError) as e:
+            if logger:
+                logger.warning("掃描 Ticket 目錄失敗 (v{}): {}".format(version, e))
+            return []
 
-    if not tickets_dir.exists():
-        if logger:
-            logger.debug("Ticket 目錄不存在: {}".format(tickets_dir))
-        return []
+    # Strategy 2: 新三層結構（v{major}/v{major}.{minor}/v{version}/tickets/）
+    parts = version.split(".")
+    if len(parts) >= 3:
+        major = parts[0]
+        minor = "{}.{}".format(parts[0], parts[1])
+        hierarchical_dir = (
+            project_root / "docs" / "work-logs"
+            / "v{}".format(major) / "v{}".format(minor) / "v{}".format(version) / "tickets"
+        )
+        if hierarchical_dir.exists():
+            try:
+                ticket_files = list(hierarchical_dir.glob("*.md"))
+                if logger:
+                    logger.debug("從版本 v{} 找到 {} 個 Ticket 檔案 (hierarchical)".format(version, len(ticket_files)))
+                return ticket_files
+            except (OSError, PermissionError) as e:
+                if logger:
+                    logger.warning("掃描 Ticket 目錄失敗 (v{}, hierarchical): {}".format(version, e))
+                return []
 
-    try:
-        ticket_files = list(tickets_dir.glob("*.md"))
-        if logger:
-            logger.debug("從版本 v{} 找到 {} 個 Ticket 檔案".format(version, len(ticket_files)))
-        return ticket_files
-    except (OSError, PermissionError) as e:
-        if logger:
-            logger.warning("掃描 Ticket 目錄失敗 (v{}): {}".format(version, e))
-        return []
+    if logger:
+        logger.debug("Ticket 目錄不存在: v{}".format(version))
+    return []
 
 
 def find_ticket_files(
@@ -630,18 +705,16 @@ def find_ticket_files(
                 if logger:
                     logger.warning("掃描其他版本目錄失敗: {}".format(e))
     else:
-        # Fallback：讀取失敗時，掃描所有版本目錄
+        # Fallback：讀取失敗時，遞迴搜尋所有 tickets 目錄
         if logger:
-            logger.info("current_version 讀取失敗，fallback 到掃描所有版本目錄")
+            logger.info("current_version 讀取失敗，fallback 到遞迴掃描所有 tickets 目錄")
 
         work_logs_dir = project_root / "docs" / "work-logs"
         if work_logs_dir.exists():
             try:
-                for version_dir in work_logs_dir.glob("v*"):
-                    version_tickets = scan_ticket_files_by_version(
-                        project_root, version_dir.name[1:], logger
-                    )
-                    all_tickets.extend(version_tickets)
+                for tickets_dir in work_logs_dir.rglob("tickets"):
+                    if tickets_dir.is_dir():
+                        all_tickets.extend(tickets_dir.glob("*.md"))
             except (OSError, PermissionError) as e:
                 if logger:
                     logger.warning("掃描版本目錄失敗: {}".format(e))
@@ -682,6 +755,7 @@ def find_ticket_file(
 
     # Strategy 1: 直接構建路徑（如果能解析出版本號）
     if version:
+        # 1a: 舊結構（flat）
         direct_path = (
             project_root / "docs" / "work-logs" / f"v{version}" / "tickets" / f"{ticket_id}.md"
         )
@@ -689,9 +763,23 @@ def find_ticket_file(
             if logger:
                 logger.info("找到 Ticket: {} 於 {} (direct path)".format(ticket_id, direct_path))
             return direct_path
-        else:
-            if logger:
-                logger.debug("直接路徑不存在，嘗試舊位置: {}".format(ticket_id))
+
+        # 1b: 新三層結構（hierarchical）
+        parts = version.split(".")
+        if len(parts) >= 3:
+            major = parts[0]
+            minor = "{}.{}".format(parts[0], parts[1])
+            hierarchical_path = (
+                project_root / "docs" / "work-logs"
+                / f"v{major}" / f"v{minor}" / f"v{version}" / "tickets" / f"{ticket_id}.md"
+            )
+            if hierarchical_path.exists():
+                if logger:
+                    logger.info("找到 Ticket: {} 於 {} (hierarchical path)".format(ticket_id, hierarchical_path))
+                return hierarchical_path
+
+        if logger:
+            logger.debug("直接路徑不存在，嘗試舊位置: {}".format(ticket_id))
 
     # Strategy 2: 檢查舊位置 .claude/tickets/{ticket_id}.md（向後相容）
     old_path = project_root / ".claude" / "tickets" / f"{ticket_id}.md"

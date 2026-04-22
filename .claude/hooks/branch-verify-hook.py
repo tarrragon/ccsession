@@ -1,5 +1,8 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
+#!/usr/bin/env -S uv run --quiet --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = []
+# ///
 """
 Branch Verify Hook - PreToolUse Hook 用於編輯前檢查分支
 
@@ -15,20 +18,21 @@ Decision: "allow" (feature 分支) | "deny" (保護分支)
 - 使用 .claude/lib/hook_io 共用模組
 - 消除重複程式碼
 
-重構紀錄 (v0.31.0-W22-001.3):
+重構紀錄:
 - 遷移至統一日誌系統 (hook_utils)
 
-修改紀錄 (0.31.1-W5-001):
+修改紀錄:
 - 將保護分支決策從 "ask" 改為 "deny"（預防 Edit 操作在保護分支上執行）
 - 優化 block 訊息，包含詳細的分支切換指引
 - 移除未使用的 worktree_info 變數
-
-修改紀錄 (0.1.1-W9-002.3):
 - 新增路徑豁免邏輯（.claude/, docs/, CLAUDE.md, README.md 在保護分支上允許編輯）
 - 新增 is_exempt_path_on_protected_branch() 函式
 - 在保護分支上，豁免路徑不阻止編輯
+- 強化 worktree 環境支援：當檔案路徑無法推導 cwd 時，嘗試從 CLAUDE_PROJECT_DIR 推導
+- 在 feat/* 分支上，所有路徑檢查均跳過（明確 early return）
 """
 
+import os
 import sys
 from pathlib import Path
 
@@ -51,6 +55,36 @@ from hook_io import (
 from hook_utils import setup_hook_logging, run_hook_safely
 
 
+def _resolve_cwd_for_branch_detection(file_path: str) -> "str | None":
+    """
+    從檔案路徑推導用於分支偵測的工作目錄
+
+    優先使用檔案所在目錄（支援 worktree 環境）。
+    如果檔案路徑非絕對路徑，fallback 到 CLAUDE_PROJECT_DIR。
+
+    Args:
+        file_path: 被編輯的檔案路徑
+
+    Returns:
+        str | None: 用於 git 命令的工作目錄，None 表示使用預設 cwd
+    """
+    if file_path and file_path.startswith("/"):
+        parent = str(Path(file_path).parent)
+        # 如果父目錄存在，使用它；否則向上尋找存在的目錄
+        check_dir = parent
+        while check_dir and check_dir != "/" and not Path(check_dir).exists():
+            check_dir = str(Path(check_dir).parent)
+        if check_dir and check_dir != "/" and Path(check_dir).exists():
+            return check_dir
+
+    # Fallback: 使用 CLAUDE_PROJECT_DIR（可能是 worktree 路徑）
+    project_dir = os.getenv("CLAUDE_PROJECT_DIR")
+    if project_dir and Path(project_dir).exists():
+        return project_dir
+
+    return None
+
+
 def is_exempt_path_on_protected_branch(file_path: str, cwd: str | None = None) -> bool:
     """
     判斷此路徑是否在保護分支上被豁免（允許編輯）
@@ -68,19 +102,23 @@ def is_exempt_path_on_protected_branch(file_path: str, cwd: str | None = None) -
         bool: True 表示豁免（允許編輯），False 表示不豁免（需要 deny）
 
     Example:
-        if is_exempt_path_on_protected_branch(".claude/rules/core/decision-tree.md"):
+        if is_exempt_path_on_protected_branch(".claude/pm-rules/decision-tree.md"):
             print("Allowed to edit .claude/ files on main")
     """
     # 豁免的路徑字首
     exempt_prefixes = [
         ".claude/",
         "docs/",
+        "scripts/experiments/",  # 實驗一次性腳本（W15-023，對應 docs/experiments/ 報告）
     ]
 
     # 豁免的精確路徑
     exempt_exact = [
         "CLAUDE.md",
         "README.md",
+        "CHANGELOG.md",
+        ".gitignore",  # repo 層級忽略清單：保護分支放行主線程直接補 runtime artifact / lock（W10-033）
+        ".gitattributes",  # repo 層級檔案屬性：保護分支放行主線程維護 eol/binary 規範（W10-054.1.1）
     ]
 
     project_root = get_project_root(cwd=cwd)
@@ -135,7 +173,7 @@ def main() -> int:
 
     # 從被編輯檔案路徑推導 git repo context（支援 worktree 環境）
     file_path = tool_input.get("file_path", "")
-    file_dir = str(Path(file_path).parent) if file_path and file_path.startswith("/") else None
+    file_dir = _resolve_cwd_for_branch_detection(file_path)
 
     # 獲取當前分支
     current_branch = get_current_branch(cwd=file_dir)
@@ -145,7 +183,8 @@ def main() -> int:
         write_hook_output(output)
         return 0
 
-    # 檢查是否為允許的分支
+    # 檢查是否為允許的分支（feat/*, fix/* 等）
+    # 在開發分支上，所有路徑均允許編輯，不需要進一步檢查
     if is_allowed_branch(current_branch):
         logger.info(f"當前在 feature 分支 '{current_branch}' 上，允許編輯")
         output = create_pretooluse_output(
@@ -195,7 +234,7 @@ def main() -> int:
 豁免路徑（允許在保護分支上編輯）：
 - .claude/ （規則、配置、Hook、方法論）
 - docs/ （工作日誌、Ticket 檔案）
-- CLAUDE.md、README.md """
+- CLAUDE.md、README.md、CHANGELOG.md """
         else:
             # 非專案檔案（應該不會發生，但保留說明）
             deny_message = f"""保護分支編輯被阻止

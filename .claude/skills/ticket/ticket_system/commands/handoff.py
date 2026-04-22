@@ -37,7 +37,10 @@ from ticket_system.lib.ticket_loader import (
     resolve_version,
     list_tickets,
 )
-from ticket_system.lib.ticket_validator import validate_ticket_id
+from ticket_system.lib.ticket_validator import (
+    validate_ticket_id,
+    validate_acceptance_criteria,
+)
 from ticket_system.lib.messages import (
     ErrorMessages,
     WarningMessages,
@@ -171,7 +174,10 @@ def _verify_handoff_dependencies(ticket: Dict[str, Any], ticket_id: str, version
     # 檢查每個依賴 Ticket 的狀態
     incomplete_deps = []
     for dep_id in blocked_by:
-        dep_ticket = load_ticket(version, dep_id)
+        # 從 dep_id 萃取版本以支援跨版本 blockedBy 查找
+        # 萃取失敗（ID 格式異常）時 fallback 到當前 version，保持既有行為
+        dep_version = extract_version_from_ticket_id(dep_id) or version
+        dep_ticket = load_ticket(dep_version, dep_id)
         if not dep_ticket:
             incomplete_deps.append(f"{dep_id} (未找到)")
         elif dep_ticket.get("status") != STATUS_COMPLETED:
@@ -210,8 +216,6 @@ def _check_all_acceptance_complete(ticket: Dict[str, Any]) -> bool:
     Returns:
         bool: True 表示全部已勾選，False 表示有未完成項目或無驗收條件
     """
-    from ticket_system.lib.ticket_validator import validate_acceptance_criteria
-
     acceptance_list = ticket.get("acceptance")
     if not acceptance_list:
         return False  # 無驗收條件，不觸發警告
@@ -504,7 +508,16 @@ def _execute_handoff(args: argparse.Namespace) -> int:
         return 1
 
     # 步驟 2：解析版本
-    version = resolve_version(getattr(args, "version", None))
+    # 優先從 Ticket ID 提取版本，fallback 到 --version 或自動偵測
+    explicit_version = getattr(args, "version", None)
+    if not explicit_version:
+        extracted = extract_version_from_ticket_id(ticket_id)
+        if extracted:
+            version = extracted
+        else:
+            version = resolve_version(None)
+    else:
+        version = resolve_version(explicit_version)
     if not version:
         _print_version_error()
         return 1
@@ -1069,8 +1082,139 @@ def _execute_gc(args: argparse.Namespace) -> int:
     return execute_gc(dry_run=(dry_run or not execute_mode))
 
 
+_VALID_AUTO_DIRECTIONS = ("to-parent", "to-child", "to-sibling", "to-source", "context-refresh")
+_AUTO_RUNQUEUE_HINT_TITLE = "下一步候選（runqueue --context=resume --top 3）"
+_AUTO_RUNQUEUE_EMPTY_MESSAGE = "目前無待恢復 ticket"
+
+
+def _print_auto_runqueue_hint(version: str) -> None:
+    """在 handoff --auto 成功後輸出 resume context 的下一步候選。"""
+    from ticket_system.commands.track_runqueue import render_runqueue
+
+    args = argparse.Namespace(
+        format="list",
+        top=3,
+        context="resume",
+        wave=None,
+    )
+
+    print()
+    print(_AUTO_RUNQUEUE_HINT_TITLE)
+    print(SEPARATOR_SECONDARY)
+
+    try:
+        rendered = render_runqueue(args, version)
+    except Exception as exc:  # pragma: no cover - defensive guard
+        print(format_warning(f"runqueue 建議產生失敗：{exc}"))
+        return
+
+    print(rendered)
+    if "  1. " not in rendered:
+        print(_AUTO_RUNQUEUE_EMPTY_MESSAGE)
+
+
+def _execute_auto_handoff(args: argparse.Namespace) -> int:
+    """
+    執行 --auto 模式 handoff。
+
+    用途：由 scheduler / 自動化流程呼叫，以明確的 from_ticket_id + direction
+    生成標準 handoff JSON，不經過 status / dependency 驗證。
+
+    與互動模式差異：
+    - 必須同時提供 --from-ticket-id 與 --direction
+    - 跳過 _verify_handoff_status / _verify_handoff_dependencies
+    - 產出的 JSON 多一個 auto_generated=true 欄位
+
+    JSON schema（對齊 handoff-reminder-hook.py 讀取格式）：
+    - ticket_id, direction, timestamp, from_status, title, what
+    - chain: { root, parent, depth } —— 直接取 ticket.chain，不自行重解析
+    - resumed_at: None
+    - auto_generated: True
+
+    Args:
+        args: argparse Namespace，需含 from_ticket_id 與 direction
+
+    Returns:
+        int: exit code (0 成功, 1 失敗)
+    """
+    from_ticket_id = getattr(args, "from_ticket_id", None)
+    direction = getattr(args, "direction", None)
+
+    if not from_ticket_id:
+        print(format_error("--auto 需要 --from-ticket-id 參數"), file=sys.stderr)
+        return 1
+    if not direction:
+        print(format_error("--auto 需要 --direction 參數"), file=sys.stderr)
+        return 1
+
+    # 驗證 direction 前綴合法（支援 to-child:ID / to-sibling:ID 任務鏈格式）
+    direction_head = direction.split(":", 1)[0]
+    if direction_head not in _VALID_AUTO_DIRECTIONS:
+        print(format_error(
+            f"--direction 無效：{direction}；允許 {', '.join(_VALID_AUTO_DIRECTIONS)}"
+        ), file=sys.stderr)
+        return 1
+
+    if not validate_ticket_id(from_ticket_id):
+        _print_id_error()
+        return 1
+
+    # 解析版本
+    explicit_version = getattr(args, "version", None)
+    if explicit_version:
+        version = resolve_version(explicit_version)
+    else:
+        extracted = extract_version_from_ticket_id(from_ticket_id)
+        version = extracted if extracted else resolve_version(None)
+    if not version:
+        _print_version_error()
+        return 1
+
+    # 載入 ticket
+    ticket, error = load_and_validate_ticket(version, from_ticket_id, auto_print_error=False)
+    if error:
+        _print_ticket_not_found_error(from_ticket_id, version)
+        return 2
+
+    # 寫入 handoff JSON
+    root = get_project_root()
+    handoff_dir = root / HANDOFF_DIR / HANDOFF_PENDING_SUBDIR
+    handoff_dir.mkdir(parents=True, exist_ok=True)
+    handoff_file = handoff_dir / f"{from_ticket_id}.json"
+
+    handoff_data = {
+        "ticket_id": from_ticket_id,
+        "direction": direction,
+        "timestamp": datetime.now().isoformat(),
+        "from_status": ticket.get("status"),
+        "title": ticket.get("title"),
+        "what": ticket.get("what"),
+        "chain": ticket.get("chain", {}),
+        "resumed_at": None,
+        "auto_generated": True,
+    }
+
+    try:
+        with open(handoff_file, "w", encoding="utf-8") as f:
+            json.dump(handoff_data, f, ensure_ascii=False, indent=2)
+    except (IOError, OSError) as exc:
+        print(format_error(f"寫入 handoff 檔案失敗：{exc}"), file=sys.stderr)
+        return 1
+
+    print(format_info(
+        InfoMessages.HANDOFF_FILE_CREATED,
+        path=str(handoff_file.relative_to(root)),
+    ))
+    _print_auto_runqueue_hint(version)
+    return 0
+
+
 def execute(args: argparse.Namespace) -> int:
     """執行 handoff 命令"""
+    # --auto 自動生成模式（scheduler / 自動化用途）
+    if getattr(args, "auto", False):
+        return _execute_auto_handoff(args)
+
     # 檢查是否為 gc 命令（改用 --gc 旗標，不用子命令）
     if getattr(args, "gc", False):
         return _execute_gc(args)
@@ -1106,7 +1250,16 @@ def execute(args: argparse.Namespace) -> int:
                 _print_id_error()
                 return 1
 
-            version = resolve_version(getattr(args, "version", None))
+            # 優先從 Ticket ID 提取版本，fallback 到 --version 或自動偵測
+            explicit_ver = getattr(args, "version", None)
+            if not explicit_ver:
+                extracted = extract_version_from_ticket_id(ticket_id)
+                if extracted:
+                    version = extracted
+                else:
+                    version = resolve_version(None)
+            else:
+                version = resolve_version(explicit_ver)
             if not version:
                 _print_version_error()
                 return 1
@@ -1209,5 +1362,20 @@ def register(subparsers: argparse._SubParsersAction) -> None:
     parser.add_argument(
         "--version",
         help=HandoffMessages.ARG_VERSION_HELP
+    )
+    parser.add_argument(
+        "--auto",
+        action="store_true",
+        help="自動生成 handoff JSON（scheduler 用途；需搭配 --from-ticket-id 與 --direction）"
+    )
+    parser.add_argument(
+        "--from-ticket-id",
+        dest="from_ticket_id",
+        help="（搭配 --auto）來源 Ticket ID"
+    )
+    parser.add_argument(
+        "--direction",
+        dest="direction",
+        help="（搭配 --auto）handoff 方向：to-parent / to-child / to-sibling / to-source / context-refresh（可加 :TARGET_ID 後綴）"
     )
     parser.set_defaults(func=execute)

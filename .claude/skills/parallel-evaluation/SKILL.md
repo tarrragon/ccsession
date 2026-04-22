@@ -1,6 +1,6 @@
 ---
 name: parallel-evaluation
-description: "多視角審核/code review 工具。派發三人組（含常駐委員 linux）並行掃描程式碼品質、架構設計、重構評估。Use for: 程式碼審查, 架構評估, 重構掃描, 結論審查"
+description: "多視角審核/code review 工具。派發三人組（含常駐委員 linux）並行掃描程式碼品質、架構設計、重構評估。Use for: 程式碼審查, 架構評估, 重構掃描, 結論審查, 系統設計變更審查, 功能規劃審查。Use when: Phase 3b 完成後 PR 前, Phase 4 重構評估前, 重大架構決策前, ANA Ticket 結論審查, 任何分析報告產出後, 規則/Skill/方法論變更後, Wave 完成審查, 規格設計完成後"
 ---
 
 # 並行評估工具
@@ -13,7 +13,9 @@ description: "多視角審核/code review 工具。派發三人組（含常駐�
 **Phase 2** → 並行視角掃描（2-4 Agent 同時掃描）
 > Phase 2 預算檢查: `reference_tokens + (N x avg_target_tokens) + (N x output_tokens) < 100,000`。超過則減少 N 或拆分標的。
 
-**Phase 3** → 彙整 + Worth-It Filter（決定執行方式，所有發現必須追蹤）
+**Phase 3** → 彙整 + Worth-It Filter + **建立 Ticket** + **錯誤模式記錄**（決定執行方式，所有發現必須追蹤）
+> Phase 3 強制步驟：(1) 彙整發現 → (2) Worth-It Filter 分類 → (3) **對每個「延後執行」項目執行 `ticket create`** → (4) 將 Ticket ID 填入報告表格 → (5) **結構性發現→錯誤模式記錄**（見下方判斷標準）→ (6) 輸出報告。步驟 3-5 不可省略，報告中不可出現沒有 Ticket ID 的「延後追蹤」行。
+> Phase 3 步驟 5 判斷標準：發現是否為**結構性模式**（跨專案可重現的錯誤類型，而非單次的專案 bug）？若是，執行 `/error-pattern add` 記錄到 `.claude/error-patterns/`。判斷方式：將發現中的專案名稱和檔案路徑替換為通用描述，如果仍然有意義 → 是結構性模式。
 > Phase 3 衝突處理：視角間有衝突時，依衝突分類策略處理（加法vs減法預設減法，linux 品味否決權）。詳見 multi-perspective-analysis-methodology.md「衝突處理策略」。
 
 ## 情境快速選擇
@@ -32,6 +34,16 @@ description: "多視角審核/code review 工具。派發三人組（含常駐�
 
 **常駐委員**：所有情境自動加入 linux（Good Taste 品質把關），總計 3-4 個 Agent。linux 評分對應 Worth-It Filter：Garbage = 高幅度、Acceptable = 中幅度、Good taste = 無發現。Wave 完成審查時，除了標準的多視角代理人外，必須額外派發 linux 代理人作為常駐審查委員，與 code-reviewer（Bug/安全）和 code-explorer（架構/設計）組成固定三人組（見 parallel-dispatch.md 多視角審查固定三人組章節）。
 
+**語言代理人加入規則**：當審查標的涉及語言/框架專屬的基礎設施或開發流程時，將對應語言代理人作為額外審查委員加入標準三人組：
+
+| 審查標的涉及 | 加入代理人 | 常見場景 |
+|-------------|-----------|---------|
+| Flutter/Dart | parsley-flutter-developer | Widget 架構、Riverpod 設計、Dart 慣例 |
+| Python | thyme-python-developer | Hook 系統、腳本設計、Python 慣例 |
+| Go | fennel-go-developer | 後端服務、Go 慣例 |
+
+此規則對情境 C（架構評估）和 D（功能評估）尤為重要，因為規劃階段的決策深受語言/框架限制影響。語言代理人可提供框架專業知識，避免產出不符合實際開發慣例的方案。
+
 ## Worth-It Filter 快速判斷
 
 > **核心原則**：Worth-It Filter 只決定「是否立即執行」，不決定「是否追蹤」。所有發現都必須建 Ticket 或寫入 todolist。發現技術債是一個問題，修復成本是否值得是另一個問題 — 兩者不在同一時刻決策。
@@ -44,6 +56,8 @@ description: "多視角審核/code review 工具。派發三人組（含常駐�
 | 低（風格） | 延後執行 | 延後執行 | 建 Ticket（P2） |
 
 **原則**: 執行有疑慮就延後，但追蹤不可省略。
+
+**強制規則**：「延後執行」不等於「不建 Ticket」。Phase 3 產出報告前，必須對所有延後項目執行 `ticket create`，並在報告表格的 Ticket 欄填入實際 ID。**禁止行為**：報告中出現「延後」但 Ticket 欄為空。
 
 > 量化標準和案例: references/worth-it-filter-details.md
 
@@ -85,8 +99,17 @@ Phase 3: 任一視角發現問題 → 回到分析階段補充
 
 ### 延後追蹤（建 Ticket，不立即執行）
 
+> **強制**：此表格每一行的 Ticket 欄必須填入實際 Ticket ID（格式如 `{version}-W{wave}-{seq}`）。空白 Ticket 欄 = 未追蹤 = 違反 quality-baseline 規則 5。
+
 | # | 視角 | 發現 | 延後原因 | Ticket |
 |---|------|------|---------|--------|
+
+### 結構性錯誤模式（已記錄到 error-patterns/）
+
+> 此區段僅在有結構性發現時出現。判斷標準：將發現中的專案名稱和檔案路徑替換為通用描述，如果仍然有意義 → 記錄。
+
+| # | Pattern ID | 標題 | 來源發現 |
+|---|-----------|------|---------|
 
 ### 結論
 [總結]
@@ -109,3 +132,8 @@ Phase 3: 任一視角發現問題 → 回到分析階段補充
 - references/lens-configurations.md - 視角配置
 - references/worth-it-filter-details.md - 過濾標準
 - references/integration-guide.md - 整合指南
+
+---
+
+**Last Updated**: 2026-03-02
+**Version**: 1.0.0
