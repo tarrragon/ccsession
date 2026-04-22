@@ -1,0 +1,24 @@
+proposals:
+  PROP-001:
+    title: "Server Domain Architecture, Event Normalization, and Recording Boundary"
+    status: draft
+    proposed: "2026-04-22"
+    confirmed: null
+    target_version: "v0.3.0"
+    source: "spec"
+    spec_refs: []
+    usecase_refs: []
+    ticket_refs: []
+    checklist:
+      - item: "確認 server domain-oriented 分層方向"
+        status: pending
+        verified_by: null
+      - item: "確認 event-driven 正規化模型與 DomainEvent envelope"
+        status: pending
+        verified_by: null
+      - item: "確認 structured log、event log、state repository 的責任分工"
+        status: pending
+        verified_by: null
+      - item: "確認 practical/refactoring 教材章節如何分配"
+        status: pending
+        verified_by: null
