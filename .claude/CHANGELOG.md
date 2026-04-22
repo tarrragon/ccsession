@@ -1,3 +1,27 @@
+## [1.23.0] - 2026-04-22
+
+### Summary
+feat: 新增 SessionStart Hook 偵測 .claude/ 未排除檔案 (.3); docs: 補充 sync 腳本排除清單分類規範與開發 checklist; docs: add PC-109 runtime state missing sync exclusion (.2)
+
+Changes: 1 feat, 2 docs
+
+- feat: 新增 SessionStart Hook 偵測 .claude/ 未排除檔案 (.3)
+- docs: 補充 sync 腳本排除清單分類規範與開發 checklist
+- docs: add PC-109 runtime state missing sync exclusion (.2)
+
+---
+
+## [1.22.2] - 2026-04-22
+
+### Summary
+fix: 修復 sync 腳本遺漏 runtime state 排除清單
+
+Changes: 1 fix
+
+- fix: 修復 sync 腳本遺漏 runtime state 排除清單
+
+---
+
 ## [1.22.1] - 2026-04-22
 
 ### Summary
