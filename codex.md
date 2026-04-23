@@ -15,6 +15,31 @@
 
 Use `.claude/skills/compositional-writing/SKILL.md` as the writing standard.
 
+## Mandatory Writing Compliance
+
+These rules are mandatory for every Codex session that writes, reviews, or edits teaching material, blog content, specs, proposals, or long-form technical documentation.
+
+Before drafting or revising content:
+
+1. Read `.claude/skills/compositional-writing/SKILL.md`.
+2. For article-style material, also read `.claude/skills/compositional-writing/references/writing-articles.md`.
+3. For general document style, also read `.claude/rules/core/document-writing-style.md`.
+4. Apply the rules as active constraints, not as optional reference material.
+
+High-priority writing requirements:
+
+- Put the core principle or definition first. Examples, code, caveats, and boundaries must follow the principle.
+- Use positive concept anchors before negative contrast. A paragraph about mistakes, anti-patterns, or boundaries must first state the correct responsibility model.
+- Avoid pure negative framing such as "X is not Y" as the only explanation. If negative contrast is needed, pair it with a positive concept and the reason the substitute is insufficient.
+- Prefer headings such as "Design Check" / "檢查" over "Common Mistakes" / "常見錯誤" when the section teaches a reusable concept.
+- Do not let examples from `server/` become project maintenance instructions. Teaching material must stay neutral and usable for engineers working on other Go projects.
+
+Verification before finishing writing work:
+
+- Search the changed material for high-risk negative wording: `不是`, `不要`, `不應`, `不能`, `不可`, `不行`, `不可以`, `常見錯誤`, `錯誤一`.
+- Search for project-specific leakage when writing public teaching material: `ccsession`, `Claude`, `JSONL`, `SessionRegistry`, `EventDispatcher`, `FileWatcher`, `Hook`.
+- Review every match before finalizing. Some negative wording is valid when it is a direct definition, but paragraph openers, headings, and anti-pattern sections must preserve a positive concept anchor.
+
 Key rules for the Go teaching material:
 
 - Atomize each article around one concept.
